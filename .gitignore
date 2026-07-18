@@ -1,0 +1,39 @@
+# --- Node / TypeScript (apps/web, apps/api) ---
+node_modules/
+dist/
+build/
+.next/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Go (services/parser) ---
+/services/parser/bin/
+*.exe
+*.test
+*.out
+vendor/
+
+# --- Environment / secrets ---
+.env
+.env.local
+.env.*.local
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+
+# --- Cloned repos (parser working directory, never commit these) ---
+/services/parser/tmp/
+/services/parser/clones/
+
+# --- Misc ---
+*.tmp
+.cache/
