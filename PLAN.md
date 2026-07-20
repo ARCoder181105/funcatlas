@@ -158,8 +158,12 @@ SECURITY.md is aspirational (a checklist, not implemented). Concrete gaps:
 - **Files to create/modify**:
   - `apps/api/internal/server/` (GitHub OAuth login + token store, repo register via URL, graph endpoints: list repos, file tree, functions-for-file, edges-for-function, raw source, search-by-name)
   - `apps/api/internal/auth/` (GitHub OAuth: authorize, callback, session, token scoped to repo-read, refresh)
-  - `apps/web/package.json`, `apps/web/src/` (React + React Flow canvas, sidebar, card, mind-map, code view, confidence-styled edges, search box)
+  - `apps/web/package.json`, `apps/web/src/` (React + React Flow canvas, sidebar, card, mind-map, code view, confidence-styled edges, search box, ⌘K command palette, animated landing page on `/`)
+  - `apps/web/src/styles/` (Tailwind config + design tokens: dark-mode-first, signature accent)
   - `apps/web/src/types/` (shared TS types mirroring DB/IR)
+  - UI follows `docs/UI_GUIDE.md` (Tailwind + shadcn/ui + Framer Motion + Shiki + cmdk + lucide-reacts: dark-mode-first, signature accent)
+  - `apps/web/src/types/` (shared TS types mirroring DB/IR)
+  - UI follows `docs/UI_GUIDE.md` (Tailwind + shadcn/ui + Framer Motion + Shiki + cmdk + lucide-react)
 - **OpenRouter models**:
   - `anthropic/claude-3.7-sonnet` (or `claude-3.5-sonnet`) — React Flow UI, component structure, UX.
   - `deepseek/deepseek-chat` — API endpoint/CRUD + OAuth logic.

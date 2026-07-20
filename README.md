@@ -23,6 +23,7 @@ Clone the target repo → parse every file with tree-sitter → extract function
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — phased build plan
 - [`docs/SECURITY.md`](docs/SECURITY.md) — cloning/parsing untrusted repos safely
 - [`docs/RISKS.md`](docs/RISKS.md) — open questions, risks, and pre-code decisions to track
+- [`docs/UI_GUIDE.md`](docs/UI_GUIDE.md) — UI/UX direction: theme, animation, landing page, canvas
 - [`DEVELOPMENT.md`](DEVELOPMENT.md) — how to set up, run, and build the project phase by phase
 
 ## Repo layout (planned)

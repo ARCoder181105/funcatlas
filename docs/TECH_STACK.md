@@ -44,8 +44,13 @@ the granular decisions that were gaps (ORM, monorepo tooling, frameworks, valida
 | Shared types package | **`packages/shared`** | One source for Drizzle types + Zod schemas consumed by both `apps/api` and `apps/web` — kills the function/file/edge ID-mismatch risk called out in `TECH_STACK.md`. |
 | Frontend bundler | **Vite + React + TS** (SPA) | Canvas-heavy SPA needs no SSR; Vite is the fastest dev/build for React. |
 | Frontend state | **Zustand** (UI) + **TanStack Query** (server) | Zustand for canvas UI state; TanStack Query for graph fetches, caching, invalidation on re-parse. |
-| Styling | **Tailwind CSS** (+ shadcn/ui optional) | Rapid, consistent modern UI without a heavy component lib. |
+| Styling | **Tailwind CSS** + **shadcn/ui** | Rapid, consistent modern UI; shadcn gives polished, accessible primitives to build on. |
+| Animation | **Framer Motion** | Declarative, production-grade UI motion (page transitions, card spring-in, edge-draw). |
+| Landing page | **React + Tailwind + Framer Motion** (same app, `/` route) | One app serves the marketing landing + the authenticated canvas; no separate deploy. |
+| Canvas | **React Flow** | Draggable/zoomable node-link canvas for the graph explorer. |
 | Code rendering | **Shiki** | VS Code-grade highlighting for the function code-block view. |
+| Command palette | **cmdk** | ⌘K palette for function search / navigation (the "cool" power-user surface). |
+| Icons | **lucide-react** | Consistent, lightweight icon set. |
 | API framework | **Fastify** (Node/TS) | JSON-first, built-in schema validation, fast; lighter than NestJS for this scope. |
 | API validation | **Zod** | Single schema source shared with frontend via `packages/shared`. |
 | API ORM | **Drizzle** | Type-safe but stays close to raw SQL, so recursive N-hop CTEs and `qualified_name` index lookups remain explicit; emits TS types. |
@@ -78,3 +83,18 @@ the granular decisions that were gaps (ORM, monorepo tooling, frameworks, valida
 ```
 
 The parser worker communicates with the rest of the system only through the job queue and Postgres — it doesn't need to share a language or a repo boundary with the TS app, which keeps the CPU-heavy piece isolated and independently scalable.
+
+## UI / UX direction (decided up front)
+
+The product must feel **premium and "crazy-cool"**, not default — on par with polished developer
+tools. The foundation is locked above (Tailwind + shadcn/ui + Framer Motion + React Flow + Shiki +
+cmdk + lucide). Intentions to carry into Phase 3:
+
+- **Theme:** dark-mode-first with a signature accent; design tokens (color/space/radius) defined once in Tailwind config. Cohesive theme = "designed" not "default".
+- **Landing page** (`/` route, same app): hero with animated graph visualization, feature highlights, a live "try a repo" CTA. Framer Motion for scroll/entrance animations.
+- **Motion polish:** edge-draw animations on the canvas, card spring-in on expand, smooth route transitions, ⌘K command palette for instant function jump.
+- **Interaction quality:** collapsible IDE-like sidebar, minimap, focus-mode on a selected function, confident empty/loading/error states (these separate "cool" from "amateur").
+- **Confidence as visual language:** edges styled solid (`exact`) / dashed (`name_match`) / dotted (`unresolved`) — informative *and* visually distinctive.
+- **Excalidraw** annotations remain deferred to post-MVP (see `ROADMAP.md`); revisit as a cool-layer later.
+
+See `docs/UI_GUIDE.md` for the detailed UI/UX spec.
