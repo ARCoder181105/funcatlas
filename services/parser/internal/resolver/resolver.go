@@ -1,5 +1,4 @@
 package resolver
-package resolver
 
 import (
 	"github.com/ARCoder181105/funcatlas/parser/internal/ir"
@@ -9,8 +8,8 @@ import (
 type ResolutionConfidence string
 
 const (
-	Exact     ResolutionConfidence = "exact"
-	NameMatch ResolutionConfidence = "name_match"
+	Exact      ResolutionConfidence = "exact"
+	NameMatch  ResolutionConfidence = "name_match"
 	Unresolved ResolutionConfidence = "unresolved"
 )
 

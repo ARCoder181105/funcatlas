@@ -1,13 +1,12 @@
 package ts
-package ts
 
 import (
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/tree-sitter/go-tree-sitter"
-	"github.com/tree-sitter/tree-sitter-typescript/typescript"
+	tree_sitter "github.com/tree-sitter/go-tree-sitter"
+	bindings "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 
 	"go.uber.org/zap"
 
@@ -19,7 +18,7 @@ import (
 // intermediate representation. Phase 0: file enumeration + parser init; the
 // query-to-IR mapping is filled in Phase 1.
 func Extract(logger *zap.Logger, root string, cfg security.Config) ([]ir.File, error) {
-	lang := tree_sitter.NewLanguage(typescript.Language())
+	lang := tree_sitter.NewLanguage(bindings.LanguageTypescript())
 	parser := tree_sitter.NewParser()
 	if err := parser.SetLanguage(lang); err != nil {
 		return nil, err

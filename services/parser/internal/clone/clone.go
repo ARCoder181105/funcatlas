@@ -1,5 +1,4 @@
 package clone
-package clone
 
 import (
 	"os"

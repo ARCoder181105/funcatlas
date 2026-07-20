@@ -1,5 +1,4 @@
 package ir
-package ir
 
 // Intermediate representation emitted by the tree-sitter pass and consumed by
 // the resolver + DB writer. Mirrors docs/DATA_MODEL.md (functions/edges/files)
@@ -23,8 +22,8 @@ type Function struct {
 
 type CallSite struct {
 	CallerQualified string
-	CalleeName     string
-	Line           int
+	CalleeName      string
+	Line            int
 }
 
 type Import struct {
@@ -35,8 +34,8 @@ type Import struct {
 
 // Graph is the full extraction result for one repo.
 type Graph struct {
-	Files    []File
+	Files     []File
 	Functions []Function
-	Calls    []CallSite
-	Imports  []Import
+	Calls     []CallSite
+	Imports   []Import
 }
