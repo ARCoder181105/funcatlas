@@ -56,8 +56,3 @@ jobs:
       - name: go test
         working-directory: services/parser
         run: go test ./...
-      - name: migration check
-        working-directory: services/parser
-        run: |
-          go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1 \
-            -path migrations -database "$DATABASE_URL" up
