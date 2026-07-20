@@ -6,7 +6,9 @@ Built to solve one problem: large codebases are hard to hold in your head, and g
 
 ## Status
 
-Early / personal project, actively being designed and built solo.
+Actively being built toward a **production-grade MVP** (see `PLAN.md` and `docs/ROADMAP.md`). The full tech stack is locked in up front in `docs/TECH_STACK.md` ("Pre-bootstrap tech-stack lock-in") so no crucial decision is made mid-development. The first language is TypeScript; GitHub OAuth and webhook-driven incremental updates are in scope from the start. Excalidraw annotations and LSP-based resolution are deliberately deferred to post-MVP.
+
+> Repo name is `funcatlas`; the product/working name used in prose is **CodeCanvas**.
 
 ## How it works (one paragraph)
 
@@ -20,17 +22,24 @@ Clone the target repo → parse every file with tree-sitter → extract function
 - [`docs/PARSING_STRATEGY.md`](docs/PARSING_STRATEGY.md) — how parsing and call-resolution actually work, including known limitations
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — phased build plan
 - [`docs/SECURITY.md`](docs/SECURITY.md) — cloning/parsing untrusted repos safely
+- [`docs/RISKS.md`](docs/RISKS.md) — open questions, risks, and pre-code decisions to track
+- [`DEVELOPMENT.md`](DEVELOPMENT.md) — how to set up, run, and build the project phase by phase
 
 ## Repo layout (planned)
 
 ```
+/                       → pnpm workspace root + Turborepo pipeline
+/packages
+  /shared               → Drizzle types + Zod schemas (api ↔ web)
 /apps
-  /web        → TypeScript + React + React Flow canvas
-  /api        → TypeScript (Node) — auth, repo management, serving graph data
+  /web                  → Vite + React + React Flow canvas (Tailwind, TanStack Query, Zustand, Shiki)
+  /api                  → TypeScript (Node/Fastify) — auth, repo management, serving graph data
 /services
-  /parser     → Go — clone, parse, resolve calls, write to Postgres
+  /parser               → Go — clone, parse, resolve calls, write to Postgres
 /docs         → this documentation
 ```
+
+See `docs/TECH_STACK.md` ("Pre-bootstrap tech-stack lock-in") for the full, decided stack.
 
 ## Core stack at a glance
 

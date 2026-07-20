@@ -4,6 +4,8 @@
 
 Tree-sitter is used for all extraction — fast, incremental, has a query language, and has mature bindings across languages including Go. It parses syntax; it does not resolve meaning. That distinction drives everything below.
 
+**Input hardening (see `SECURITY.md`):** before any file reaches tree-sitter, the clone step rejects symlink / path-traversal escapes and skips files that exceed the size cap (>1MB), are binary, or live under `node_modules`/`.git`/build output. Parsing is also limited to the first language (TypeScript) for the MVP.
+
 ## What tree-sitter queries extract
 
 Using tree-sitter's query syntax (not manual tree-walking):

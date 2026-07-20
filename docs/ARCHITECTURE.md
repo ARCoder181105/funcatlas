@@ -39,8 +39,9 @@ Job Queue ──▶ diff changed files ──▶ re-parse only those ──▶ r
 ## Components
 
 ### 1. Clone Service
-- Takes a GitHub URL, clones it into an isolated environment (container, at minimum — see `SECURITY.md`).
+- Takes a GitHub URL (authenticated via the user's OAuth token, repo-read scope) or a local path, and clones/reads it into an isolated environment (container, at minimum — see `SECURITY.md`).
 - Never runs the repo's own build/install scripts. Read-only file access is all that's needed for parsing.
+- **Input hardening before parsing:** never follows symlinks, validates every path is inside the clone root, skips files >1MB / binary / under `node_modules`/`.git`, and caps total file count and depth (see `SECURITY.md` and `PARSING_STRATEGY.md`).
 - Stores the last-synced commit SHA per repo so incremental updates know what changed.
 
 ### 2. Parser Worker (Go)
@@ -64,19 +65,23 @@ Job Queue ──▶ diff changed files ──▶ re-parse only those ──▶ r
 - See `DATA_MODEL.md` for the actual schema.
 
 ### 5. API (TypeScript / Node)
-- Auth (GitHub OAuth), repo registration, serving graph data to the frontend.
-- Endpoints roughly: list repos → get file tree → get functions for a file → get edges for a function → get raw source for a function.
-- Receives GitHub webhooks and pushes re-parse jobs onto the queue.
+- Auth (GitHub OAuth — authorize, callback, session, token scoped to repo-read with refresh), repo registration, serving graph data to the frontend.
+- Endpoints: list repos → get file tree → get functions for a file → get edges for a function → get raw source for a function → **search functions by name** (across a repo).
+- All graph-serving endpoints are session-gated; no anonymous access.
+- Receives GitHub webhooks (HMAC-verified, replay-protected, per-repo throttled) and pushes re-parse jobs onto the queue.
 
 ### 6. Canvas (TypeScript / React / React Flow)
 - Sidebar file tree (like an IDE).
 - Click a file → a card appears on the canvas.
 - Click a card → mind-map of that file's functions branches out.
 - Click a function → code block view, with links out to external packages/files if the call crosses a boundary.
+- Edges are visually distinguished by `resolution_confidence`: solid (`exact`), dashed (`name_match`), dotted (`unresolved`) — a guess is never shown as fact.
+- A function-name **search box** lets users jump to any function across the repo (core to the product's value).
 - Multiple files/mind-maps can be open on the same canvas at once.
-- Excalidraw layer embedded for freehand notes/annotations on top of the graph.
+- Excalidraw layer is **deferred to post-MVP** (see `ROADMAP.md`).
 
-### 7. Job Queue
+### 7. Job Queue Renames/deletes update every edge pointing at the old function, so no orphans remain.
+- A max-concurrent-parse cap and per-repo throttle prevent a webhook flood from exhausting resources.
 - Redis + BullMQ (or equivalent) sits between the webhook listener and the parser worker.
 - On a push/merge: diff the changed files → enqueue only those for re-parsing → re-link only the edges touching those functions (not a full repo re-parse).
 

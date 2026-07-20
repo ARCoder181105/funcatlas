@@ -7,9 +7,17 @@ This project clones and reads arbitrary user-supplied repositories. That's a rea
 - **Parsing never requires execution.** Tree-sitter reads file contents and produces a syntax tree — it does not need `npm install`, `pip install`, build scripts, or any other code from the target repo to run. The clone/parse pipeline should never invoke the repo's own install/build/test scripts.
 - **Isolate the clone + parse step.** Even without deliberately executing the repo's code, git hooks and certain tooling can trigger unexpected behavior on clone/checkout. Run cloning and parsing inside a container at minimum; a microVM (e.g. Firecracker-style isolation) is a stronger option if handling many untrusted third-party repos at scale.
 - **Mount only what's needed.** The parser process should only have access to the cloned repo's directory — never the host filesystem, credentials, or other users' cloned repos.
-- **No network access from the parse step.** The parser doesn't need outbound network access to do its job; blocking it removes a whole class of potential exfiltration or supply-chain risk from a malicious repo.
-- **Private repo auth.** GitHub OAuth for user login; webhook payloads must be signature-verified (GitHub's HMAC signature) before being trusted and enqueued.
+- **No network access from the parse step.** The parser doesn't need outbound network access to do its job; blocking it removes a whole class of potential exfiltration or supply-chain risk from a malicious repo. This is enforced as a **hard runtime constraint** (`docker run --network none`, read-only mount, dropped capabilities) — not just a note.
+- **Private repo auth.** GitHub OAuth for user login (token scoped to repo-read, with refresh); webhook payloads must be signature-verified (GitHub's HMAC signature) before being trusted and enqueued.
 - **Tenant isolation.** If this ever serves more than one user, cloned repos and parse jobs must not share state, disk, or memory across users/repos — treat each clone as its own isolated workspace, cleaned up after use.
+
+## Concrete input hardening (enforced in the clone/parse step)
+
+- **Symlink / path-traversal guard.** Never follow symlinks. Resolve every file path and reject it unless it is strictly inside the clone root (rejects `../../etc/passwd` and symlinks pointing outside the repo). This applies to both parsing and to serving raw source.
+- **Repo/clone bombs.** Cap total file count, per-file size (skip files >1MB), and directory depth. Skip binary/non-text files and anything under `node_modules`/`.git`/build output (respect `.gitignore`). A 100k-file repo or a 50MB minified file must not OOM the parser.
+- **Webhook DoS / replay.** HMAC verification alone is insufficient: enforce a timestamp/replay window, per-repo job throttling, and a max-concurrent-parse cap so a flood of webhooks can't exhaust resources.
+- **API authorization.** Every graph-serving endpoint is session-gated; anonymous requests are rejected even in single-user mode.
+- **SQL / CTE safety.** All queries are parameterized; the recursive N-hop traversal CTE is depth-bounded to prevent runaway queries.
 
 ## What this project does NOT need (for now)
 
@@ -20,7 +28,12 @@ This project clones and reads arbitrary user-supplied repositories. That's a rea
 
 - [ ] Clone/parse runs in an isolated container, not the host running the API
 - [ ] No install/build scripts from the target repo are ever invoked
-- [ ] Parser process has no outbound network access
-- [ ] Webhook signatures are verified before jobs are enqueued
-- [ ] OAuth tokens are scoped to the minimum GitHub permissions needed (repo read, not admin)
+- [ ] Parser process has no outbound network access (`--network none`, read-only mount, dropped caps)
+- [ ] Symlink / path-traversal escapes are rejected before parsing or serving source
+- [ ] File-count, per-file size (>1MB), and depth caps are enforced; binary/`node_modules`/`.git` skipped
+- [ ] Webhook signatures are verified, replay-protected (timestamp window), and per-repo throttled
+- [ ] All graph endpoints are session-gated (no anonymous access)
+- [ ] Recursive N-hop CTE is depth-bounded and parameterized
+- [ ] OAuth tokens are scoped to the minimum GitHub permissions needed (repo read, not admin) and refreshed
+- [ ] Secrets (OAuth client secret, webhook secret) come from env vars via `.env.example`; never committed
 - [ ] Cloned repo data is cleaned up after parsing, not left indefinitely on disk

@@ -24,15 +24,57 @@ The project splits into two workloads with different needs, so the stack is spli
 
 **Name/scope-based resolution before LSP integration** — LSP-based call resolution is the accurate approach long-term, but it's slower to build and can multiply RPC calls badly on projects with heavy re-exports. Ship name/scope matching first (tagged with a confidence level), add LSP resolution per-language once the rest of the pipeline is proven.
 
+**GitHub OAuth + webhooks are in the MVP, not deferred.** A production-grade service needs authenticated access (repo read via OAuth) and automatic updates (webhook → queue → incremental re-parse) from the start; a manual "re-parse" button and no-auth are not production-grade. The token is scoped to repo-read with refresh handling.
+
+**Function-name search is in the MVP.** Finding a function by name across a large repo is core to the product's value ("codebases hard to hold in your head"), so a simple name-search endpoint + UI box ships with the canvas, not after.
+
+**A migration tool is chosen up front.** Schema lives in versioned migrations (golang-migrate or Flyway) rather than ad-hoc `CREATE TABLE` scripts, to avoid drift between the parser's schema and the API's expectations.
+
+## Pre-bootstrap tech-stack lock-in
+
+All of the following were decided up front (during planning, before any code) so that **no crucial
+tech-stack choice is made during development** — each pick is justified by its specific use case.
+The high-level table at the top of this doc covers the big architectural splits; this table covers
+the granular decisions that were gaps (ORM, monorepo tooling, frameworks, validation, sessions, etc.).
+
+| Area | Decision | Why (best use case) |
+|---|---|---|
+| Monorepo package manager | **pnpm** (workspaces) | Fast, strict, disk-efficient; native workspace protocol for `/apps` + `/services`. |
+| Task orchestration | **Turborepo** | Cached `build`/`test`/`lint` across packages; fast CI for a multi-app repo. |
+| Shared types package | **`packages/shared`** | One source for Drizzle types + Zod schemas consumed by both `apps/api` and `apps/web` — kills the function/file/edge ID-mismatch risk called out in `TECH_STACK.md`. |
+| Frontend bundler | **Vite + React + TS** (SPA) | Canvas-heavy SPA needs no SSR; Vite is the fastest dev/build for React. |
+| Frontend state | **Zustand** (UI) + **TanStack Query** (server) | Zustand for canvas UI state; TanStack Query for graph fetches, caching, invalidation on re-parse. |
+| Styling | **Tailwind CSS** (+ shadcn/ui optional) | Rapid, consistent modern UI without a heavy component lib. |
+| Code rendering | **Shiki** | VS Code-grade highlighting for the function code-block view. |
+| API framework | **Fastify** (Node/TS) | JSON-first, built-in schema validation, fast; lighter than NestJS for this scope. |
+| API validation | **Zod** | Single schema source shared with frontend via `packages/shared`. |
+| API ORM | **Drizzle** | Type-safe but stays close to raw SQL, so recursive N-hop CTEs and `qualified_name` index lookups remain explicit; emits TS types. |
+| API DB driver | **postgres.js** (under Drizzle) | Fast, ergonomic Postgres driver. |
+| Auth (OAuth) | **arctic** + **oslo** | Minimal, modern GitHub OAuth + session primitives; token scoped to repo-read. |
+| Sessions | **Redis-backed** (reuse Redis) | Safer than stateless JWT for production; single datastore already present. |
+| API rate limit | **@fastify/rate-limit** | Protects graph endpoints. |
+| Parser tree-sitter | **smacker/tree-sitter-go** + **tree-sitter-typescript** grammar | Mature Go bindings + first-language TS grammar. |
+| Parser DB access | **sqlx** + **pgx** (`jackc/pgx/v5`) | Explicit SQL + high-performance pool for bulk function/edge writes. |
+| Migrations | **golang-migrate** (SQL) | Language-agnostic; same migrated schema used by Go writer and TS reader. |
+| Logging | **pino** (Node) + **zap** (Go) | Structured logs; cheap in hot paths. |
+| Testing | **Vitest** (TS) + **testify** (Go); **testcontainers-go** for DB integration | Aligns with Vite; real Postgres in tests. |
+| Lint/format | **ESLint + Prettier** (TS) + **golangci-lint** (Go) | Standard, fast. |
+| CI | **GitHub Actions** | Lint/test/build + migration check on PR. |
+| Local infra | **docker-compose** | Reproducible postgres + redis + api + web + parser. |
+| Secrets | **`.env` + `.env.example`** (dotenv) for MVP | Real secrets never committed; vault deferred. |
+
 ## Repo/package layout
 
 ```
+/                       → pnpm workspace root + Turborepo pipeline
+/packages
+  /shared               → Drizzle types + Zod schemas (api ↔ web)
 /apps
-  /web        → React + React Flow + Excalidraw
-  /api        → Node/TS — auth, repo mgmt, graph-serving endpoints, webhook receiver
+  /web                  → Vite + React + React Flow + Tailwind + TanStack Query + Zustand + Shiki
+  /api                  → Node/TS (Fastify + Drizzle + postgres.js + arctic/oslo) — auth, repo mgmt, graph endpoints, webhook receiver
 /services
-  /parser     → Go — clone handling, tree-sitter parsing, call resolution
-/docs         → project documentation
+  /parser               → Go (smacker/tree-sitter-go + tree-sitter-typescript, sqlx + pgx, zap) — clone, parse, resolve, write to Postgres
+/docs                   → project documentation
 ```
 
 The parser worker communicates with the rest of the system only through the job queue and Postgres — it doesn't need to share a language or a repo boundary with the TS app, which keeps the CPU-heavy piece isolated and independently scalable.
