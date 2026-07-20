@@ -39,6 +39,6 @@ func (w *Writer) WriteGraph(ctx context.Context, g ir.Graph) error {
 }
 
 func (w *Writer) Close() {
-	w.db.Close()
+	_ = w.db.Close()
 	w.pool.Close()
 }
