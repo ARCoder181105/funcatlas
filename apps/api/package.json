@@ -1,0 +1,36 @@
+{
+  "name": "api",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"no tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "@funcatlas/shared": "workspace:*",
+    "@fastify/cors": "^10.0.2",
+    "@fastify/rate-limit": "^10.1.1",
+    "arctic": "^3.4.0",
+    "drizzle-orm": "^0.44.2",
+    "dotenv": "^17.0.0",
+    "fastify": "^5.2.1",
+    "ioredis": "^5.4.2",
+    "oslo": "^1.2.1",
+    "pino": "^9.6.0",
+    "postgres": "^3.4.5",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@funcatlas/eslint-config": "workspace:*",
+    "@funcatlas/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "eslint": "^9.39.1",
+    "tsx": "^4.19.2",
+    "typescript": "5.9.2"
+  }
+}
