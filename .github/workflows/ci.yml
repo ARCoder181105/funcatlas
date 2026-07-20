@@ -24,6 +24,8 @@ jobs:
 
   go:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgres://funcatlas:funcatlas@localhost:5432/funcatlas?sslmode=disable
     services:
       postgres:
         image: postgres:16
@@ -53,8 +55,6 @@ jobs:
           working-directory: services/parser
       - name: go test
         working-directory: services/parser
-        env:
-          DATABASE_URL: postgres://funcatlas:funcatlas@localhost:5432/funcatlas?sslmode=disable
         run: go test ./...
       - name: migration check
         working-directory: services/parser
