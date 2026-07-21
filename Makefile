@@ -2,7 +2,7 @@
 # Run `make <target>`. Most targets shell out to pnpm/turbo or docker.
 
 .PHONY: install dev build lint typecheck test migrate up down health \
-        go-build go-test go-vet go-run go-tidy
+        go-build go-test go-vet go-run go-tidy clean
 
 install: ## Install all workspace dependencies
 	pnpm install
@@ -50,6 +50,10 @@ go-tidy: ## Tidy Go modules
 
 go-run: ## Run the parser against a local repo (usage: make go-run REPO=./path)
 	cd services/parser && go run ./cmd/parser --repo "$(REPO)"
+
+clean: ## Clean up generated artifacts and caches
+	pnpm store prune
+	rm -rf dist build .turbo node_modules out || true
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
