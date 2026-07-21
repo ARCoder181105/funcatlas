@@ -8,7 +8,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-pnpm-lock.yaml* 
 
 # --- Go (services/parser) ---
 /services/parser/bin/
