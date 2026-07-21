@@ -37,3 +37,9 @@ Thumbs.db
 # --- Misc ---
 *.tmp
 .cache/
+
+# --- Turbo ---
+.turbo/
+
+# --- Vercel (if used later) ---
+.vercel/

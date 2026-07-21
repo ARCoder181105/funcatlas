@@ -1,0 +1,22 @@
+{
+  "name": "funcatlas",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,go,md}\""
+  },
+  "devDependencies": {
+    "eslint": "^9.39.1",
+    "prettier": "^3.7.4",
+    "turbo": "^2.10.5",
+    "typescript": "5.9.2"
+  },
+  "packageManager": "pnpm@11.15.1",
+  "engines": {
+    "node": ">=20"
+  }
+}

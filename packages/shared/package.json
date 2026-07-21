@@ -1,0 +1,29 @@
+{
+  "name": "@funcatlas/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts",
+    "./types": "./src/types.ts",
+    "./validation": "./src/validation.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -b --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "test": "echo \"no tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.2",
+    "postgres": "^3.4.5",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@funcatlas/eslint-config": "workspace:*",
+    "@funcatlas/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "typescript": "5.9.2"
+  }
+}

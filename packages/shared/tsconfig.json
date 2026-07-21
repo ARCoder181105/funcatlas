@@ -1,0 +1,10 @@
+{
+  "extends": "@funcatlas/typescript-config/base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "incremental": true
+  },
+  "include": ["src/**/*.ts"]
+}

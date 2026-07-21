@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Version comes from package.json's "packageManager" field (single source of truth).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm -r lint
+      - run: pnpm -r typecheck
+      - run: pnpm -r build
+      - run: pnpm -r test
+
+  go:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgres://funcatlas:funcatlas@localhost:5432/funcatlas?sslmode=disable
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: funcatlas
+          POSTGRES_PASSWORD: funcatlas
+          POSTGRES_DB: funcatlas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U funcatlas"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: services/parser/go.sum
+      - name: Install CGO toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.12.2
+          working-directory: services/parser
+      - name: go test
+        working-directory: services/parser
+        run: go test ./...
