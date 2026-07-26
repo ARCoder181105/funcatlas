@@ -41,6 +41,9 @@ Tree-sitter finds a call site like `getUser(id)`; it cannot say which `getUser` 
 - Module-level call: Caller is `<module>`.
 - Anonymous functions fallback to `<anonymous>`.
 
+**Overload Index Post-Pass:**
+After extracting all functions in a file, group identical `qualified_name` values, sort each group by `start_line`, and assign `overload_index` values `0..n-1`. This is consistent with the database uniqueness key `(file_id, qualified_name, overload_index)`, ensuring anonymous and overloaded functions are deterministically identifiable.
+
 ### Phase 2: Inter-File Edge Creation (Resolution) is a distinct step, done in this order for v1:
 
 1. **Same file** — is there a `getUser` defined in this file? Prefer it.

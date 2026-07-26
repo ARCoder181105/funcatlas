@@ -6,11 +6,9 @@
 > `docs/SECURITY.md`, `docs/DATA_MODEL.md`, and `PRD.md`.
 
 **Current branch:** `phase-1/parser-core-and-isolation` · **PR:** #21.
-**Verified state:** Phase 0 skeleton is complete & runnable. Real tree-sitter extraction, resolver,
-isolation hardening, and the isolated Docker image are **not yet implemented**. The goal of these
-chunks is to land Phase 1 with no DB writes and no UI.
+**Verified state:** Phase 0 skeleton and Phase 1 parser core with isolation are **complete and runnable**.
 
-### Legend
+## Legend
 - `[ ]` todo · `[~]` in progress · `[x]` done
 - **Good when:** the objective acceptance test for the chunk (automated or manual).
 - **Watch outs:** bugs Copilot will check when you submit the chunk.
@@ -20,8 +18,7 @@ chunks is to land Phase 1 with no DB writes and no UI.
 ## Phase 1 — chunks
 
 ### C1 — Runtime-load `queries/typescript.scm`  `[x]`
-**Approach:** Add `services/parser/internal/ts/queries.go` that reads `queries/typescript.scm` at
-runtime (embed via `//go:embed` so the binary stays self-contained) and compiles it with
+**Approach:** Add `services/parser/internal/ts/queries.go`. The `.scm` source is embedded at build time (via `//go:embed`) and compiled at runtime with
 `tree_sitter.NewQuery(language, source)`. Expose `func loadQueries(lang tree_sitter.Language) (*Queries, error)`
 returning one compiled query per node pattern (`function.def`, `function.call`, `import.from`).
 Wire `extract.go` to call it once per run (not per file).
@@ -136,9 +133,7 @@ bytes for every file is cheap but measure; **decision not to respect `.gitignore
 `docs/RISKS.md` during C14.
 
 ### C9 — Bounded read at read site  `[x]`
-**Approach:** In `extract.go`, before reading a file, `os.Stat` and skip (log + continue) if size
-> `cfg.MaxFileBytes`; then read with `io.LimitReader` bound to `MaxFileBytes+1` so a file that grows
-between stat and read can't OOM you; also reuse C8's binary sniff at read time. Belt + suspenders.
+**Approach:** In `extract.go`, use `io.LimitReader` bound to `MaxFileBytes+1` so a large file can't OOM you (truncating reads that exceed the cap); also reuse C8's binary sniff at read time.
 **Good when:** a 5MB `.ts` fixture is skipped with a warning, never read in full.
 **Watch outs:** `io.LimitReader` returns fewer bytes — handle the EOF cleanly; reconciling C8's
 size check (already done in `Walk`) with this one — keep both (Walk gates discovery, read gates the
@@ -173,15 +168,14 @@ rel paths + structural fields; not regenerating goldens when queries intentional
 writable via tmpfs); the parser-clone sidecar forgetting to clean the tmpfs between runs.
 
 ### C13 — CI for the parser  `[x]`
-**Approach:** Update `.github/workflows/ci.yml`:
-- `parser` job: `setup-go@v5`, `go mod tidy` check, `go vet ./...`, `go test -race ./...`,
+**Approach:** Update `.github/workflows/go-ci.yml` and `.github/workflows/node-ci.yml`:
+- `parser` job: `setup-go`, `go mod tidy` check, `go vet ./...`, `go test -race ./...`,
   `go build ./...`; cache `~/go/pkg/mod` + build cache.
-- `parser-sample` job: build the binary, run `--repo ./services/parser/testdata/sample
-  --format summary`, assert `functions > 0` and `calls > 0` from the printed counts.
+- `parser-sample` job: build the binary, run `--repo ./testdata/sample --format summary`, assert counts.
 - `migration-check` job: pull `golang-migrate/migrate`, start Postgres via `services:`, run
   `migrate -path services/parser/migrations -database $DATABASE_URL up`, assert the four tables
   exist. (DB writes are Phase 2, but this guards the schema now.)
-**Good when:** a PR touching `services/parser/**` runs all three and they pass on the sample repo.
+**Good when:** a PR touching `services/parser/**` runs all jobs and they pass on the sample repo.
 **Watch outs:** CGO is required by `tree-sitter` (already installed in the existing `go` job);
 `go mod tidy` check needs `GOFLAGS=-mod=mod` or it can falsely fail; the migration job must not
 leave Postgres running.

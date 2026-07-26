@@ -139,7 +139,7 @@ multi-user); name/scope resolution; webhook incremental updates; function-name s
 
 ## 10. Release plan (4 phases)
 
-- **Phase 1 — Parser core + isolation** *(current; branch `phase-1/parser-core-and-isolation`,
+- **Phase 1 — Parser core + isolation** *(completed; branch `phase-1/parser-core-and-isolation`,
   PR #21)*. Given a local repo path → correct IR JSON for TypeScript, with hardening and an
   isolated Docker image. No DB writes, no UI. See `docs/PHASE1_TASKS.md` and `TASKLIST.md`.
 - **Phase 2 — Storage + resolution**. Persist IR to Postgres; name/scope resolver with confidence;
@@ -176,7 +176,7 @@ Tracked in `docs/RISKS.md` (R1–R18). Status snapshot at PRD authoring:
   `unresolved` (R8). `overload_index` is part of the DB uniqueness key, so Phase 4's
   delete-then-reinsert incremental relink never collides on `UNIQUE` and is stable across identical
   re-parses (keyed by `start_line`).
-- **Query loading:** runtime-load `queries/typescript.scm` (editable without recompiling Go).
+- **Query loading:** `queries/typescript.scm` is embedded at build time (via `//go:embed`) and compiled at runtime.
 - **`.gitignore` respect:** deferred post-MVP (skip-list already covers `node_modules`/etc.).
 - **Clone vs parse containers:** separate `parser-clone` (network enabled) → shared tmpfs →
   `parser-parse` (`network none`, read-only, non-root, no caps).

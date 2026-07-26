@@ -14,9 +14,8 @@
   codebase. clone repo → tree-sitter parses functions + call sites → resolve calls → store graph in
   Postgres → explore on a React Flow canvas (file → card → function mind-map → code block).
   First language: **TypeScript**. 4-phase MVP.
-- **Status:** Phase 0 (monorepo/skeleton/migration/CI) is **DONE & runnable**. Phase 1 (real
-  tree-sitter extraction, resolver, isolation hardening, isolated Docker) is **not yet started**.
-- **Branch:** `phase-1/parser-core-and-isolation`. **PR:** #21. **Default:** `main`.
+- **Status:** Phase 0 (monorepo/skeleton/migration/CI) and Phase 1 (real tree-sitter extraction, resolver, isolation hardening, isolated Docker) are **DONE & runnable**.
+- **Branch:** `main` (post-merge). **Default:** `main`.
 - **Active doc:** `TASKLIST.md` — Phase 1 split into 15 chunks (C1…C14 + C4b). Tick as you go.
 - **Owner of this build:** the human user **writes most of the code** (learning internals).
   Copilot's job = **debug, review, suggest better approaches, remove duplication, improve
@@ -49,8 +48,7 @@
 - ORM = Drizzle (API) + sqlx (parser). No GORM/Prisma.
 - **Clone vs parse containers:** `parser-clone` (network enabled) → shared tmpfs → `parser-parse`
   (`network none`, read-only, non-root, no caps).
-- **Query loading:** runtime-load `queries/typescript.scm` (editable w/o recompiling Go), embedded
-  into the Go binary via `//go:embed`.
+- **Query loading:** `queries/typescript.scm` is embedded at build time (via `//go:embed`) and compiled at runtime.
 - **`.gitignore` respect:** DEFER post-MVP (skip-list already covers `node_modules`/`.git`/etc.).
 - **Naming convention (TypeScript):**
   - top-level function `qualified_name` = bare name (`getUser`).
@@ -100,20 +98,16 @@
 PRD.md, TASKLIST.md, NEXT_MODEL_HANDOFF.md (this file)
 ```
 
-## 4. Phase 0 — DONE facts (verified, not from task doc)
+## 4. Phase 0 & 1 — DONE facts (verified, not from task doc)
 
 - `services/parser/cmd/parser/main.go` — wires `clone.Prepare → ts.Extract → (Phase 2 stub)`.
-- `internal/ts/extract.go` — inits language+parser, walks files, reads `.ts/.tsx`, but only
-  `_ = parser.Parse(...)` → **queries are NOT run yet. C1 fixes this.**
-- `internal/security/{path,config}.go` — `ContainsRoot`, `Walk` with size/count/depth caps; gaps:
-  no symlink hard-fail, no binary sniff, fragile depth calc. **C8 fixes these.**
-- `internal/ir/ir.go` — Go-native types; **R9 already handled in code** but `RISKS.md` still says
-  OPEN. **C14 closes the RISKS.md box** (do not duplicate the fix in code).
+- `internal/ts/extract.go` — inits language+parser, walks files, reads `.ts/.tsx`, and runs queries.
+- `internal/security/{path,config}.go` — `ContainsRoot`, `Walk` with size/count/depth caps, symlink hard-fail, and binary sniff.
+- `internal/ir/ir.go` — Go-native types; **R9 handled in code** and `RISKS.md` updated.
 - `migrations/0001_init.sql` — full schema with overload-safe UNIQUE, CASCADE, indexes,
   `parsed_commit`/`updated_at`. Correct as-is; Phase 2 just writes to it.
 - `apps/api`, `apps/web` — skeletons only.
-- `.github/workflows/ci.yml` — `node` + `go` jobs; `go` job already runs Postgres service.
-  Missing: **parser sample-run job + migration-check job** → C13 adds them.
+- `.github/workflows/ci.yml` (and node/go splits) — `node` + `go` jobs; `go` job already runs Postgres service, plus parser sample-run job + migration-check job.
 
 ## 5. The verified tree-sitter-go API (in `go.mod`)
 

@@ -14,7 +14,10 @@ import (
 
 func TestExtract_Golden(t *testing.T) {
 	logger := zap.NewNop()
-	cfg := security.ConfigFromEnv()
+	cfg := security.Config{
+		MaxFiles:     100,
+		MaxFileBytes: 10 * 1024 * 1024,
+	}
 	root := "../../testdata/golden"
 
 	graph, err := ts.Extract(logger, root, cfg)
@@ -46,6 +49,10 @@ func TestExtract_Golden(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(actual, expected) {
-		t.Errorf("Mismatch between actual and expected JSON outputs. See %s", actualFile)
+		t.Errorf("Mismatch between actual and expected JSON outputs. See %s\nDiff:\n", actualFile)
+		// We could use assert.Equal but t.Errorf with a json diff is fine, or just let assert do it.
+		// Since we have testify:
+		t.Logf("Expected: %s", string(expectedData))
+		t.Logf("Actual: %s", string(actualData))
 	}
 }

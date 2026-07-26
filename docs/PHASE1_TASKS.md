@@ -6,23 +6,23 @@
 
 ---
 
-## Current state (Phase 0 — DONE)
+## Current state (Phase 0 & 1 — DONE)
 
-The boilerplate is wired and runnable end-to-end as a skeleton:
+The boilerplate and parser core are wired and runnable end-to-end:
 
 - `services/parser/cmd/parser/main.go` — wires `clone.Prepare → ts.Extract → (Phase 2 stub)`.
 - `services/parser/internal/clone/clone.go` — local path or `git clone --depth 1`; never runs install/build.
-- `services/parser/internal/security/` — `Config` (env-driven caps: 1MB/file, 50k files, depth 25, skip `node_modules/.git/dist/build/coverage/.next`), `ContainsRoot` (symlink/`..` guard), `Walk` (cap-enforcing file enumerator).
-- `services/parser/internal/security/path_test.go` — existing `TestContainsRootRejectsEscape`.
-- `services/parser/internal/ts/extract.go` — initializes tree-sitter-typescript language/parser, walks files, reads `.ts/.tsx`, but **only records path — no queries run yet** (`_ = parser.Parse(...)`).
-- `services/parser/internal/ir/ir.go` — `File`, `Function`, `CallSite`, `Import`, `Graph` structs (mirrors `DATA_MODEL.md`).
-- `services/parser/queries/typescript.scm` — query stubs for `function_declaration`, `method_definition`, `call_expression`, `import_statement`/`export_statement` **(Go side does not load these yet)**.
-- `services/parser/internal/resolver/resolver.go` — confidence constants + `Resolve()` that marks everything `unresolved` (Phase 2 fill-in).
-- `services/parser/internal/db/writer.go` — pgx pool + sqlx connection; `WriteGraph` is a no-op (Phase 2).
-- `services/parser/migrations/0001_init.sql` — full schema (repos/files/functions/edges + indexes + `ON DELETE CASCADE` + `parsed_commit`/`updated_at`).
-- `services/parser/testdata/sample/repo.ts` — tiny sample with function, class method, call.
+- `services/parser/internal/security/` — `Config` (env-driven caps), `ContainsRoot`, `Walk` (cap-enforcing file enumerator with symlink hard-fail and binary sniff).
+- `services/parser/internal/security/path_test.go` — tests for containment, symlinks, caps.
+- `services/parser/internal/ts/extract.go` — initializes tree-sitter-typescript language/parser, walks files, reads `.ts/.tsx`, and runs queries.
+- `services/parser/internal/ir/ir.go` — Go-native `File`, `Function`, `CallSite`, `Import`, `Graph` structs.
+- `services/parser/queries/typescript.scm` — query patterns loaded into Go via `//go:embed`.
+- `services/parser/internal/resolver/resolver.go` — confidence constants + `Resolve()` stub.
+- `services/parser/internal/db/writer.go` — pgx pool + sqlx connection; `WriteGraph` stub.
+- `services/parser/migrations/0001_init.sql` — full schema.
+- `services/parser/testdata/sample/repo.ts` — test fixtures.
 
-So Phase 1 = **make `ts.Extract` actually extract**, harden isolation for real-world repos, and prove it with tests + a Docker image that runs the hardened config.
+So Phase 1 = **DONE**. We emit a complete, correct IR for TypeScript with production isolation in place.
 
 ---
 
@@ -30,7 +30,7 @@ So Phase 1 = **make `ts.Extract` actually extract**, harden isolation for real-w
 
 **File:** `services/parser/internal/ts/extract.go` (extend), possibly new `services/parser/internal/ts/queries.go`.
 
-1. Load `queries/typescript.scm` → compile queries against the TypeScript language via `tree_sitter.Query` / `QueryCursor`. (Decide: parse the `.scm` file at runtime, or hand-build queries in Go. Runtime load is more maintainable; hand-built is simpler. **Recommend runtime `.scm` load** so queries stay editable without recompiling.)
+1. Load `queries/typescript.scm` → compiled queries against the TypeScript language. The `.scm` source is embedded at build time (via `//go:embed`) and compiled at runtime.
 2. For each `.ts/.tsx` file, wrap `tree_sitter.NewLanguage` + `parser.Parse(src, nil)` to get a `Tree`, then run each query against the AST.
 3. Populate `ir.Function` for each match:
    - `Name` from `@function.def` capture.
@@ -94,11 +94,10 @@ The current `Walk` enforces caps but has gaps flagged in `PLAN.md` §1.3:
 
 **File:** `services/parser/internal/ts/extract.go`.
 
-`security.Walk` already skips files over `MaxFileBytes` in the directory walk, BUT `extract.go` does `os.ReadFile(p)` directly which re-reads regardless of size and has no bound. Fix:
+`security.Walk` already skips files over `MaxFileBytes` in the directory walk, BUT `extract.go` needs to ensure safety during the actual file read. Fix:
 
-1. Before `os.ReadFile`, `os.Stat` and reject files > `cfg.MaxFileBytes` (log + skip, don't fail the whole run).
-2. Use a bounded read (`io.LimitReader`) so a file that grows between the stat and the read can't OOM you. Belt + suspenders.
-3. Skip files binary-detected at read time (Task 3's sniffer), reused here.
+1. Use a bounded read (`io.LimitReader`) so a file that grows between the stat and the read can't OOM you. Truncate reads that exceed the cap.
+2. Skip files binary-detected at read time (Task 3's sniffer), reused here.
 
 **Done when:** a 5MB `.ts` fixture is skipped with a warning, not read in full.
 
@@ -163,22 +162,22 @@ The `Dockerfile` exists but needs to bake in the runtime constraints from `docs/
    - `tmpfs: [/tmp:size=100m]` for clones.
    - `mem_limit`, `cpus` bounds.
 5. Runtime entrypoint runs only `parse` (no clone) — clone is a separate step/or container.
-6. Add a `make docker-run-parser REPO=./services/parser/testdata/sample` target that mounts the repo read-only and runs parse against the shared volume.
+6. Add a `make docker-run-parser REPO=./services/parser/testdata/sample` target that mounts the repo read-only and runs parse against the shared volume, invoking the built binary.
 
-**Done when:** `docker compose run --rm parser go run ./cmd/parser --repo /work/sample` runs as non-root, read-only rootfs, no network, and emits `out.json` successfully. Verify with `docker inspect` that `NetworkMode=none` and `Cap` is empty.
+**Done when:** `docker compose run --rm parser --repo /work/sample` runs as non-root, read-only rootfs, no network, and emits `out.json` successfully using the compiled Go binary. Verify with `docker inspect` that `NetworkMode=none` and `Cap` is empty.
 
 ---
 
 ## Task 9 — CI for the parser
 
-**File:** `.github/workflows/ci.yml` (new or update existing).
+**File:** `.github/workflows/go-ci.yml` and `.github/workflows/node-ci.yml` (split).
 
-1. Job `parser`: `setup-go@v5`, `go mod tidy` check, `go vet ./...`, `go test -race ./...`, `go build ./...`.
+1. Job `parser`: `setup-go`, `go mod tidy` check, `go vet ./...`, `go test -race ./...`, `go build ./...`.
 2. Cache `~/go/pkg/mod` and the build cache.
-3. Job `migration-check`: pull `golang-migrate/migrate` image, spin up Postgres via `services:`, run `migrate -path services/parser/migrations -database $DATABASE_URL up`, then assert tables exist. (This guards the schema even though DB writes are Phase 2.)
-4. Don't gate on the TS app yet — keep it parser-only so CI is green while you work.
+3. Job `parser-sample`: build the binary, run `--repo ./testdata/sample --format summary`, assert counts.
+4. Job `migration-check`: pull `golang-migrate/migrate` image, spin up Postgres via `services:`, run `migrate -path services/parser/migrations -database $DATABASE_URL up`, then assert tables exist. (This guards the schema even though DB writes are Phase 2.)
 
-**Done when:** a PR touching `services/parser/**` runs all three jobs and they pass on the sample repo.
+**Done when:** a PR touching `services/parser/**` runs all jobs and they pass on the sample repo.
 
 ---
 
@@ -211,9 +210,9 @@ All of the following pass:
 
 ## Naming/status notes (carry from Phase 0)
 
-- **Open decision — overload index:** detect at extraction or at resolution? Recommend **extraction with a post-pass per file** (count same-`qualified_name`, assign `overload_index` 0..n-1).
-- **Open decision — `.scm` runtime load vs hand-built queries:** Recommend **runtime load** so queries stay editable without recompiling Go.
-- **Open decision — `.gitignore` respect:** Defer unless a test repo needs it; record in `RISKS.md`.
-- **Open decision — clone vs parse containers with `network none`:** Recommend **separate clone container WITH network → shared tmpfs → parse container with `network none`**.
+- **Decided — overload index:** Assign `overload_index` 0..n-1 in a post-pass per file to ensure DB uniqueness. (See PRD.md §11)
+- **Decided — `.scm` query load:** Embedded at build time via `//go:embed` and compiled at runtime. (See PRD.md §11)
+- **Decided — `.gitignore` respect:** Deferred post-MVP. (See PRD.md §11)
+- **Decided — clone vs parse containers:** Separate `parser-clone` (network enabled) → shared tmpfs → `parser-parse` (`network none`). (See PRD.md §11)
 - **Still deferred to Phase 2** (don't build these now): DB writes (`db.Writer.WriteGraph`), the resolver algorithm (`resolver.Resolve` confidence tagging), Drizzle read-side, API graph endpoints.
-- **Naming** (`funcatlas` repo vs `CodeCanvas` product) is still unresolved — not blocking Phase 1, but resolve before any OAuth app / image tag creation (Phase 3).
+- **Naming** (`funcatlas` repo vs `CodeCanvas` product) remains unresolved (deferred to Phase 3).
