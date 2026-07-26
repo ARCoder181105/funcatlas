@@ -30,7 +30,7 @@ TypeScript language without error and the four pattern names are reachable.
 **Watch outs:** using the wrong grammar (`LanguageTypescript` vs `LanguageTSX`); compiling queries
 per-file (slow); missing `//go:embed` tag; query capture names not matching `@function.def` etc.
 
-### C2 — Populate `ir.Function` from `@function.def`  `[ ]`
+### C2 — Populate `ir.Function` from `@function.def`  `[x]`
 **Approach:** Extend `extract.go` to run the `function.def`/`function.call` queries per file via
 `QueryCursor`. For each `@function.def` capture: `Name` = identifier text; `StartLine`/`EndLine`
 from the declaration node's start/end row; `Source` = `src` sliced between `StartLine-1` and
@@ -42,7 +42,7 @@ from the declaration node's start/end row; `Source` = `src` sliced between `Star
 offset); off-by-one on `EndLine`; slicing `src` using line indices without splitting cleanly on
 `\n`; not handling `function_declaration` inside class context.
 
-### C3 — Add arrow/function-expression capture  `[ ]`
+### C3 — Add arrow/function-expression capture  `[x]`
 **Approach:** Extend `queries/typescript.scm` to capture
 `(lexical_declaration (variable_declarator name: (identifier) @function.def value: [(arrow_function) (function_expression)]))`
 (and the `const`/`let` → `var_declaration` variant). Handle named function expressions where
@@ -53,7 +53,7 @@ present. Treat the variable name as the function name.
 object) — your query must require the `arrow_function`/`function_expression` child; arrow bodies
 that are single *expressions* (no `statement_block`); async/generator modifiers.
 
-### C4 — Qualified-name scope walk  `[ ]`
+### C4 — Qualified-name scope walk  `[x]`
 **Approach:** Add `services/parser/internal/ts/scope.go` with `func qualifiedName(node Node) string`
 that walks parents collecting `class_declaration`/`function_declaration`/`method_definition`/
 `arrow_function`/`function_expression` names (the variable name for arrows), then joins with `.`.

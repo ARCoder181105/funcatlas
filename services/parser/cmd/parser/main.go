@@ -36,11 +36,11 @@ func main() {
 		logger.Fatal("clone/prepare failed", zap.Error(err))
 	}
 
-	files, err := ts.Extract(logger, root, cfg)
+	graph, err := ts.Extract(logger, root, cfg)
 	if err != nil {
 		logger.Fatal("parse failed", zap.Error(err))
 	}
-	logger.Info("extracted files", zap.Int("count", len(files)))
+	logger.Info("extracted", zap.Int("files", len(graph.Files)), zap.Int("functions", len(graph.Functions)))
 
 	// Phase 2: resolve calls -> write to Postgres via db.Writer.
 	_ = db.NewWriter // referenced for Phase 2 wiring

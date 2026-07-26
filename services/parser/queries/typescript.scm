@@ -21,3 +21,11 @@
 
 (export_statement
   source: (string) @import.from)
+
+(variable_declarator
+  name: (identifier) @function.def
+  value: [
+    (arrow_function)
+    (function_expression)
+  ])
+
