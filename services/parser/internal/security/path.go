@@ -59,11 +59,15 @@ func Walk(logger *zap.Logger, root string, cfg Config) ([]string, error) {
 		if err != nil {
 			return nil
 		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return os.ErrPermission
+		}
 		if info.Size() > cfg.MaxFileBytes {
-			return nil // skip oversized file
+			logger.Warn("skipping oversized file", zap.String("path", path))
+			return nil
 		}
 		if _, err := ContainsRoot(root, path); err != nil {
-			return nil // reject escaped path
+			return err
 		}
 		out = append(out, path)
 		count++

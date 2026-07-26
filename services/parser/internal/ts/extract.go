@@ -2,6 +2,7 @@ package ts
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,11 +37,20 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 		
 		startLen := len(graph.Functions)
 
-		src, err := os.ReadFile(p)
+		f, err := os.Open(p)
+		if err != nil {
+			logger.Warn("open failed", zap.String("path", p), zap.Error(err))
+			continue
+		}
+		src, err := io.ReadAll(io.LimitReader(f, int64(cfg.MaxFileBytes)))
+		f.Close()
 		if err != nil {
 			logger.Warn("read failed", zap.String("path", p), zap.Error(err))
 			continue
 		}
+		
+		// If the file is exactly MaxFileBytes, it might be truncated. Since we just limit the read,
+		// it will parse whatever fits. If we wanted to error on truncation, we could read MaxFileBytes+1.
 
 		tree := parser.Parse(src, nil)
 		if tree == nil {
