@@ -19,7 +19,7 @@ The boilerplate and parser core are wired and runnable end-to-end:
 - `services/parser/queries/typescript.scm` — query patterns loaded into Go via `//go:embed`.
 - `services/parser/internal/resolver/resolver.go` — confidence constants + `Resolve()` stub.
 - `services/parser/internal/db/writer.go` — pgx pool + sqlx connection; `WriteGraph` stub.
-- `services/parser/migrations/0001_init.sql` — full schema.
+- `services/parser/migrations/0001_init.up.sql` — full schema.
 - `services/parser/testdata/sample/repo.ts` — test fixtures.
 
 So Phase 1 = **DONE**. We emit a complete, correct IR for TypeScript with production isolation in place.
