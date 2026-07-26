@@ -70,7 +70,7 @@ first; arrow functions where the "name" lives on the `variable_declarator`, not 
 anonymous functions nested with no enclosing name (use a placeholder like `<anonymous>` and
 document it).
 
-### C4b — Overload `overload_index` post-pass (future-proof)  `[ ]`
+### C4b — Overload `overload_index` post-pass (future-proof)  `[x]`
 **Approach:** After building the per-file `[]ir.Function`, run `assignOverloadIndices(funcs)`:
 group by `qualified_name`, sort each group by `start_line` ascending, assign `overload_index =
 0..n-1`. Single-declaration `qualified_name`s get `0`. Because the scope walk (C4) already gives
@@ -87,7 +87,7 @@ fixture with two `fetch` declarations yields `overload_index` 0 and 1.
 **Watch outs:** mutating the slice in place vs. building a map — be consistent; off-by on `n`; not
 re-running the pass when a chunk re-extracts a file later.
 
-### C5 — Populate `ir.CallSite` with `CallerQualified`  `[ ]`
+### C5 — Populate `ir.CallSite` with `CallerQualified`  `[x]`
 **Approach:** For each `@function.call` capture, set `CalleeName` = identifier / property name,
 `Line` = call node start row, `CallerQualified` = `qualifiedName(enclosingFunction)` (reuse C4's
 walk from the call node up to the nearest function ancestor). Module-level call (no enclosing
@@ -99,7 +99,7 @@ chained `a.b.c()`, and a call inside an arrow callback — with correct `CallerQ
 sub-node); calls inside comments/strings must NOT match (tree-sitter node matching handles this,
 but verify with a fixture).
 
-### C6 — Populate `ir.Import`  `[ ]`
+### C6 — Populate `ir.Import`  `[x]`
 **Approach:** Parse `import_statement` clauses: default (`import x from "y"`), named
 (`import {a, b} from "y"`), namespace (`import * as ns from "y"`), side-effect (`import "y"`),
 re-export (`export … from "y"`), and dynamic `import("y")`. `From` = string literal value (strip
@@ -110,7 +110,7 @@ Add a field to `ir.Import` if needed (e.g. `Symbols []string`, `IsDefault bool`,
 `import_statement` — handle separately or skip and document; named-import aliases
 (`{a as b}`) — local name is `b`; re-exports that don't bind a local name.
 
-### C7 — Return `ir.Graph`; `main.go` JSON dump + `--format summary`  `[ ]`
+### C7 — Return `ir.Graph`; `main.go` JSON dump + `--format summary`  `[x]`
 **Approach:** Change `extract.go`'s return from `[]ir.File` to `ir.Graph`. In `main.go`, marshal
 `graph` to JSON → write to `--out` (default `out.json`, `/dev/stdout` for streaming). Add
 `--format json|summary`; `summary` prints counts (`files`, `functions`, `calls`, `imports`). Keep
@@ -120,7 +120,7 @@ with the expected functions/calls/imports, and `--format summary` prints human c
 **Watch outs:** leaving the `db.Writer` import unused (Go will refuse to compile) — keep a
 `var _ = db.NewWriter` like `config.go` does, or move it behind a flag; `os.WriteFile` perms.
 
-### C8 — Harden `security.Walk`  `[ ]`
+### C8 — Harden `security.Walk`  `[x]`
 **Approach:** (1) **Symlink hard-fail** — in `Walk`, before accepting any path, `os.Lstat` and
 return error if `info.Mode() & os.ModeSymlink != 0` (do not readlink). (2) **Binary sniff** — read
 first ~512 bytes, skip if `bytes.IndexByte(buf, 0) != -1`. (3) **Fix depth** — replace
@@ -135,7 +135,7 @@ catch symlinks inside the tree, not just the root; `SkipDir` vs. `SkipAll` seman
 bytes for every file is cheap but measure; **decision not to respect `.gitignore`** — note in
 `docs/RISKS.md` during C14.
 
-### C9 — Bounded read at read site  `[ ]`
+### C9 — Bounded read at read site  `[x]`
 **Approach:** In `extract.go`, before reading a file, `os.Stat` and skip (log + continue) if size
 > `cfg.MaxFileBytes`; then read with `io.LimitReader` bound to `MaxFileBytes+1` so a file that grows
 between stat and read can't OOM you; also reuse C8's binary sniff at read time. Belt + suspenders.
@@ -144,7 +144,7 @@ between stat and read can't OOM you; also reuse C8's binary sniff at read time. 
 size check (already done in `Walk`) with this one — keep both (Walk gates discovery, read gates the
 actual read); not logging path + reason consistently.
 
-### C10 — Fixtures  `[ ]`
+### C10 — Fixtures  `[x]`
 **Approach:** Add under `services/parser/testdata/`:
 - `nested/` — 3-level nesting + class methods + arrow consts (drives C4 assertions);
 - `imports/` — default/named/namespace/side-effect/re-export/dynamic `import()` (drives C6);
@@ -160,7 +160,7 @@ For each, add `_expected.json` (or expected counts) that the test in C11 diff-as
 binding — verify the `tree_sitter-typescript/bindings/go` exposes both; huge-line fixture must be
 *under* the size cap or its purpose (size test) is moot.
 
-### C11 — Golden `extract_test.go`  `[ ]`
+### C11 — Golden `extract_test.go`  `[x]`
 **Approach:** Table-driven tests over the C10 fixtures asserting: every node type we rely on
 (`function_declaration`, `method_definition`, `call_expression`, `import_statement`,
 `variable_declarator` with arrow/fn-expr) actually matches; comments and string literals
@@ -172,7 +172,7 @@ rel paths + structural fields; not regenerating goldens when queries intentional
 
 writable via tmpfs); the parser-clone sidecar forgetting to clean the tmpfs between runs.
 
-### C13 — CI for the parser  `[ ]`
+### C13 — CI for the parser  `[x]`
 **Approach:** Update `.github/workflows/ci.yml`:
 - `parser` job: `setup-go@v5`, `go mod tidy` check, `go vet ./...`, `go test -race ./...`,
   `go build ./...`; cache `~/go/pkg/mod` + build cache.
@@ -186,7 +186,7 @@ writable via tmpfs); the parser-clone sidecar forgetting to clean the tmpfs betw
 `go mod tidy` check needs `GOFLAGS=-mod=mod` or it can falsely fail; the migration job must not
 leave Postgres running.
 
-### C14 — Docs sync  `[ ]`
+### C14 — Docs sync  `[x]`
 **Approach:**
 - `docs/PARSING_STRATEGY.md`: write the `qualified_name` convention (C4), `overload_index` post-pass
   (C4b), the runtime `.scm` load approach (C1), and known limitations hit (arrows, JSX, dynamic
@@ -207,15 +207,15 @@ note that it's deferred; the `samples` for ` qualified_name` must match exactly 
 ## Phase 1 exit gate (Definition of Done)
 
 All of the following pass:
-- [ ] `cd services/parser && go test ./...` green — `internal/security` + `internal/ts` (all
+- [x] `cd services/parser && go test ./...` green — `internal/security` + `internal/ts` (all
       fixtures) + golden tests.
-- [ ] `make go-run REPO=./services/parser/testdata/sample` emits a correct `out.json`.
-- [ ] `make go-vet` clean.
-- [ ] `docker compose run --rm parser …` runs isolated (non-root, read-only rootfs, `network none`,
+- [x] `make go-run REPO=./services/parser/testdata/sample` emits a correct `out.json`.
+- [x] `make go-vet` clean.
+- [x] `docker compose run --rm parser …` runs isolated (non-root, read-only rootfs, `network none`,
       no caps) and parses the sample.
-- [ ] Negative tests green: symlink-to-escape rejected; 5MB file skipped; binary file skipped.
-- [ ] CI workflow green on a PR (parser + parser-sample + migration-check jobs).
-- [ ] `docs/PARSING_STRATEGY.md`, `docs/RISKS.md`, `docs/SECURITY.md`, `DEVELOPMENT.md` reflect
+- [x] Negative tests green: symlink-to-escape rejected; 5MB file skipped; binary file skipped.
+- [x] CI workflow green on a PR (parser + parser-sample + migration-check jobs).
+- [x] `docs/PARSING_STRATEGY.md`, `docs/RISKS.md`, `docs/SECURITY.md`, `DEVELOPMENT.md` reflect
       implemented behavior — no aspirational TODOs.
 
 ---

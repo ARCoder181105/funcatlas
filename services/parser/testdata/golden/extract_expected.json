@@ -25,7 +25,7 @@
       "Source": "function localCall() {\n    obj.method();\n    a.b.c();\n    setTimeout(() =\u003e {\n        innerCall();\n    }, 100);\n}"
     },
     {
-      "FileID": 0,
+      "FileID": 2,
       "PackagePath": "",
       "Name": "sync",
       "QualifiedName": "Repo.sync",
@@ -35,7 +35,7 @@
       "Source": "    sync() {\n        function cb() {}\n        cb();\n    }"
     },
     {
-      "FileID": 0,
+      "FileID": 2,
       "PackagePath": "",
       "Name": "cb",
       "QualifiedName": "Repo.sync.cb",
@@ -45,7 +45,7 @@
       "Source": "        function cb() {}"
     },
     {
-      "FileID": 0,
+      "FileID": 2,
       "PackagePath": "",
       "Name": "fetch",
       "QualifiedName": "fetch",
@@ -55,7 +55,7 @@
       "Source": "export function fetch(url: string, opts?: any): string {\n    return \"done\";\n}"
     },
     {
-      "FileID": 0,
+      "FileID": 2,
       "PackagePath": "",
       "Name": "greet",
       "QualifiedName": "greet",
@@ -65,7 +65,7 @@
       "Source": "const greet = (name: string) =\u003e `Hello ${name}`;"
     },
     {
-      "FileID": 0,
+      "FileID": 2,
       "PackagePath": "",
       "Name": "f",
       "QualifiedName": "f",
@@ -75,7 +75,7 @@
       "Source": "let f = function() {};"
     },
     {
-      "FileID": 0,
+      "FileID": 2,
       "PackagePath": "",
       "Name": "caller",
       "QualifiedName": "caller",
@@ -129,40 +129,40 @@
   ],
   "Imports": [
     {
-      "FileID": 0,
+      "FileID": 1,
       "Symbols": [
         "def"
       ],
       "From": "a"
     },
     {
-      "FileID": 0,
+      "FileID": 1,
       "Symbols": [
         "named"
       ],
       "From": "b"
     },
     {
-      "FileID": 0,
+      "FileID": 1,
       "Symbols": [
         "ns"
       ],
       "From": "c"
     },
     {
-      "FileID": 0,
+      "FileID": 1,
       "Symbols": null,
       "From": "d"
     },
     {
-      "FileID": 0,
+      "FileID": 1,
       "Symbols": [
         "reexport"
       ],
       "From": "e"
     },
     {
-      "FileID": 0,
+      "FileID": 2,
       "Symbols": [
         "a",
         "b"
@@ -170,14 +170,14 @@
       "From": "x"
     },
     {
-      "FileID": 0,
+      "FileID": 2,
       "Symbols": [
         "ns"
       ],
       "From": "y"
     },
     {
-      "FileID": 0,
+      "FileID": 2,
       "Symbols": null,
       "From": "z"
     }

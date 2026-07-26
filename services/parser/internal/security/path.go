@@ -55,12 +55,12 @@ func Walk(logger *zap.Logger, root string, cfg Config) ([]string, error) {
 			logger.Warn("file cap reached, stopping walk", zap.Int("max", cfg.MaxFiles))
 			return fs.SkipAll
 		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return os.ErrPermission
+		}
 		info, err := d.Info()
 		if err != nil {
 			return nil
-		}
-		if d.Type()&os.ModeSymlink != 0 {
-			return os.ErrPermission
 		}
 		if info.Size() > cfg.MaxFileBytes {
 			logger.Warn("skipping oversized file", zap.String("path", path))

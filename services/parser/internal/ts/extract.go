@@ -31,11 +31,26 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 		return ir.Graph{}, err
 	}
 
+	qs, err := loadQueries(lang)
+	if err != nil {
+		return ir.Graph{}, fmt.Errorf("loadQueries: %w", err)
+	}
+	defer qs.Close()
+
 	var graph ir.Graph
 	for _, p := range paths {
 		if !strings.HasSuffix(p, ".ts") && !strings.HasSuffix(p, ".tsx") {
 			continue
 		}
+
+		rel, _ := filepath.Rel(root, p)
+		pkgPath := filepath.Dir(rel)
+		if pkgPath == "." || pkgPath == "" {
+			pkgPath = ""
+		}
+		
+		fileID := len(graph.Files)
+		graph.Files = append(graph.Files, ir.File{Path: rel, Language: "typescript"})
 		
 		startLen := len(graph.Functions)
 
@@ -44,15 +59,17 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 			logger.Warn("open failed", zap.String("path", p), zap.Error(err))
 			continue
 		}
-		src, err := io.ReadAll(io.LimitReader(f, int64(cfg.MaxFileBytes)))
+		src, err := io.ReadAll(io.LimitReader(f, int64(cfg.MaxFileBytes)+1))
 		_ = f.Close()
 		if err != nil {
 			logger.Warn("read failed", zap.String("path", p), zap.Error(err))
 			continue
 		}
 		
-		// If the file is exactly MaxFileBytes, it might be truncated. Since we just limit the read,
-		// it will parse whatever fits. If we wanted to error on truncation, we could read MaxFileBytes+1.
+		if int64(len(src)) > cfg.MaxFileBytes {
+			logger.Warn("file exceeds max bytes, skipping", zap.String("path", p))
+			continue
+		}
 
 		tree := parser.Parse(src, nil)
 		if tree == nil {
@@ -60,16 +77,9 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 			continue
 		}
 
-		qs, err := loadQueries(lang)
-		if err != nil {
-			tree.Close()
-			return ir.Graph{}, fmt.Errorf("loadQueries: %w", err)
-		}
-
-		rel, _ := filepath.Rel(root, p)
-		pkgPath := filepath.Dir(rel)
-		if pkgPath == "." || pkgPath == "" {
-			pkgPath = ""
+		if tree == nil {
+			logger.Warn("parse returned nil tree", zap.String("path", p))
+			continue
 		}
 
 		cursor := tree_sitter.NewQueryCursor()
@@ -105,6 +115,7 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 				source := strings.Join(lines[startLine-1:endLine], "\n")
 
 				graph.Functions = append(graph.Functions, ir.Function{
+					FileID:        fileID,
 					PackagePath:   pkgPath,
 					Name:          funcName,
 					QualifiedName: qualifiedName(*declNode, src, funcName),
@@ -117,6 +128,7 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 		}
 
 		assignOverloadIndices(graph.Functions[startLen:])
+		cursor.Close()
 
 		cursor = tree_sitter.NewQueryCursor()
 		callMatches := cursor.Matches(qs.call, tree.RootNode(), src)
@@ -180,6 +192,7 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 				})
 			}
 		}
+		cursor.Close()
 
 		cursor = tree_sitter.NewQueryCursor()
 		impMatches := cursor.Matches(qs.imp, tree.RootNode(), src)
@@ -217,21 +230,15 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 				}
 
 				graph.Imports = append(graph.Imports, ir.Import{
+					FileID:  fileID,
 					From:    from,
 					Symbols: symbols,
 				})
 			}
 		}
 
-		// Add file entry once if we found any functions
-		// To match original intent of len(matches.Captures) > 0, we can check if we added any functions in this iteration, 
-		// but since graph.Functions is cumulative, we can just track if we had matches.
-		// For simplicity, we just add the file since we parsed it successfully.
-		graph.Files = append(graph.Files, ir.File{Path: rel, Language: "typescript"})
-
 		cursor.Close()
 		tree.Close()
-		qs.Close()
 	}
 
 	return graph, nil
