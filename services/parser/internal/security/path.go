@@ -1,6 +1,7 @@
 package security
 
 import (
+	"bytes"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -65,6 +66,16 @@ func Walk(logger *zap.Logger, root string, cfg Config) ([]string, error) {
 		if info.Size() > cfg.MaxFileBytes {
 			logger.Warn("skipping oversized file", zap.String("path", path))
 			return nil
+		}
+		f, err := os.Open(path)
+		if err == nil {
+			buf := make([]byte, 512)
+			n, _ := f.Read(buf)
+			f.Close()
+			if bytes.IndexByte(buf[:n], 0) != -1 {
+				logger.Warn("skipping binary file", zap.String("path", path))
+				return nil
+			}
 		}
 		if _, err := ContainsRoot(root, path); err != nil {
 			return err

@@ -41,6 +41,21 @@ jobs:
         with:
           version: v2.12.2
           working-directory: services/parser
+      - name: go mod tidy check
+        working-directory: services/parser
+        run: go mod tidy && git diff --exit-code go.mod go.sum
+      - name: go vet
+        working-directory: services/parser
+        run: go vet ./...
       - name: go test
         working-directory: services/parser
-        run: go test ./...
+        run: go test -race ./...
+      - name: go build
+        working-directory: services/parser
+        run: go build -o parser ./cmd/parser
+      - name: parser sample check
+        working-directory: services/parser
+        run: ./parser --repo ./testdata/sample --format summary
+      - name: migration check
+        run: |
+          docker run --rm --network host -v $(pwd)/services/parser/migrations:/migrations migrate/migrate -path /migrations -database "${DATABASE_URL}" up

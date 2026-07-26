@@ -1,6 +1,7 @@
 package ts
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -49,9 +50,6 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 			pkgPath = ""
 		}
 		
-		fileID := len(graph.Files)
-		graph.Files = append(graph.Files, ir.File{Path: rel, Language: "typescript"})
-		
 		startLen := len(graph.Functions)
 
 		f, err := os.Open(p)
@@ -71,11 +69,23 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 			continue
 		}
 
+		sniffLen := len(src)
+		if sniffLen > 512 {
+			sniffLen = 512
+		}
+		if bytes.IndexByte(src[:sniffLen], 0) != -1 {
+			logger.Warn("binary file detected at read time, skipping", zap.String("path", p))
+			continue
+		}
+
 		tree := parser.Parse(src, nil)
 		if tree == nil {
 			logger.Warn("parse returned nil tree", zap.String("path", p))
 			continue
 		}
+		
+		fileID := len(graph.Files)
+		graph.Files = append(graph.Files, ir.File{Path: rel, Language: "typescript"})
 
 		if tree == nil {
 			logger.Warn("parse returned nil tree", zap.String("path", p))
