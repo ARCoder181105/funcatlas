@@ -16,14 +16,15 @@ func qualifiedName(node tree_sitter.Node, src []byte, baseName string) string {
 		curr := *parent
 		kind := curr.Kind()
 
-		if kind == "class_declaration" || kind == "function_declaration" || kind == "method_definition" {
+		switch kind {
+		case "class_declaration", "function_declaration", "method_definition":
 			nameNode := curr.ChildByFieldName("name")
 			if !nameNode.IsMissing() && nameNode.Id() != 0 {
 				parts = append(parts, nameNode.Utf8Text(src))
 			} else {
 				parts = append(parts, "<anonymous>")
 			}
-		} else if kind == "arrow_function" || kind == "function_expression" {
+		case "arrow_function", "function_expression":
 			pParent := curr.Parent()
 			if pParent != nil && pParent.Id() != 0 && pParent.Kind() == "variable_declarator" {
 				nameNode := pParent.ChildByFieldName("name")

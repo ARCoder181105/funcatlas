@@ -21,7 +21,9 @@ import (
 func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, error) {
 	lang := tree_sitter.NewLanguage(bindings.LanguageTypescript())
 	parser := tree_sitter.NewParser()
-	parser.SetLanguage(lang)
+	if err := parser.SetLanguage(lang); err != nil {
+		return ir.Graph{}, fmt.Errorf("failed to set language: %w", err)
+	}
 	defer parser.Close()
 
 	paths, err := security.Walk(logger, root, cfg)
@@ -43,7 +45,7 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 			continue
 		}
 		src, err := io.ReadAll(io.LimitReader(f, int64(cfg.MaxFileBytes)))
-		f.Close()
+		_ = f.Close()
 		if err != nil {
 			logger.Warn("read failed", zap.String("path", p), zap.Error(err))
 			continue
