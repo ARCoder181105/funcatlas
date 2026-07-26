@@ -33,6 +33,9 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 		if !strings.HasSuffix(p, ".ts") && !strings.HasSuffix(p, ".tsx") {
 			continue
 		}
+		
+		startLen := len(graph.Functions)
+
 		src, err := os.ReadFile(p)
 		if err != nil {
 			logger.Warn("read failed", zap.String("path", p), zap.Error(err))
@@ -101,8 +104,115 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 			}
 		}
 
+		assignOverloadIndices(graph.Functions[startLen:])
+
+		cursor = tree_sitter.NewQueryCursor()
+		callMatches := cursor.Matches(qs.call, tree.RootNode(), src)
+		callIndex, _ := qs.call.CaptureIndexForName("function.call")
+
+		for match := callMatches.Next(); match != nil; match = callMatches.Next() {
+			for _, cap := range match.Captures {
+				if cap.Index != uint32(callIndex) {
+					continue
+				}
+
+				callNode := cap.Node
+				if callNode.IsMissing() || callNode.HasError() {
+					continue
+				}
+
+				calleeName := callNode.Utf8Text(src)
+				line := int(callNode.StartPosition().Row) + 1
+
+				callerQualified := "<module>"
+				// Walk up to find nearest enclosing function
+				parent := callNode.Parent()
+				var enclosingDecl *tree_sitter.Node
+				for parent != nil && !parent.IsMissing() && !parent.HasError() && parent.Id() != 0 {
+					kind := parent.Kind()
+					if kind == "function_declaration" || kind == "method_definition" {
+						enclosingDecl = parent
+						break
+					} else if kind == "arrow_function" || kind == "function_expression" {
+						pParent := parent.Parent()
+						if pParent != nil && pParent.Kind() == "variable_declarator" {
+							enclosingDecl = pParent
+						} else {
+							enclosingDecl = parent
+						}
+						break
+					}
+					parent = parent.Parent()
+				}
+
+				if enclosingDecl != nil {
+					// Use qualifiedName on the enclosing declaration
+					var baseName string
+					if enclosingDecl.Kind() == "variable_declarator" || enclosingDecl.Kind() == "function_declaration" || enclosingDecl.Kind() == "method_definition" {
+						nameNode := enclosingDecl.ChildByFieldName("name")
+						if nameNode != nil {
+							baseName = nameNode.Utf8Text(src)
+						} else {
+							baseName = "<anonymous>"
+						}
+					} else {
+						baseName = "<anonymous>"
+					}
+					callerQualified = qualifiedName(*enclosingDecl, src, baseName)
+				}
+
+				graph.Calls = append(graph.Calls, ir.CallSite{
+					CalleeName:      calleeName,
+					CallerQualified: callerQualified,
+					Line:            line,
+				})
+			}
+		}
+
+		cursor = tree_sitter.NewQueryCursor()
+		impMatches := cursor.Matches(qs.imp, tree.RootNode(), src)
+		impIndex, _ := qs.imp.CaptureIndexForName("import.from")
+
+		for match := impMatches.Next(); match != nil; match = impMatches.Next() {
+			for _, cap := range match.Captures {
+				if cap.Index != uint32(impIndex) {
+					continue
+				}
+
+				sourceNode := cap.Node
+				if sourceNode.IsMissing() || sourceNode.HasError() {
+					continue
+				}
+
+				from := strings.Trim(sourceNode.Utf8Text(src), "\"'`")
+				var symbols []string
+
+				stmt := sourceNode.Parent()
+				if stmt != nil {
+					var walk func(n tree_sitter.Node)
+					walk = func(n tree_sitter.Node) {
+						if n.Kind() == "identifier" {
+							symbols = append(symbols, n.Utf8Text(src))
+						}
+						for i := uint(0); i < n.ChildCount(); i++ {
+							child := n.Child(i)
+							if child != nil && child.Id() != sourceNode.Id() {
+								walk(*child)
+							}
+						}
+					}
+					walk(*stmt)
+				}
+
+				graph.Imports = append(graph.Imports, ir.Import{
+					From:    from,
+					Symbols: symbols,
+				})
+			}
+		}
+
 		// Add file entry once if we found any functions
-		// To match original intent of len(matches.Captures) > 0, we can check if we added any functions in this iteration,
+		// To match original intent of len(matches.Captures) > 0, we can check if we added any functions in this iteration, 
 		// but since graph.Functions is cumulative, we can just track if we had matches.
 		// For simplicity, we just add the file since we parsed it successfully.
 		graph.Files = append(graph.Files, ir.File{Path: rel, Language: "typescript"})
@@ -113,4 +223,30 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 	}
 
 	return graph, nil
+}
+
+func assignOverloadIndices(funcs []ir.Function) {
+	groups := make(map[string][]int)
+	for i, f := range funcs {
+		groups[f.QualifiedName] = append(groups[f.QualifiedName], i)
+	}
+
+	for _, indices := range groups {
+		if len(indices) <= 1 {
+			continue
+		}
+		// Since we slice the underlying array and modify it, we can't just use `funcs[indices[i]]` directly in sort if it's out of order, 
+		// but the indices array stores the local index within the `funcs` slice.
+		for i := 0; i < len(indices)-1; i++ {
+			for j := i + 1; j < len(indices); j++ {
+				if funcs[indices[i]].StartLine > funcs[indices[j]].StartLine {
+					indices[i], indices[j] = indices[j], indices[i]
+				}
+			}
+		}
+		
+		for idx, fIdx := range indices {
+			funcs[fIdx].OverloadIndex = idx
+		}
+	}
 }

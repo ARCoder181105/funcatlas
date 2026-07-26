@@ -11,3 +11,10 @@ let doSomething = function() {
 const obj = {
     notAFunc: 5
 };
+
+export function fetch(url: string): string;
+export function fetch(url: string, opts: any): string;
+export function fetch(url: string, opts?: any): string {
+    return "done";
+}
+

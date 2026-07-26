@@ -27,9 +27,9 @@ type CallSite struct {
 }
 
 type Import struct {
-	FileID int
-	Symbol string
-	From   string
+	FileID  int
+	Symbols []string
+	From    string
 }
 
 // Graph is the full extraction result for one repo.
