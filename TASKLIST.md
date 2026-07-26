@@ -170,18 +170,6 @@ scope walk on `nested/` matches expectations (C4); overload indices on `overload
 **Watch outs:** golden JSON that records unstable fields (absolute paths, byte sizes) — keep only
 rel paths + structural fields; not regenerating goldens when queries intentionally change.
 
-### C12 — Hardened parser Docker image  `[ ]`
-**Approach:** Multi-stage `Dockerfile`: `golang:1.25` build → distroless/alpine runtime, `USER
-nonroot` (UID 65532), only `git` in runtime. Bake `PARSER_*` env defaults via `ENV`. In
-`docker-compose.yml` add a `parser` service with `read_only: true`, `network_mode: none`,
-`cap_drop: [ALL]`, `tmpfs: [/tmp:size=100m]`, `mem_limit`, `cpus`. **Clone/parse split** per the
-locked decision: a `parser-clone` one-shot container (network enabled) clones into a shared tmpfs;
-the `parser-parse` container runs `--network none` against that volume. Add
-`make docker-run-parser REPO=./services/parser/testdata/sample`.
-**Good when:** `docker compose run --rm parser …` runs as non-root, read-only rootfs, no network,
-no caps, and emits `out.json`; `docker inspect` shows `NetworkMode=none` and empty `Cap`.
-**Watch outs:** distroless has no shell → `git` must come from a build stage or you containerize
-clone differently; `read_only: true` fights any code that writes to rootfs (only `/tmp` is
 writable via tmpfs); the parser-clone sidecar forgetting to clean the tmpfs between runs.
 
 ### C13 — CI for the parser  `[ ]`
