@@ -10,7 +10,7 @@ code block). First language: **TypeScript**.
 ## Status
 - [x] Phase 0: Bootstrap
 - [x] Phase 1: Parser & Isolation
-- [ ] Phase 2: Storage & Resolution
+- [~] Phase 2: Storage & Resolution
 - [ ] Phase 3: API, Auth, Canvas & Search
 - [ ] Phase 4: Webhooks, Queue & Hardening
 

@@ -14,9 +14,9 @@
   codebase. clone repo → tree-sitter parses functions + call sites → resolve calls → store graph in
   Postgres → explore on a React Flow canvas (file → card → function mind-map → code block).
   First language: **TypeScript**. 4-phase MVP.
-- **Status:** Phase 0 (monorepo/skeleton/migration/CI) and Phase 1 (real tree-sitter extraction, resolver, isolation hardening, isolated Docker) are **DONE & runnable**.
-- **Branch:** `main` (post-merge). **Default:** `main`.
-- **Active doc:** `TASKLIST.md` — Phase 1 split into 15 chunks (C1…C14 + C4b). Tick as you go.
+- **Status:** Phase 0 and Phase 1 are **DONE**. We are starting Phase 2 (Storage + Resolution).
+- **Branch:** `phase-2/storage-and-resolution`. **Default:** `main`.
+- **Active doc:** `TASKLIST.md` — Phase 2 chunks. Tick as you go.
 - **Owner of this build:** the human user **writes most of the code** (learning internals).
   Copilot's job = **debug, review, suggest better approaches, remove duplication, improve
   comments/naming, catch bugs, guide when stuck**. Copilot maintains `TASKLIST.md` checkboxes.
