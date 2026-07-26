@@ -3,6 +3,7 @@ package ts_test
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -26,7 +27,7 @@ func TestExtract_Golden(t *testing.T) {
 		t.Fatalf("Marshal failed: %v", err)
 	}
 
-	actualFile := "../../testdata/golden/extract_actual.json"
+	actualFile := filepath.Join(t.TempDir(), "extract_actual.json")
 	if err := os.WriteFile(actualFile, actualData, 0644); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
