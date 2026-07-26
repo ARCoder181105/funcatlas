@@ -2,7 +2,7 @@
 # Run `make <target>`. Most targets shell out to pnpm/turbo or docker.
 
 .PHONY: install dev build lint typecheck test migrate up down health \
-        go-build go-test go-vet go-run go-tidy clean
+        go-build go-test go-vet go-run go-tidy go-lint clean
 
 install: ## Install all workspace dependencies
 	pnpm install
@@ -47,6 +47,9 @@ go-vet: ## Vet the Go parser
 
 go-tidy: ## Tidy Go modules
 	cd services/parser && go mod tidy
+
+go-lint: ## Lint the Go parser
+	cd services/parser && golangci-lint run
 
 go-run: ## Run the parser against a local repo (usage: make go-run REPO=./path)
 	cd services/parser && go run ./cmd/parser --repo "$(REPO)"

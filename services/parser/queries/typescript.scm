@@ -20,4 +20,12 @@
   source: (string) @import.from)
 
 (export_statement
-  "from": (string) @import.from)
+  source: (string) @import.from)
+
+(variable_declarator
+  name: (identifier) @function.def
+  value: [
+    (arrow_function)
+    (function_expression)
+  ])
+

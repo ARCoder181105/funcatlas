@@ -26,11 +26,11 @@ This project clones and reads arbitrary user-supplied repositories. That's a rea
 
 ## Checklist before handling real users' private repos
 
-- [ ] Clone/parse runs in an isolated container, not the host running the API
-- [ ] No install/build scripts from the target repo are ever invoked
-- [ ] Parser process has no outbound network access (`--network none`, read-only mount, dropped caps)
-- [ ] Symlink / path-traversal escapes are rejected before parsing or serving source
-- [ ] File-count, per-file size (>1MB), and depth caps are enforced; binary/`node_modules`/`.git` skipped
+- [x] Clone/parse runs in an isolated container, not the host running the API
+- [x] No install/build scripts from the target repo are ever invoked
+- [x] Parser process has no outbound network access (`--network none`, read-only mount, dropped caps)
+- [ ] Symlink / path-traversal escapes are checked (path-validation only; full descriptor-based TOCTOU protection deferred)
+- [x] File-count, per-file size (>1MB), and depth caps are enforced; binary/`node_modules`/`.git` skipped
 - [ ] Webhook signatures are verified, replay-protected (timestamp window), and per-repo throttled
 - [ ] All graph endpoints are session-gated (no anonymous access)
 - [ ] Recursive N-hop CTE is depth-bounded and parameterized

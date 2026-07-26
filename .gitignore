@@ -43,3 +43,5 @@ Thumbs.db
 
 # --- Vercel (if used later) ---
 .vercel/
+out.json
+extract_actual.json

@@ -1,6 +1,8 @@
 package security
 
 import (
+	"bytes"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -55,15 +57,42 @@ func Walk(logger *zap.Logger, root string, cfg Config) ([]string, error) {
 			logger.Warn("file cap reached, stopping walk", zap.Int("max", cfg.MaxFiles))
 			return fs.SkipAll
 		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return os.ErrPermission
+		}
 		info, err := d.Info()
 		if err != nil {
 			return nil
 		}
 		if info.Size() > cfg.MaxFileBytes {
-			return nil // skip oversized file
+			logger.Warn("skipping oversized file", zap.String("path", path))
+			return nil
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			logger.Warn("failed to open file", zap.String("path", path), zap.Error(err))
+			return nil
+		}
+		buf := make([]byte, 512)
+		n, err := f.Read(buf)
+		if err != nil && err != io.EOF {
+			_ = f.Close()
+			logger.Warn("failed to read file", zap.String("path", path), zap.Error(err))
+			return nil
+		}
+		if err := f.Close(); err != nil {
+			logger.Warn("failed to close file", zap.String("path", path), zap.Error(err))
+			return nil
+		}
+		if bytes.IndexByte(buf[:n], 0) != -1 {
+			logger.Warn("skipping binary file", zap.String("path", path))
+			return nil
 		}
 		if _, err := ContainsRoot(root, path); err != nil {
-			return nil // reject escaped path
+			return err
 		}
 		out = append(out, path)
 		count++

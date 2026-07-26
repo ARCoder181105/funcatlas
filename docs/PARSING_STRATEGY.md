@@ -32,7 +32,19 @@ Getting all of this right amounts to re-implementing a simplified parser — tre
 
 ## Call resolution — the actual hard problem
 
-Tree-sitter finds a call site like `getUser(id)`; it cannot say which `getUser` definition that refers to when multiple exist. Resolution is a distinct step, done in this order for v1:
+Tree-sitter finds a call site like `getUser(id)`; it cannot say which `getUser` definition that refers to
+
+### Naming Rules (C4/C5)
+- Top-level function: bare `Name` (e.g. `getUser`).
+- Class method: `ClassName.methodName` (e.g. `Repo.sync`).
+- Nested function: `OuterFunc.innerFunc`.
+- Module-level call: Caller is `<module>`.
+- Anonymous functions fallback to `<anonymous>`.
+
+**Overload Index Post-Pass:**
+After extracting all functions in a file, group identical `qualified_name` values, sort each group by `start_line`, and assign `overload_index` values `0..n-1`. This is consistent with the database uniqueness key `(file_id, qualified_name, overload_index)`, ensuring anonymous and overloaded functions are deterministically identifiable.
+
+### Phase 2: Inter-File Edge Creation (Resolution) is a distinct step, done in this order for v1:
 
 1. **Same file** — is there a `getUser` defined in this file? Prefer it.
 2. **Imported symbol** — does the file's import statements bring in a specific `getUser` from elsewhere? Follow that.

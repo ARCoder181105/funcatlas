@@ -8,8 +8,11 @@ resolve calls → store in Postgres → explore via React Flow canvas (file → 
 code block). First language: **TypeScript**.
 
 ## Status
-Planning only — no code yet. Phases: 0 bootstrap → 1 parser+isolation → 2 storage+resolution →
-3 API+auth+canvas+search → 4 webhooks+queue+hardening.
+- [x] Phase 0: Bootstrap
+- [x] Phase 1: Parser & Isolation
+- [ ] Phase 2: Storage & Resolution
+- [ ] Phase 3: API, Auth, Canvas & Search
+- [ ] Phase 4: Webhooks, Queue & Hardening
 
 ## Locked stack (do NOT re-decide without explicit reason)
 - Monorepo: **pnpm + Turborepo**; shared types in **`packages/shared`** (Drizzle + Zod).
