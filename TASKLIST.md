@@ -19,7 +19,7 @@ chunks is to land Phase 1 with no DB writes and no UI.
 
 ## Phase 1 — chunks
 
-### C1 — Runtime-load `queries/typescript.scm`  `[ ]`
+### C1 — Runtime-load `queries/typescript.scm`  `[x]`
 **Approach:** Add `services/parser/internal/ts/queries.go` that reads `queries/typescript.scm` at
 runtime (embed via `//go:embed` so the binary stays self-contained) and compiles it with
 `tree_sitter.NewQuery(language, source)`. Expose `func loadQueries(lang tree_sitter.Language) (*Queries, error)`

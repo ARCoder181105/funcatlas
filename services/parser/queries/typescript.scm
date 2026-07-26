@@ -20,4 +20,4 @@
   source: (string) @import.from)
 
 (export_statement
-  "from": (string) @import.from)
+  source: (string) @import.from)
