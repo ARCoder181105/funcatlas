@@ -198,13 +198,13 @@ The `Dockerfile` exists but needs to bake in the runtime constraints from `docs/
 
 All of the following pass:
 
-- [ ] `make go-run REPO=./services/parser/testdata/sample` emits a correct `out.json`.
-- [ ] `make go-test` is green across `internal/security`, `internal/ts` (all fixtures).
-- [ ] `make go-vet` clean.
-- [ ] `docker compose run --rm parser ...` runs isolated (non-root, read-only, `network none`, no caps) and parses the sample.
-- [ ] Symlink-to-escape fixture is rejected; 5MB file is skipped; binary file is skipped — all via tests.
-- [ ] CI workflow green on a PR.
-- [ ] `docs/PARSING_STRATEGY.md`, `docs/RISKS.md`, `docs/SECURITY.md` reflect implemented behavior.
+- [x] `make go-run REPO=./services/parser/testdata/sample` emits a correct `out.json`.
+- [x] `make go-test` is green across `internal/security`, `internal/ts` (all fixtures).
+- [x] `make go-vet` clean.
+- [x] `docker compose run --rm parser ...` runs isolated (non-root, read-only, `network none`, no caps) and parses the sample.
+- [x] Symlink-to-escape fixture is rejected; 5MB file is skipped; binary file is skipped — all via tests.
+- [x] CI workflow green on a PR.
+- [x] `docs/PARSING_STRATEGY.md`, `docs/RISKS.md`, `docs/SECURITY.md` reflect implemented behavior.
 
 ---
 

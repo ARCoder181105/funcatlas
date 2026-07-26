@@ -87,7 +87,7 @@
       /ir              Go-native IR: File/Function/CallSite/Import/Graph (R9 handled here)
       /resolver        Resolve() confidence consts; marks all unresolved (Phase 2 fill)
       /security        Config (env caps), ContainsRoot (symlink/.. guard), Walk (cap-enforcing)
-      /ts              extract.go (init lang/parser + walk; queries NOT run yet)
+      /ts              extract.go (init lang/parser + walk; runs queries)
     /migrations/0001_init.sql  full schema (overload-safe UNIQUE, CASCADE, indexes)
     /queries/typescript.scm    query patterns (@function.def/@call/@import.from);
                               C1 fixed: export_statement uses `source:` field, not `"from":` (invalid syntax)
