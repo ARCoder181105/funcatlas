@@ -71,7 +71,7 @@ func Walk(logger *zap.Logger, root string, cfg Config) ([]string, error) {
 		if err == nil {
 			buf := make([]byte, 512)
 			n, _ := f.Read(buf)
-			f.Close()
+			_ = f.Close()
 			if bytes.IndexByte(buf[:n], 0) != -1 {
 				logger.Warn("skipping binary file", zap.String("path", path))
 				return nil
