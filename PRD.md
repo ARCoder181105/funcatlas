@@ -1,200 +1,111 @@
-# PRD — funcatlas / CodeCanvas
+# Product Requirements
 
-> Product Requirements Document. Single source of truth for *what* we're building and *why*.
-> Architecture, stack, and risks live in `docs/` (`ARCHITECTURE.md`, `TECH_STACK.md`,
-> `DATA_MODEL.md`, `RISKS.md`, `SECURITY.md`, `UI_GUIDE.md`); this document is the **product
-> contract**. Cross-reference `PLAN.md` for the phased execution plan and `TASKLIST.md` for the
-> current chunk-by-chunk build.
+What funcatlas is, who it's for, and what it must do to count as finished. This document owns the
+product contract. The build sequence lives in [`PLAN.md`](PLAN.md); architecture, schema, and stack
+reasoning live in [`docs/`](docs/).
 
 ---
 
-## 1. Vision
+## 1. The problem
 
-An interactive visual map of any codebase: paste a repo URL → we clone it, parse with tree-sitter,
-resolve call relationships, store the graph in Postgres, and let you explore it on a React Flow
-canvas (file → card → function mind-map → code block). The goal is to make *the shape of a
-codebase* legible for repos that no longer fit in one human head — without ever pretending to know
-what a call points to when it doesn't.
+A codebase outgrows the working memory of the people maintaining it long before it becomes large by
+any objective measure. The tools we have are all local: go-to-definition answers "where is this one
+symbol" and grep answers "where does this string appear", but neither answers "what is the shape of
+this thing" or "what breaks if I change this function". Static-analysis dashboards report the shape
+as tables and numbers, which is not how anyone actually holds a structure in their head.
 
-**One-liner:** *"See the shape of any codebase — functions, calls, and confidence, visually."*
+funcatlas answers the repo-level question visually — and, critically, tells you how sure it is.
 
----
+**One line:** *see the shape of any codebase — functions, calls, and confidence.*
 
-## 2. Why now / problem
+## 2. Who it's for
 
-- Codebases outgrow a single engineer's working memory; onboarding to a large repo is slow.
-- Existing tools (IDE go-to-definition) are **local and per-file**; none give a *repo-level* map.
-- Static-analysis dashboards are tables/numbers, not **explorable** graphs.
-- A trustworthy, repo-wide visual call graph — with explicit uncertainty baked in — closes the gap.
+| | Persona | The question they arrive with |
+|---|---|---|
+| P1 | Engineer onboarding to an unfamiliar repo | "Where do I even start?" — wants entry points and the high-level shape |
+| P2 | Maintainer of a large TypeScript project | "What's the blast radius if I change this?" — wants N-hop traversal and caller sets |
+| P3 | Contributor evaluating a project | "Is this codebase sane?" — wants orientation before a first PR |
 
----
+Not for, in the MVP: teams needing shared canvases, RBAC, or real-time collaboration.
 
-## 3. Target users & personas
-
-- **P1 — Mid/senior engineer onboarding to an unfamiliar repo.** *"Where do I even start?"* Wants
-  the high-level shape: entry points, hot functions, who calls what.
-- **P2 — Tech lead / maintainer of a large TS project.** *"What's the blast radius if I change
-  this function?"* Wants N-hop traversal and caller sets.
-- **P3 — OSS contributor evaluating a project.** Quick orientation before a first PR.
-
-**Non-goal for MVP:** multi-tenant teams, RBAC, sharing canvases, real-time collaboration.
-
----
-
-## 4. Goals & non-goals (MVP)
+## 3. What "done" means
 
 ### Goals
-- Parse a public TS repo end-to-end → trustworthy, confidence-tagged call graph persisted in Postgres.
-- Explore it on a premium dark-mode React Flow canvas: sidebar → card → mind-map → code.
-- GitHub OAuth login; register a repo by URL; automatic incremental refresh via webhook + queue.
-- Function-name search across the repo (⌘K palette + search box).
-- Production-grade isolation: parser runs non-root, read-only, no network egress, no symlink
-  follow, file/size/binary caps.
 
-### Non-goals (post-MVP)
-- LSP-based resolution (ships later as a v2 upgrade of `name_match`/`unresolved` → `exact`).
-- Excalidraw freehand annotation layer.
-- Multi-language support (TypeScript first; go deep before breadth).
-- Neo4j / dedicated graph database.
-- Real-time multi-user editing, saved canvas layouts.
+- Parse a public TypeScript repo end to end into a confidence-tagged call graph in Postgres.
+- Explore that graph on a dark-mode React Flow canvas: sidebar → card → mind-map → code.
+- GitHub OAuth login, repo registration by URL, automatic refresh on push.
+- Function-name search across a repo, from a search box and a ⌘K palette.
+- Run the parser against untrusted repos without exposing the host.
 
----
+### Explicitly not goals
 
-## 5. User stories
+LSP-based resolution, a freehand annotation layer, languages beyond TypeScript, a dedicated graph
+database, saved canvas layouts, real-time multi-user editing. Rationale for each is in
+[`PLAN.md`](PLAN.md#cut-from-the-mvp).
 
-- As a visitor, I land on `/` and see an animated live-graph hero so I understand the product in
-  5 seconds, then "Try a repo" → GitHub OAuth.
-- As a logged-in user, I paste a repo URL → the repo is cloned/parsed → I see its file tree.
-- As a user, I click a file → a card appears → click the card → a mind-map of that file's functions
-  branches out → click a function → Shiki-highlighted code block, with cross-file call links.
-- As a user, edges show confidence: **solid** (`exact`) / **dashed** (`name_match`) / **dotted**
-  (`unresolved`) — a guess is never drawn as a fact.
-- As a user, I ⌘K / search a function name → jump to it anywhere in the repo.
-- As a user, when the repo's maintainer pushes, the graph updates automatically (webhook → queue).
-- As a maintainer, I see the blast radius of changing a function (N-hop traversal).
+## 4. User stories
 
----
+- I land on `/`, see an animated live-graph hero, understand the product in five seconds, and hit
+  "Try a repo".
+- I paste a repo URL; it clones and parses; I get a file tree.
+- I click a file → a card appears → I click the card → a mind-map of that file's functions branches
+  out → I click a function → its highlighted source, with links out to cross-file calls.
+- I can tell at a glance how confident each edge is: **solid** for `exact`, **dashed** for
+  `name_match`, **dotted** for `unresolved`.
+- I press ⌘K, type a function name, and jump to it anywhere in the repo.
+- When the repo's maintainer pushes, my graph updates without me asking.
+- I select a function and see everything that would be affected if I changed it.
 
-## 6. Functional requirements
+## 5. Functional requirements
 
-- **FR-1 Ingestion** — accept a public GitHub repo URL (post-OAuth, repo-read scope) **or** a local
-  path; clone/read into an isolated environment; never execute the repo's build/install scripts.
-- **FR-2 Parsing** — tree-sitter extracts function/method definitions (name, qualified name, line
-  range, source), call expressions (callee name, enclosing caller, line), and import statements.
-- **FR-3 Input hardening** — reject symlink/path-traversal escapes; skip files >1MB, binary files,
-  and dirs under `node_modules`/`.git`/`dist`/`build`; cap total file count and tree depth.
-- **FR-4 Resolution** — link each call to a definition via same-file → imported symbol → package
-  fallback → unresolved; tag every edge `exact`/`name_match`/`unresolved`.
-- **FR-5 Storage** — persist repos, files, functions, edges to Postgres (schema in `DATA_MODEL.md`),
-  with overload-safe uniqueness, `ON DELETE CASCADE`, and `parsed_commit`/`updated_at` for incremental diff.
-- **FR-6 Graph API** (session-gated) — list repos; file tree; functions for file; edges for function;
-  raw source; search functions by name across a repo.
-- **FR-7 Canvas** — sidebar file tree; card → mind-map → code; confidence-styled edges; minimap;
-  multi-open; ⌘K palette + name search; ≤2000 visible-node target with expand-on-click.
-- **FR-8 Auth** — GitHub OAuth from day 1 (repo-read scope, refresh); Redis sessions; rate-limit.
-- **FR-9 Incremental refresh** — GitHub webhook (HMAC-verified, replay-protected, per-repo
-  throttled) → BullMQ → diff changed files → re-parse only those → re-link only affected edges
-  (renames/deletes update every edge pointing at the old function — no orphans).
-- **FR-10 Isolation runtime** — parser container runs non-root, read-only rootfs, no caps, and
-  **network NONE** during parse (clone happens in a separate network-enabled sidecar sharing tmpfs).
+| | Requirement |
+|---|---|
+| FR-1 | **Ingestion** — accept a public GitHub URL (post-OAuth, repo-read scope) or a local path; clone into an isolated environment; never invoke the repo's own install, build, or test scripts. |
+| FR-2 | **Parsing** — extract function and method definitions (name, qualified name, line range, source), call expressions (callee, receiver, enclosing caller, line), and import statements. |
+| FR-3 | **Input hardening** — reject symlinks and path-traversal escapes; skip files over 1 MB, binary files, and anything under `node_modules`, `.git`, `dist`, or `build`; cap total file count and tree depth. |
+| FR-4 | **Resolution** — link each call via same-file → imported symbol → package fallback → unresolved, and tag every edge with its confidence. An unresolved call is still recorded, with the callee name it could not resolve. |
+| FR-5 | **Storage** — persist repos, files, functions, and edges to Postgres with overload-safe uniqueness, cascading deletes, and `parsed_commit`/`updated_at` for incremental diffing. |
+| FR-6 | **Graph API** — session-gated: list repos, file tree, functions for a file, edges for a function, raw source, and search by name. |
+| FR-7 | **Canvas** — sidebar file tree; card → mind-map → code; confidence-styled edges; minimap; multiple files open at once; ⌘K palette; a 2,000 visible-node ceiling with expand-on-click beyond it. |
+| FR-8 | **Auth** — GitHub OAuth from day one, repo-read scope with refresh, Redis-backed sessions, rate limiting. |
+| FR-9 | **Incremental refresh** — HMAC-verified, replay-protected, per-repo-throttled webhook → queue → diff changed files → re-parse only those → relink only affected edges. A rename or deletion must update every edge pointing at the old function. |
+| FR-10 | **Isolation runtime** — the parse container runs non-root, read-only, with no capabilities and no network. Cloning happens in a separate network-enabled step that hands over a shared tmpfs. |
 
----
+## 6. Non-functional requirements
 
-## 7. Non-functional requirements
+| | Requirement |
+|---|---|
+| NFR-1 | **Performance** — 300-file TypeScript repo parsed and resolved in under 90 s; `functions-for-file` p95 under 150 ms; 5-hop traversal over 10k edges under 500 ms; 60 fps at 2,000 visible nodes. |
+| NFR-2 | **Security** — no network egress during parse; an untrusted repo cannot read host files; webhooks are replay- and flood-safe; every graph endpoint is session-gated; secrets come from the environment. |
+| NFR-3 | **Correctness** — re-parsing a renamed or deleted function leaves no orphan edges, and resolution never claims certainty it does not have. |
+| NFR-4 | **Operability** — one `docker compose up` brings the whole stack up; `/healthz` on api and parser; structured logs (zap in the parser, pino in the api). |
+| NFR-5 | **Maintainability** — shared TypeScript types only in `packages/shared`; one SQL migration source at `services/parser/migrations/`; explicit SQL via sqlx in Go, Drizzle in the API, no full ORM anywhere. |
+| NFR-6 | **UX** — dark-mode-first with accent tokens; motion that explains rather than decorates; skeleton loading; actionable errors; `prefers-reduced-motion` respected. |
 
-- **NFR-1 Performance** — parse a 300-file TS repo in **< 90s**; `GET functions for file` p95
-  **< 150ms**; N-hop (depth 5, 10k edges) **< 500ms**; canvas 60fps at ≤2000 visible nodes.
-- **NFR-2 Security** — no network egress during parse; untrusted repo can't read host files
-  (symlink/path containment); webhook replay/flood safe; session-gated API; secrets via env.
-- **NFR-3 Correctness** — re-parse of a renamed/deleted function leaves **no orphan edges**;
-  resolution never silently claims certainty it lacks (confidence is first-class).
-- **NFR-4 Operability** — single `docker compose up` brings up postgres, redis, api, web, parser;
-  `/healthz` endpoints; logs via `zap` (parser) + `pino` (api).
-- **NFR-5 Maintainability** — shared TS types in `packages/shared`; single SQL migration source
-  (`services/parser/migrations/`); no full ORM on the Go side (`sqlx` explicit SQL); Drizzle on TS API side.
-- **NFR-6 UX** — premium dark-mode-first; accent tokens; purposeful Framer Motion; skeleton/shimmer
-  loading; actionable errors; `prefers-reduced-motion` respected.
+## 7. Success metrics
 
----
+- A real 300-file public TypeScript repo parses, resolves, and renders without error or OOM.
+- Traversal and query latency meet NFR-1.
+- Zero successful symlink-escape or oversized-file reads — the negative tests stay green.
+- A push to a registered repo updates the graph automatically; a replayed webhook is rejected.
+- Someone unfamiliar with a repo finds its entry point in under five minutes.
 
-## 8. Success metrics (MVP)
+## 8. The design commitment
 
-- A real 300-file public TS repo parses, resolves, and renders end-to-end without OOM or error.
-- N-hop traversal returns in <500ms at 10k edges; p95 `functions-for-file` <150ms.
-- **0** successful symlink-escape / oversized-file reads (negative tests green).
-- Pushing a commit to a registered repo updates the graph automatically; replayed/out-of-window
-  webhook rejected; webhook flood throttled.
-- A pilot user can navigate an unfamiliar repo to *find the entry point* in <5 min.
+Every edge carries a `resolution_confidence` of `exact`, `name_match`, or `unresolved`, and the UI
+renders each differently. This is not a nice-to-have field — it is the reason to trust the tool.
+Name and scope matching cannot resolve re-export chains, overloads, or dynamic dispatch, and a call
+graph that quietly guesses in those cases is worse than no call graph, because you cannot tell which
+parts to doubt. So the parser records what it does not know, and the canvas draws it as a dotted line.
 
----
+## 9. Glossary
 
-## 9. Scope boundaries
-
-**In:** TypeScript only; public repos via GitHub OAuth; single-user (per-repo isolation, not
-multi-user); name/scope resolution; webhook incremental updates; function-name search.
-
-**Out:** LSP resolution; Excalidraw; multi-language; Neo4j; layout persistence; multi-tenant.
-
----
-
-## 10. Release plan (4 phases)
-
-- **Phase 1 — Parser core + isolation** *(completed; branch `phase-1/parser-core-and-isolation`,
-  PR #21)*. Given a local repo path → correct IR JSON for TypeScript, with hardening and an
-  isolated Docker image. No DB writes, no UI. See `docs/PHASE1_TASKS.md` and `TASKLIST.md`.
-- **Phase 2 — Storage + resolution**. Persist IR to Postgres; name/scope resolver with confidence;
-  re-parse leaves no orphans.
-- **Phase 3 — API + auth + canvas + search**. GitHub OAuth; graph endpoints; React Flow canvas;
-  ⌘K + name search; premium dark UI per `docs/UI_GUIDE.md`.
-- **Phase 4 — Webhooks + queue + hardening**. BullMQ; HMAC webhook; incremental re-parse/relink;
-  full `SECURITY.md` compliance; `/healthz`.
-
----
-
-## 11. Risks & open decisions
-
-Tracked in `docs/RISKS.md` (R1–R18). Status snapshot at PRD authoring:
-
-- **Pre-Phase-0 (resolved by code):** R10 (single migration source — `services/parser/migrations/`),
-  R9 (Go can't import TS shared types — `internal/ir/ir.go` carries Go-native IR; the RISKS.md OPEN
-  box is stale and should be flipped to DECIDED in `TASKLIST.md` chunk C14).
-- **Pre-Phase-1 (decision due now):** R16 (pin `tree-sitter-typescript` grammar version).
-- **Pre-Phase-2:** R6 (TS "package" definition), R7 (`qualified_name` format), R8 (overload +
-  edges → edges to overloaded `qualified_name`s tagged `unresolved`).
-- **Pre-Phase-3/4:** R2 (session strategy), R4 (GitHub OAuth app), R5 (local webhook tooling),
-  R11–R15 (dev/prod modes, parse lock, webhook debounce, repo cleanup, canvas virtualization),
-  R17 (CI needs Docker), R18 (UI).
-- **R1** (product vs repo name) and **R3** (benchmark repo) are *deferred, not blocking* Phase 1.
-
-### Confirmed decisions (locked during PRD review)
-
-- **Overload detection — future-proof:** assign `overload_index` in a **per-file post-pass** after
-  extraction + the qualified-name scope walk. Group functions in a file by `qualified_name`, order
-  by `start_line`, assign `0..n-1`. Same-name in *different* scopes (top-level `sync` vs `Repo.sync`)
-  already get distinct `qualified_name`s → each index `0` (not overloads). Genuine TS overloads
-  share `qualified_name` → get `0,1,2,…`. Phase 2 tags edges to overloaded `qualified_name`s
-  `unresolved` (R8). `overload_index` is part of the DB uniqueness key, so Phase 4's
-  delete-then-reinsert incremental relink never collides on `UNIQUE` and is stable across identical
-  re-parses (keyed by `start_line`).
-- **Query loading:** `queries/typescript.scm` is embedded at build time (via `//go:embed`) and compiled at runtime.
-- **`.gitignore` respect:** deferred post-MVP (skip-list already covers `node_modules`/etc.).
-- **Clone vs parse containers:** separate `parser-clone` (network enabled) → shared tmpfs →
-  `parser-parse` (`network none`, read-only, non-root, no caps).
-- **Naming convention picks:** top-level `qualified_name` = bare name; module-level call's
-  `CallerQualified` = `"<module>"`; `package_path` = `""` for files at repo root.
-- **R3 benchmark:** defer to end of Phase 1 — use only `testdata/sample` now; pick a real ~300-file
-  TS OSS repo right before exit testing.
-
----
-
-## 12. Glossary
-
-- **IR** — intermediate representation; Go structs the parser emits (`File`, `Function`,
-  `CallSite`, `Import`, `Graph`) in `services/parser/internal/ir/ir.go`.
-- **`qualified_name`** — scope-aware function key (e.g. `Repo.sync`, `getUser.inner`); the
-  uniqueness guarantee for `(file_id, qualified_name, overload_index)`.
-- **`overload_index`** — disambiguator `0..n-1` assigned per `(file, qualified_name)` post-pass.
-- **`resolution_confidence`** — `exact` / `name_match` / `unresolved`; drives UI edge style.
-- **blast radius** — N-hop traversal over `edges` (recursive CTE, depth-bounded).
-- **relink** — Phase 4 action: on rename/delete, update every edge pointing at the old function
-  so no orphan edges remain.
+| Term | Meaning |
+|---|---|
+| **IR** | Intermediate representation — the Go structs the parser emits, in `services/parser/internal/ir/ir.go` |
+| **`qualified_name`** | Scope-aware function key, dot-joined: `Repo.sync`, `getUser.inner` |
+| **`overload_index`** | Disambiguator `0..n-1` for functions sharing a `qualified_name` within one file |
+| **`resolution_confidence`** | `exact` / `name_match` / `unresolved` — drives edge style on the canvas |
+| **blast radius** | The set of functions reachable from a given one, via depth-bounded recursive CTE |
+| **relink** | On rename or delete, updating every edge that pointed at the old function |

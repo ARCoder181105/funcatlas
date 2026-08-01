@@ -1,126 +1,136 @@
-# Development Workflow
+# Development
 
-Follow this workflow for the entire build. It assumes the plan in `PLAN.md`, the stack in
-`docs/TECH_STACK.md`, and the open questions in `docs/RISKS.md` are the source of truth.
-
----
-
-## 0. Prerequisites (one-time)
-
-- **Node 20+** and **pnpm** (`npm i -g pnpm`)
-- **Go 1.22+**
-- **Docker + Docker Compose** (needed for Postgres, Redis, and `testcontainers-go` in CI)
-- **GitHub OAuth App** (see `docs/RISKS.md` R4): create it, note client ID/secret, set redirect
-  `http://localhost:3000/auth/callback`, and create a webhook secret.
-- **Local webhook tunnel** (R5): `ngrok http 3000` (or `smee.io`) for Phase 4 dev testing.
-- Copy secrets: `cp .env.example .env` and fill in `GITHUB_CLIENT_ID/SECRET`, `GITHUB_WEBHOOK_SECRET`,
-  `SESSION_SECRET`, `DATABASE_URL`, `REDIS_URL`.
+How to set up, run, and contribute to funcatlas. The phase order is in [`PLAN.md`](PLAN.md); the
+current work is in [`TASKLIST.md`](TASKLIST.md).
 
 ---
 
-## 1. Repository layout (already decided)
+## Prerequisites
 
-```
-/                       pnpm workspace root + Turborepo
-/packages/shared        Drizzle types + Zod schemas (api ↔ web)
-/apps/web               Vite + React + React Flow + Tailwind + TanStack Query + Zustand + Shiki
-/apps/api               Node/TS (Fastify + Drizzle + postgres.js + arctic/oslo)
-/services/parser        Go (tree-sitter + sqlx/pgx + zap)
-/docs                   documentation
-```
+Needed now:
 
----
+- **Node 20+** and **pnpm** — `npm i -g pnpm`
+- **Go 1.24+** with a C toolchain (`gcc`) — tree-sitter uses cgo
+- **Docker** and **Docker Compose** — Postgres, Redis, and testcontainers
+- **golang-migrate** CLI — or use the `migrate/migrate` Docker image, as CI does
 
-## 2. Daily dev loop
+Needed from Phase 3 onward, so you can defer them:
 
-### Start infrastructure (Postgres + Redis)
+- A **GitHub OAuth App** (see [`docs/RISKS.md`](docs/RISKS.md) R4) — register it, note the client id
+  and secret, set the redirect to `http://localhost:3000/auth/callback`, generate a webhook secret.
+- A **webhook tunnel** for Phase 4 — `ngrok http 3000` or `smee.io`, because GitHub cannot reach
+  `localhost`.
+
+## First-time setup
+
 ```bash
+pnpm install
+cp .env.example .env      # then fill in DATABASE_URL and REDIS_URL at minimum
 docker compose up -d postgres redis
-```
-
-### Run migrations (golang-migrate — single source in `services/parser/migrations`)
-```bash
 migrate -path services/parser/migrations -database "$DATABASE_URL" up
 ```
 
-### Run services in dev mode (hot reload)
-```bash
-# Terminal 1 — API (tsx watch)
-cd apps/api && pnpm dev
+Never commit `.env`. Only `.env.example` is tracked.
 
-# Terminal 2 — Web (Vite HMR)
-cd apps/web && pnpm dev
+## Layout
 
-# Terminal 3 — Parser (Go rebuild on change via air or go run)
-cd services/parser && go run ./cmd/parser
 ```
-> Prod mode (no HMR) is `docker compose up` (brings up api + web + parser + postgres + redis).
+/packages/shared        Drizzle schema + Zod schemas, shared by api and web
+/packages/eslint-config, /packages/typescript-config
+/apps/api               Fastify + Drizzle + postgres.js + arctic/oslo
+/apps/web               Vite + React + React Flow + Tailwind + TanStack Query + Zustand
+/services/parser        Go — tree-sitter, sqlx/pgx, zap
+  /cmd/parser           entry point
+  /internal/clone       local path or shallow git clone
+  /internal/security    path containment, size and depth caps, symlink rejection
+  /internal/ts          tree-sitter extraction and the qualified-name scope walk
+  /internal/ir          Go-native intermediate representation
+  /internal/resolver    call resolution and confidence tagging
+  /internal/db          Postgres writer
+  /migrations           the single source of schema
+  /queries              tree-sitter .scm patterns, embedded at build
+  /testdata             fixtures and golden output
+/docs                   architecture, data model, security, risks
+```
 
-### Type-check / lint / test (all packages)
+## Daily loop
+
+Bring up infrastructure, then run whichever services you're working on natively — you want hot
+reload, and compose does not give you that.
+
+```bash
+docker compose up -d postgres redis     # infra only
+
+cd apps/api && pnpm dev                 # terminal 1 — tsx watch
+cd apps/web && pnpm dev                 # terminal 2 — Vite HMR
+cd services/parser && go run ./cmd/parser --repo ./testdata/sample   # terminal 3
+```
+
+`docker compose up` with no arguments runs the whole stack in prod mode, no hot reload. Use it to
+check that the thing actually works in a container, not to develop in.
+
+## Checks
+
+Run these before every commit. `make help` lists every target.
+
 ```bash
 pnpm -r lint
-pnpm -r typecheck      # or pnpm -r build
+pnpm -r typecheck
 pnpm -r test
-cd services/parser && go test ./...
+cd services/parser && go vet ./... && go test -race ./...
 ```
 
----
-
-## 3. Phase-by-phase execution
-
-Work strictly in order. Each phase has a "Done when" in `docs/ROADMAP.md` and `PLAN.md`.
-
-| Phase | Focus | Start here | Verify |
-|---|---|---|---|
-| **0 — Bootstrap** | Monorepo, shared pkg, skeletons, migrations, CI | `pnpm install` + scaffold | `pnpm -r build`, `migrate up`, `curl localhost:3000/healthz` |
-| **1 — Parser + isolation** | tree-sitter TS → JSON, symlink/size guards, Dockerfile | `services/parser` | `go test ./...`, `go run . --repo ./testdata/sample`, symlink negative test |
-| **2 — Storage + resolution** | Postgres writes, name/scope resolver, confidence | `services/parser/internal/resolver` + `apps/api/db` | `psql` schema check, known-graph spot-check, rename re-parse (no orphans) |
-| **3 — API + auth + canvas + search** | OAuth, graph endpoints, React Flow UI, search | `apps/api/internal/*` + `apps/web/src` | log in via OAuth, click through a repo, `curl` endpoints, `npm run build` |
-| **4 — Webhooks + queue + hardening** | BullMQ, HMAC webhook, re-link, SECURITY.md compliance | `apps/api/internal/webhook` + `services/parser/internal/relink` | push commit → auto update, replay rejected, flood throttled, `--network none` parse |
-
-**Recommended order within a phase:** schema/migration → core logic (with unit tests) → API/UI →
-manual end-to-end test → mark "Done when" satisfied → commit.
-
----
-
-## 4. Branch & PR flow
-
-- Default branch is `main`. Create feature branches: `phase0-bootstrap`, `phase1-parser`, etc.
-- Keep each phase in its own branch; open a PR when its "Done when" is met.
-- PR must pass CI (lint + test + build + migration check). See `docs/RISKS.md` R17 (CI needs Docker).
-- Squash-merge to `main`; delete the branch after merge.
-- Tag phase completions: `git tag -a phase1 -m "Parser core + isolation"`.
-
----
-
-## 5. Using the risk tracker
-
-- `docs/RISKS.md` holds R1–R17. Before starting a phase, check which R-items must be resolved first
-  (each notes its phase). Flip `[ ]` → `[x]` and **OPEN** → **DECIDED** when resolved.
-- Resolve-before-coding priorities: **R1** (name), **R3** (benchmark repo), **R10** (migration source)
-  before Phase 0; **R6–R9** before Phase 2; **R2/R11–R17** as their phases arrive.
-
----
-
-## 6. Conventions
-
-- **Commits:** imperative ("add parser symlink guard"), small and scoped per concern.
-- **Types:** shared TS types live only in `packages/shared`; the Go parser keeps its own IR types
-  mirroring the schema (R9) — do not try to import TS types into Go.
-- **Secrets:** never commit `.env`; only `.env.example`. Rotate the webhook secret if leaked.
-- **Grammar versions:** pin `tree-sitter-typescript` (R16) to avoid silent parse breakage.
-- **Migrations:** never edit a merged migration; add a new numbered file instead.
-
----
-
-## 7. Quick reference
+Useful parser commands while working:
 
 ```bash
-pnpm install                 # install all workspace deps
-docker compose up -d         # full stack (prod-like)
-docker compose up -d postgres redis   # infra only (dev)
+make go-run REPO=./services/parser/testdata/sample          # writes out.json
+cd services/parser && go run ./cmd/parser --repo ./testdata/golden --format summary
+```
+
+## Working through a phase
+
+Each phase has an exit test in [`PLAN.md`](PLAN.md) and a chunk list in [`TASKLIST.md`](TASKLIST.md).
+Within a chunk the order that works:
+
+1. Schema or migration first, if the chunk needs one — everything downstream depends on its shape.
+2. Core logic, with its test written in the same commit.
+3. Wire it into the API or UI.
+4. Run the chunk's "done when" test for real, not by inspection.
+5. Tick the checkbox and commit.
+
+Before starting a phase, check [`docs/RISKS.md`](docs/RISKS.md) for items marked open against it.
+Some are manual setup that will block you an hour in if you skip them.
+
+## Branches and commits
+
+- `main` is the default branch. Work on `phase-N/short-description`.
+- One PR per phase, opened when its exit test passes. CI must be green: lint, test, build, and the
+  migration check.
+- Squash-merge, then delete the branch. Tag phase completions: `git tag -a phase-2 -m "Storage and resolution"`.
+- Commit messages are imperative and cover one concern — `add parser symlink hard-fail`, not
+  `updates and fixes`.
+
+## Conventions worth knowing before you trip on them
+
+- **Migrations are append-only.** Never edit one that has been applied; add a numbered file. Every
+  `*.up.sql` needs a matching `*.down.sql`.
+- **Shared TypeScript types live only in `packages/shared`.** The Go parser cannot import them and
+  keeps its own IR types in `internal/ir/ir.go` — this duplication is deliberate, see
+  [`docs/RISKS.md`](docs/RISKS.md) R9.
+- **Grammar versions are pinned** in `go.mod`. A bump is a deliberate change with a test run, not a
+  `go get -u`.
+- **Secrets come from the environment.** Rotate the webhook secret if it ever leaks.
+
+## Quick reference
+
+```bash
+pnpm install
+docker compose up -d postgres redis
+docker compose up -d                                    # full stack, prod-like
 migrate -path services/parser/migrations -database "$DATABASE_URL" up
-pnpm -r lint && pnpm -r build && pnpm -r test
-cd services/parser && go test ./... && go run ./cmd/parser --repo ./testdata/sample
-curl localhost:3000/healthz  # api health
+make down                                               # roll back one migration
+pnpm -r lint && pnpm -r typecheck && pnpm -r build && pnpm -r test
+make go-test && make go-vet
+make go-run REPO=./services/parser/testdata/sample
+curl localhost:3000/healthz
 ```

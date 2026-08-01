@@ -1,4 +1,4 @@
-# funcatlas / CodeCanvas — common developer tasks
+# funcatlas — common developer tasks
 # Run `make <target>`. Most targets shell out to pnpm/turbo or docker.
 
 .PHONY: install dev build lint typecheck test migrate up down health \

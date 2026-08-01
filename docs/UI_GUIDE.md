@@ -65,5 +65,5 @@ not a default CRUD UI. This guide is the single source of truth for look-and-fee
 
 ## 6. Deferred (post-MVP)
 
-- Excalidraw freehand annotation layer (see `ROADMAP.md`).
+- Freehand annotation layer (see `../PLAN.md`).
 - Light theme, custom theming UI, saved layouts/perspectives.
