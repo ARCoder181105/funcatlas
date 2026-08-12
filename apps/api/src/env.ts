@@ -1,5 +1,12 @@
-import "dotenv/config";
+import path from "node:path";
+import { config } from "dotenv";
 import { z } from "zod";
+
+// dotenv resolves against the working directory, and this package is started
+// from both the repo root (turbo) and apps/api (tsx, vitest). Anchor to this
+// file so the root .env is found either way. Missing file is not an error --
+// CI supplies the environment directly.
+config({ path: path.resolve(import.meta.dirname, "../../..", ".env") });
 
 // Fail-fast env validation. All keys mirror .env.example.
 const schema = z.object({

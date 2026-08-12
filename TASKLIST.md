@@ -1,16 +1,18 @@
-# Phase 2 — Storage and Resolution
+# Phase 3a — API and Auth
 
-The live task list. Phase 2 turns the intermediate representation the parser already produces into
-persisted, confidence-tagged edges in Postgres, and gives the API a way to traverse them.
+The live task list. Phase 2 put a confidence-tagged call graph in Postgres. Phase 3a puts a login in
+front of it and makes every endpoint that serves it real, so the whole product is exercisable with
+`curl` before any UI exists.
 
-**Branch:** `phase-2/storage-and-resolution`
-**Reference:** [`PLAN.md`](PLAN.md) Phase 2 · [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) ·
-[`docs/PARSING_STRATEGY.md`](docs/PARSING_STRATEGY.md)
+**Branch:** `phase-3a/api-and-auth`
+**Reference:** [`PLAN.md`](PLAN.md) Phase 3 · [`docs/SECURITY.md`](docs/SECURITY.md) ·
+[`docs/DATA_MODEL.md`](docs/DATA_MODEL.md)
 
 ## How to work through this
 
 Claude implements; you review at the phase gate. One chunk at a time, top to bottom — the order is
-load-bearing, C0 unblocks C4 and C1 unblocks C5. Each chunk lists:
+load-bearing: A0 unblocks every test, A1 unblocks A2 and A4, and A5 has to exist before A6 has data
+to serve. Each chunk lists:
 
 - **Why** — the reason it exists, so it can be pushed back on if the reason is wrong.
 - **Where** — the files it touches.
@@ -23,317 +25,278 @@ imperative message. `[ ]` todo · `[~]` in progress · `[x]` done.
 
 ## What this phase actually teaches
 
-Worth knowing up front, because each of these is a transferable idea wearing a funcatlas costume.
-If a chunk feels like busywork, it's probably because the underlying idea hasn't clicked yet — stop
-and ask rather than pushing through.
-
 | Chunks | Concept | Where else you'll meet it |
 |---|---|---|
-| C1, C5 | Referential integrity and cascade semantics — letting the database enforce correctness instead of application code remembering to | Every relational schema you ever design |
-| C3 | Transactional bulk writes — why a half-written graph is worse than none, and why per-row inserts don't scale | Any ETL, importer, or sync job |
-| C4 | Symbol resolution and scoping — how a name becomes a reference, and what to do when it can't | Compilers, linters, language servers, import systems |
-| C6 | Recursive queries and cycle detection — traversing a graph in SQL without hanging | Org charts, dependency trees, permission hierarchies, category nesting |
+| A1 | Opaque server-side sessions — why the cookie holds a lookup key and never the data | Every stateful web app that isn't doing JWTs |
+| A2 | The OAuth authorization-code flow, and what the `state` parameter is actually defending against | Every "sign in with X" button you will ever wire |
+| A4 | Middleware and encapsulation — applying a rule once to a whole subtree of routes instead of per handler | Express, Fastify, Rails, Django, Spring |
+| A5 | Shelling out safely — argv arrays, timeouts, and why user input must never reach a shell | Any service that drives an external tool |
+| A6 | Keeping SQL out of handlers, and 404-vs-empty-list as an API design decision | Every REST or RPC service you write |
 
-C4 is the one worth slowing down for. Resolution is the core of how every compiler and IDE works,
-and doing it by hand once teaches more than reading about it ten times.
+A2 is the one worth slowing down for. Nearly every OAuth tutorial online gets `state` wrong, and the
+current code has a literal `"state-placeholder"` in it — a live CSRF hole that this chunk closes.
+
+## What Phase 3a does not build
+
+Not gaps — deliberate scope. Say so now if you disagree, not at the gate.
+
+- **No users table, no multi-tenancy.** `docs/SECURITY.md` gates every endpoint "even in single-user
+  mode", and PRD §4 puts multi-user out of scope. The session carries the GitHub user id; no repo
+  ownership column exists, so there is no "someone else's repo" case to 404 on.
+- **No queue.** `POST /api/repos` runs the parser synchronously. Phase 4 replaces the spawn.
+- **No UI.** That is 3b. The exit gate for this phase is a `curl` session.
+- **Public repositories only.** See A2 on the GitHub scope.
 
 ---
 
-## C0 — Complete the IR so resolution is possible  `[x]`
+## A0 — Make the app injectable  `[x]`
 
-**Why.** Phase 1 emits an IR that's correct to *read* but not sufficient to *resolve*. Three gaps
-block the resolver, and no amount of clever resolver code works around them:
+**Why.** `apps/api/src/index.ts` builds a Fastify instance and calls `listen()` at module top level.
+Importing it from a test starts a server on port 3000. Every route test in this phase needs
+`app.inject()`, so the split has to happen before anything else does.
 
-1. `ir.CallSite` has no file. The first two resolution rules are "is the callee defined in this
-   same file?" and "does this file import it?" — both need to know which file the call came from.
-   Run `make go-run REPO=./services/parser/testdata/golden` and you'll see calls from `calls.ts`
-   and `repo.ts` in one flat list with no way to tell them apart.
-2. Method calls lose their receiver. `Repo.sync()` is recorded as callee `sync` with `Repo`
-   discarded, so the resolver cannot distinguish it from `anythingElse.sync()`.
-3. Import symbols are collected by walking the statement for every `identifier` node. For
-   `import { a as b } from "x"` that yields **both** `a` and `b`. The resolver matches call sites
-   against *local* names, so `b` is the correct answer and `a` is noise that will cause false matches.
+A second problem surfaces the moment a test imports the app: `env.ts` used `import "dotenv/config"`,
+which resolves `.env` against the working directory. The only `.env` is at the repo root, so
+anything started from `apps/api` — tsx, vitest — got no environment at all and failed the fail-fast
+parse.
 
-**Where.** `services/parser/internal/ir/ir.go`, `services/parser/internal/ts/extract.go`,
-`services/parser/queries/typescript.scm`, `services/parser/internal/ts/extract_test.go`
+**Where.** `apps/api/src/app.ts` (new), `apps/api/src/index.ts`, `apps/api/src/env.ts`,
+`apps/api/src/app.test.ts` (new), `apps/api/package.json`, `.github/workflows/node-ci.yml`
 
 **Do.**
 
-1. Add `FileID int` to `ir.CallSite` and populate it — `fileID` is already in scope in the extract
-   loop, it just isn't being copied onto the call.
-2. Add `CalleeObject string` to `ir.CallSite`. For a `member_expression` callee, capture the object
-   as well as the property; leave it empty for a plain identifier call. This needs a second capture
-   in the `.scm` — something like `object: (identifier) @call.object` alongside the existing
-   `@function.call`.
-3. Rewrite import symbol extraction to collect **local binding names only**, and record which kind
-   of import each is. Walk the `import_clause` properly rather than grabbing every identifier:
-   - `import def from "m"` → local `def`, kind default
-   - `import { a } from "m"` → local `a`, kind named
-   - `import { a as b } from "m"` → local `b`, kind named, original `a`
-   - `import * as ns from "m"` → local `ns`, kind namespace
-   - `import "m"` → no locals, kind side-effect
+1. Extract `buildApp()` into `app.ts`: registers cors, cookie and rate-limit, mounts `/healthz` and
+   the auth and graph routes, returns the instance without listening. `index.ts` keeps only the
+   `listen()` call and its error handling.
+2. Add `@fastify/cookie`, registered with `SESSION_SECRET`. A1 needs it; registering a plugin is
+   part of building the app, so it belongs in the same chunk as the builder.
+3. Silence the logger under `NODE_ENV=test`. Pino writes a line per injected request otherwise, and
+   a failing assertion gets lost in it.
+4. Anchor dotenv to the repo root via `import.meta.dirname` rather than the working directory. The
+   path resolves the same from `src/` and from the compiled `dist/`.
+5. Give CI the environment it has no `.env` for. Placeholder values — no test reaches GitHub.
 
-   A small `ir.ImportedSymbol{Local, Original, Kind string}` is cleaner than three parallel slices.
-4. While you're in `extract.go`, two cleanups: `strings.Split(string(src), "\n")` runs *inside* the
-   per-function loop, re-splitting the whole file for every function found — hoist it above the
-   loop. And the nil-tree check appears twice (once before the file is appended, once after);
-   delete the second.
+**Done when.** A test builds the app, injects `GET /healthz`, gets a 200, and asserts
+`app.server.listening === false`. It runs from `apps/api` as its working directory, which is what
+proves the dotenv fix: there is no `apps/api/.env`.
 
-**Done when.** A test over `testdata/golden` asserts: every `CallSite` carries the `FileID` of the
-file it was found in; `Repo.sync()` yields `CalleeObject: "Repo", CalleeName: "sync"`; and
-`import { a as b } from "x"` yields exactly one symbol whose local name is `b`.
-
-**Watch for.** Populating `FileID` after `graph.Files` has already grown (off by one). Capturing the
-property of a *chained* call `a.b.c()` — decide what `CalleeObject` means there and write it down.
-Breaking the existing golden JSON without regenerating it.
+**Watch for.** Registering the cookie plugin after the routes that read cookies — Fastify plugin
+order is load-bearing. `import.meta.dirname` needs Node 20.11+; CI is on 22.
 
 ---
 
-## C1 — Migration 0002: make an unresolved edge storable  `[x]`
+## A1 — Sessions in Redis  `[ ]`
 
-**Why.** The `edges` table cannot currently represent two of its own three confidence values. An
-edge stores `callee_function_id`; if a call is `unresolved` there is no function to point at, so the
-column is null and the callee's *name* is lost entirely. An unresolved edge that doesn't record what
-it failed to resolve is not a data point, it's a blank row. Same for `name_match` where the target
-is ambiguous. This has to be fixed before the resolver writes anything, because the resolver's whole
-output depends on it.
+**Why.** There is no session anywhere in the codebase. `/auth/callback` returns 501 and every
+`/api/*` route is open to the internet. Sessions come before OAuth because the callback's last step
+is "create a session", and before the route gate because the gate is "read a session".
 
-Two smaller things ride along: there is no down migration at all, so `make down` fails and you can
-never roll back a mistake; and `files.repo_id` has no `ON DELETE CASCADE`, so deleting a repo will
-either error or strand every file row under it.
+The cookie holds an opaque random id and nothing else. Not the GitHub token, not the user id, not a
+signed blob of claims — a key into Redis. Anything in the cookie is in the browser, and a token in
+the browser is a token in whatever reads it.
 
-**Where.** `services/parser/migrations/` (new `0002_*.up.sql` and `.down.sql`, plus a backfilled
-`0001_init.down.sql`), `docs/DATA_MODEL.md`
+**Where.** `apps/api/src/auth/session.ts` (new), `apps/api/src/auth/session.test.ts` (new),
+`apps/api/src/env.ts`
 
 **Do.**
 
-1. Write `0001_init.down.sql` — drop the four tables in reverse dependency order. Never edit
-   `0001_init.up.sql`; it's already applied.
-2. Write `0002_edge_callee_name.up.sql`:
-   - `ALTER TABLE edges ALTER COLUMN callee_function_id DROP NOT NULL` if it is not null already,
-     and confirm it is nullable.
-   - `ADD COLUMN callee_name TEXT NOT NULL DEFAULT ''` — the name as written at the call site.
-   - `ADD COLUMN call_line INTEGER` — so the UI can jump to the call, not just the function.
-   - `ALTER TABLE files DROP CONSTRAINT files_repo_id_fkey`, re-add it with
-     `ON DELETE CASCADE`, and make `repo_id` `NOT NULL`.
-3. Write the matching `0002_*.down.sql`.
-4. Update `docs/DATA_MODEL.md` to match, including a note on why an edge keeps the callee name.
+1. `createSession(user)` — 32 bytes from `node:crypto` hex-encoded, `SETEX session:<id>` holding the
+   GitHub user id, login and access token, expiring at `SESSION_TTL`.
+2. `readSession(id)` and `destroySession(id)`.
+3. Cookie helpers: `HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` when `NODE_ENV=production`,
+   `maxAge` matching the Redis TTL so the two expire together.
+4. `requireSession` — a Fastify `preHandler` that reads the cookie, looks Redis up, attaches the
+   session to the request, and replies 401 otherwise.
+5. Drop the now-unused `oslo` dependency. `node:crypto` covers the randomness, and oslo is
+   deprecated upstream.
 
-**Done when.** `migrate up` → `migrate down` → `migrate up` runs clean against a fresh Postgres, and
-`\d edges` in `psql` shows a nullable `callee_function_id` alongside `callee_name` and `call_line`.
+**Done when.** Tests cover: a created session reads back; the Redis key carries a TTL within a second
+of `SESSION_TTL`; a destroyed session reads back as null; `requireSession` 401s with no cookie, with
+a syntactically valid but unknown id, and with an expired one.
 
-**Watch for.** Postgres names the constraint `files_repo_id_fkey` by default, but verify with `\d files`
-rather than assuming. A `NOT NULL DEFAULT ''` on an existing table rewrites it — fine at this size,
-worth knowing. Down migrations that drop data silently.
+**Watch for.** `SameSite=Strict` breaks the OAuth redirect — the browser arrives from github.com and
+a strict cookie is not sent. Reusing one Redis key prefix for sessions and BullMQ jobs. Returning
+the access token in any response body, including an error.
 
 ---
 
-## C2 — Close the schema drift in `packages/shared`  `[x]`
+## A2 — The real OAuth flow  `[ ]`
 
-**Why.** The Drizzle schema and the SQL migration are supposed to be the same schema described
-twice, and right now they disagree in three places. Each disagreement is a runtime error waiting
-for whichever code path hits it first:
+**Why.** `auth/routes.ts:16` passes the literal `"state-placeholder"` as the OAuth state. That is a
+CSRF hole with a name: an attacker sends a victim a crafted callback URL and the victim's browser
+logs in as the attacker, because nothing ties the callback to the login that started it. Callback
+and logout are 501s.
 
-- `resolutionConfidence` is declared as a Drizzle `pgEnum`, but the migration creates the column as
-  `TEXT` with a `CHECK` constraint. There is no Postgres enum type named `resolution_confidence` in
-  the database at all.
-- `edges.calleeFunctionId` is `.notNull()` in Drizzle; the SQL allows null, and after C1 it *must*
-  allow null.
-- `functions.fileId` is `.notNull()` in Drizzle; the SQL column is nullable.
-
-**Where.** `packages/shared/src/schema.ts`, `packages/shared/src/types.ts`
+**Where.** `apps/api/src/auth/routes.ts`, `apps/api/src/auth/github.ts` (new),
+`apps/api/src/auth/routes.test.ts` (new)
 
 **Do.**
 
-1. Replace the `pgEnum` with `text("resolution_confidence").$type<ResolutionConfidence>().notNull()`,
-   importing the union type that already exists in `types.ts`. The `CHECK` constraint in the database
-   stays as the actual enforcement — Drizzle just needs to describe it accurately.
-2. Make `calleeFunctionId` nullable and add `calleeName` and `callLine` from C1.
-3. Reconcile the `notNull` mismatches on `fileId` and `repoId` — pick whichever the SQL says, or
-   change the SQL in C1 and make both say the same thing. Just don't leave them disagreeing.
-4. Regenerate or hand-update the inferred row types and make sure `pnpm -r build` still passes.
+1. `/auth/login` — 32 random bytes as state, into a `HttpOnly` cookie with a ten-minute TTL, then
+   redirect to the URL arctic builds. Drop the `await`: arctic 3's `createAuthorizationURL` is
+   synchronous and awaiting it hides that.
+2. Scope: **`read:user`**. GitHub OAuth apps have no read-only repository scope — the choice is
+   `repo`, which also grants *write* to every private repository the user can reach, or a public-only
+   scope. Nothing in this phase reads a private repository, so the narrow scope is correct until a
+   phase actually needs one. Recorded in `docs/RISKS.md`.
+3. `/auth/callback` — validate with the existing `oauthCallbackSchema`, compare the state against the
+   cookie with `timingSafeEqual` after a length check, clear the state cookie, exchange the code,
+   fetch the GitHub user, create the session, redirect to `APP_PUBLIC_URL`.
+4. `/auth/logout` — destroy the Redis key and clear the cookie.
+5. `/auth/me` — the current user, or 401. 3b needs it to decide what to render.
+6. Every failure returns 400 with a flat message: missing state cookie, mismatched state, arctic
+   `OAuth2RequestError`, non-200 from GitHub. None of them reach the default 500 handler.
 
-**Done when.** `pnpm -r build` passes, and a scratch script that selects one row from each table
-through Drizzle against the real migrated database returns without a type or runtime error.
+**Done when.** Tests cover: `/auth/login` sets a state cookie and redirects to github.com with that
+same state in the query; a callback with no state cookie is 400; a callback whose state does not
+match the cookie is 400; logout clears the cookie and the Redis key. The exchange itself is not
+tested against live GitHub — A3 is how a session gets created in tests.
 
-**Watch for.** "It compiles" is not the test here — TypeScript will happily agree with a schema that
-does not match the database. Actually run a query.
+**Watch for.** Comparing state with `===` (timing) or forgetting to clear the state cookie (replay).
+Trusting `code` before `state` — validate state first, always. `redirect_uri` must match the OAuth
+app registration byte for byte, trailing slash included.
 
 ---
 
-## C3 — Parser writes the graph to Postgres  `[x]`
+## A3 — Dev login, gated  `[ ]`
 
-**Why.** `db.Writer.WriteGraph` is a stub that returns nil. This is the chunk that makes the parser
-stop being a JSON printer.
+**Why.** Phase 3b and every route test need a session. Going through GitHub for one makes tests
+depend on the network and a live OAuth app.
 
-**Where.** `services/parser/internal/db/writer.go`, `services/parser/cmd/parser/main.go`
+**Where.** `apps/api/src/auth/routes.ts`, `apps/api/src/auth/routes.test.ts`
+
+**Do.** Register `POST /auth/dev-login` only when `NODE_ENV` is `development` or `test`. It creates a
+session for a fixed fake user with no token. Comment it as Phase 4 removal.
+
+**Done when.** It returns a usable session cookie under `test`, and the route does not exist — 404,
+not 401 — when `NODE_ENV=production`.
+
+**Watch for.** Gating inside the handler instead of around the registration. A production 401 says
+"this endpoint exists, bring credentials"; a 404 says nothing.
+
+---
+
+## A4 — Gate every `/api/*` route  `[ ]`
+
+**Why.** All six graph endpoints are open. `docs/SECURITY.md:19`: every graph-serving endpoint is
+session-gated, anonymous requests rejected even in single-user mode.
+
+**Where.** `apps/api/src/routes/graph.ts`, `apps/api/src/app.ts`,
+`apps/api/src/routes/graph.test.ts` (new)
+
+**Do.** Move the graph routes inside a Fastify plugin scope carrying a single
+`addHook("preHandler", requireSession)`. One hook for the subtree, not one line per route — a
+per-route gate is a gate someone forgets to copy onto route seven.
+
+**Done when.** A table-driven test walks every `/api/*` route and asserts 401 with no cookie and 401
+with a forged one, and that the same routes answer with a dev-login session.
+
+**Watch for.** Registering the hook outside the plugin scope, which gates `/healthz` and the auth
+routes too — including the login that is supposed to be reachable logged out.
+
+---
+
+## A5 — Repo registration runs a parse  `[ ]`
+
+**Why.** Nothing can put a repository into the database except a human running the parser CLI. The
+product's first action is "paste a GitHub URL".
+
+**Where.** `services/parser/internal/clone/clone.go`, `services/parser/cmd/parser/main.go`,
+`apps/api/src/repos/register.ts` (new), `apps/api/src/routes/repos.ts` (new), `apps/api/src/env.ts`,
+`Makefile`
 
 **Do.**
 
-1. Take a repo identifier and a commit SHA as inputs. Upsert the `repos` row and get its id.
-2. Insert files, then functions, inside a **single transaction** — a half-written graph is worse
-   than no graph, because the API cannot tell the difference.
-3. Batch the function inserts. Use `pgx.CopyFrom`, or multi-row `INSERT` in chunks of a few hundred.
-   Do not insert one row per round trip; the 300-file target in NFR-1 will not survive it.
-4. Store `ir.Function.Source` into `source_blob_ref`. The data model already permits a plain text
-   column at this stage — no object storage.
-5. Return a `map[qualifiedNameKey]int64` of the inserted function ids, because C4 needs to turn
-   resolved calls into edges pointing at real primary keys.
-6. Wire it into `main.go` behind a `--write` flag so `--format json` still works for inspection.
-   Drop the `_ = db.NewWriter` placeholder line while you're there.
+1. Parser: resolve the commit with `git rev-parse HEAD` after cloning, so `--commit` becomes
+   optional. Otherwise the API has to clone the repository a second time purely to learn the SHA.
+2. Normalise the URL before storing — strip a trailing slash and `.git`, lowercase the host — so one
+   repository cannot land twice under two spellings and produce two disjoint graphs.
+3. `POST /api/repos` validates with the existing `repoUrlSchema`, then spawns `PARSER_BIN` through
+   `execFile` with an **argv array**. Never a shell, never string interpolation: the URL is user
+   input, and `; rm -rf` is a valid substring of a string that passes a URL check.
+4. New env `PARSER_BIN` and `PARSE_TIMEOUT_MS`, plus a Makefile target that builds the binary.
+5. Non-zero exit becomes a 502 carrying the tail of stderr, not a 500.
 
-**Done when.** `make go-run REPO=./services/parser/testdata/golden --write` populates a local
-Postgres, row counts in `files` and `functions` match the counts `--format summary` reports, and
-running it a second time neither duplicates rows nor violates the unique constraint.
+**Done when.** A Go test asserts the resolved SHA is 40 hex characters. API tests use a stub script
+as `PARSER_BIN` to drive both exits: an invalid URL is 400, a parser failure is 502, and success
+returns the repo row.
 
-**Watch for.** Forgetting to roll back on a mid-transaction error. `UNIQUE (file_id, qualified_name,
-overload_index)` violations from the second run — decide up front whether re-running is an upsert or
-a delete-and-reinsert, and be consistent with C5. Holding one transaction open for a very large repo.
-
----
-
-## C4 — The resolver  `[x]`
-
-**Why.** This is the chunk the whole product rests on. Everything before it is plumbing; this is
-where a raw call site becomes a claim about the code, and where the honesty commitment in
-[`PRD.md`](PRD.md#8-the-design-commitment) is either kept or quietly broken.
-
-**Where.** `services/parser/internal/resolver/resolver.go` (+ tests), `services/parser/internal/ir/ir.go`
-
-**Do.**
-
-1. Change the signature. `Resolve` currently returns `map[ir.CallSite]ResolutionConfidence`, which
-   has two problems: it never says *what the call resolved to*, and keying a map by the struct
-   silently collapses two identical calls on the same line into one edge. Return a slice instead —
-   add an `ir.Edge{CallerFuncIdx, CalleeFuncIdx int, CalleeName string, Line int, Confidence string}`
-   where an unresolved callee is `-1`.
-2. Build two in-memory indexes up front, once:
-   - functions by file: `map[fileID]map[qualifiedName][]funcIdx`
-   - imports by file: `map[fileID]map[localName]importSource`
-
-   The entire repo graph is already in memory. Do not query the database per call site — that's the
-   O(N²) trap the old plan warned about, and the fix is to not go to the database at all.
-3. Apply the rules in order, per call site:
-   - **Same file.** A function in this file whose qualified name matches → `exact`.
-   - **Imported symbol.** The callee's local name is in this file's imports → follow to the source
-     module, find the definition → `exact`. If the module resolves outside the repo (`react`,
-     `node:fs`) → `unresolved`; that's an honest answer, not a failure.
-   - **Package fallback.** Exactly one function with that name in the same `package_path` →
-     `name_match`. Exactly one in the whole repo → `name_match`.
-   - **Otherwise** → `unresolved`, keeping `CalleeName` so the edge still says something.
-4. Two rules on top:
-   - If a match is ambiguous — more than one candidate — the answer is `unresolved`, never a
-     coin flip.
-   - If the matched `qualified_name` has more than one `overload_index` in that file, the answer is
-     `unresolved`. Name and scope matching cannot pick an overload, so it must not pretend to.
-5. Use `CalleeObject` from C0: when it's set and names an imported namespace or a local class, that
-   narrows the search. When it's set and you can't identify it, that's `unresolved`.
-
-**Done when.** A table-driven test over a fixture with a hand-written expected confidence for every
-call passes — including at least one `exact` same-file, one `exact` via import, one `name_match`
-package fallback, one `unresolved` external module, and one `unresolved` overload.
-
-**Watch for.** Resolving to a function in a file that doesn't export it. Treating a bare `foo()` and
-`obj.foo()` as the same callee. Silently picking the first candidate when there are several — that's
-the exact failure this product exists to avoid. Recursion (a function calling itself) producing a
-self-edge you didn't expect.
+**Watch for.** `exec` instead of `execFile`. No timeout — a hung clone holds the connection until the
+client gives up. Trusting `repoUrlSchema` as a security boundary: it checks the string contains
+`github.com`, which `https://evil.com/#github.com` also does. The argv array is what makes that
+harmless, not the schema.
 
 ---
 
-## C5 — Edges, and re-parsing without orphans  `[x]`
+## A6 — The five 501 endpoints  `[ ]`
 
-**Why.** NFR-3 says a re-parse after a rename leaves no orphan edges. That property has to be
-designed in, because the naive version — insert everything again — produces a graph that grows a
-duplicate set of edges on every push, and Phase 4's webhook loop will run this constantly.
+**Why.** `routes/graph.ts:11-15` — five endpoints return 501. They are the entire read surface of the
+product, and 3b cannot render anything without them.
 
-**Where.** `services/parser/internal/db/writer.go`, a new integration test
+**Where.** `apps/api/src/graph/queries.ts`, `apps/api/src/routes/graph.ts`,
+`apps/api/src/graph/queries.test.ts`, `apps/api/src/routes/graph.test.ts`
 
-**Do.**
+**Do.** All SQL in `queries.ts`; handlers validate, call, and reply.
 
-1. Write the resolved edges from C4, mapping function indexes to the real ids returned by C3.
-   Unresolved edges get a null `callee_function_id` and a populated `callee_name`.
-2. Implement re-parse as **delete-then-reinsert scoped to the files that changed**: within the
-   transaction, delete the `functions` rows for those files (the `ON DELETE CASCADE` on `edges`
-   takes their edges with them), then insert the new ones. Do not delete the `files` rows — their
-   ids are referenced elsewhere.
-3. Set `parsed_commit` on every row you write, so Phase 4 can diff.
-4. The subtle case, and the one the test must cover: a function is deleted from file A, but file B
-   still calls it. B's edge is cascade-deleted along with A's function — correct — but B was not
-   re-parsed, so nothing re-creates that edge as `unresolved`. Decide how you handle this and write
-   the decision down. Re-resolving every file that imports a changed file is the straightforward
-   answer.
+| Endpoint | Returns |
+|---|---|
+| `GET /api/repos` | Every repo with its file and function counts |
+| `GET /api/repos/:repoId/tree` | Flat `{id, path, language, functionCount}` ordered by path |
+| `GET /api/files/:fileId/functions` | Functions with lines and qualified name, no source |
+| `GET /api/functions/:fnId/source` | `{source, startLine, endLine, path}` |
+| `GET /api/repos/:repoId/search` | Name matches, prefix ranked above substring |
 
-**Done when.** An integration test parses a fixture, renames a function in it, re-parses, and asserts:
-the old function row is gone, no edge points at a non-existent function, and callers of the renamed
-function now hold `unresolved` edges carrying the old name.
+The tree stays flat — the client nests it. Building the hierarchy in SQL costs a recursive query to
+produce something the sidebar has to walk anyway. The function list omits source because a file with
+two hundred functions would ship two hundred function bodies to render a list of names.
 
-**Watch for.** Cascade deletes taking more than you meant. Deleting outside the transaction. Assuming
-file ids are stable when a file is deleted and recreated.
+**Done when.** Each endpoint has a happy path and a 404 tested against real Postgres, and search has
+a test pinning that a prefix match outranks a substring match.
 
----
-
-## C6 — N-hop traversal in the API  `[x]`
-
-**Why.** "What's the blast radius of changing this function" is persona P2's entire reason to use
-this tool, and it's the one query a plain `SELECT` cannot answer.
-
-**Where.** `apps/api/src/graph/` (new), `apps/api/src/routes/graph.ts`
-
-**Do.**
-
-1. Write a depth-bounded recursive CTE that walks `edges` from a starting `function_id` and returns
-   each reachable function with the depth it was found at.
-2. Bound the depth with a **parameter**, defaulting to 5, capped server-side. An unbounded recursive
-   CTE over a cyclic graph does not return.
-3. Guard against cycles explicitly — mutual recursion is normal in real code. Carry the visited path
-   in an array column and filter, or use `UNION` rather than `UNION ALL` and accept the dedupe.
-4. Parameterize everything. This is raw SQL through Drizzle's `sql` template; string-concatenating a
-   depth or an id into it is a SQL injection hole.
-5. Replace the `/api/functions/:fnId/edges` 501 stub with a real handler. Leave the rest stubbed —
-   they're Phase 3.
-
-**Done when.** A Vitest test against a real Postgres (testcontainers, or the compose instance) inserts
-a small known graph *including a cycle*, and asserts the traversal returns the right functions at the
-right depths and terminates.
-
-**Watch for.** A CTE that returns rows but never terminates on the cyclic fixture — make sure the
-test actually has a cycle, or it proves nothing. Depth off by one (is the start node depth 0 or 1?).
-Forgetting that an edge with a null callee has nothing to traverse to.
+**Watch for.** Returning `[]` for an unknown id — "this repo has no files" and "this repo does not
+exist" are different answers and the UI cannot tell them apart. Search that forgets to scope through
+`files.repo_id` and returns another repository's functions. Unescaped `%` and `_` in the `ILIKE`
+pattern, which are wildcards the user did not ask for.
 
 ---
 
-## C7 — Sync the docs to reality  `[x]`
+## A7 — CI, docs, and the exit gate  `[ ]`
 
-**Why.** Docs that lie are worse than no docs, and this is the chunk where the ones you just
-invalidated get corrected — while you still remember why.
+**Why.** The session tests need a Redis that CI does not have, and they *skip* rather than fail
+without one — a green tick proving nothing. Phase 2 hit exactly this with Postgres.
 
-**Where.** `docs/DATA_MODEL.md`, `docs/PARSING_STRATEGY.md`, `docs/RISKS.md`, `CLAUDE.md`, `PLAN.md`
+**Where.** `.github/workflows/node-ci.yml`, `.env.example`, `DEVELOPMENT.md`, `CLAUDE.md`,
+`PLAN.md`, `docs/RISKS.md`
 
-**Do.** Record the new `edges` columns and the re-parse strategy in the data model. Write the actual
-resolution algorithm you built into the parsing strategy, including the rules where it chose
-`unresolved` over a guess. Flip R6, R7, and R8 to DECIDED in the risk list with one line each on what
-was decided. Mark Phase 2 done in `CLAUDE.md` and `PLAN.md`.
+**Do.** Add a Redis service to node-ci. Document the new env keys and how to log in and register a
+repo locally. Record the `read:user` scope decision in the risk list. Update the phase status and the
+known-gaps section in `CLAUDE.md`.
 
-**Done when.** No document describes behaviour that the code does not have.
+**Done when.** No document describes behaviour the code does not have, and CI runs the session tests
+rather than skipping them.
 
 ---
 
 ## Exit gate
 
-Phase 2 is finished when all of these hold:
+Phase 3a is finished when all of these hold:
 
-- [x] The IR carries file attribution, call receivers, and correct import locals (C0).
-- [x] Migrations roll forward and back cleanly, and an unresolved edge is storable (C1).
-- [x] The Drizzle schema and the SQL migration describe the same database (C2).
-- [x] The parser writes a complete graph transactionally, and re-running is safe (C3).
-- [x] Every call site gets a confidence tag, and ambiguity resolves to `unresolved` (C4).
-- [x] A re-parse after a rename leaves zero orphan edges (C5).
-- [x] The API answers a depth-bounded N-hop traversal over a cyclic graph (C6).
-- [x] `make go-test`, `make go-vet`, and `pnpm -r build` are green, and CI passes (C7).
+- [x] The app can be built and injected without binding a port, from any working directory (A0).
+- [ ] A session is an opaque id in a `HttpOnly` cookie and its data never leaves Redis (A1).
+- [ ] OAuth state is random per login, verified on callback, and single-use (A2).
+- [ ] The dev-login route does not exist in production (A3).
+- [ ] Every `/api/*` route 401s without a session (A4).
+- [ ] A GitHub URL posted to `/api/repos` ends with that repo's graph in Postgres (A5).
+- [ ] All six graph endpoints return real data, and 404 on an unknown id (A6).
+- [ ] `pnpm -r build`, `pnpm -r test` and the Go suite are green, and CI passes (A7).
+
+**The gate itself:** with the session cookie, `curl` through login → register a repo → tree →
+functions → edges → source → search. Then repeat one of them without the cookie and get a 401.
 
 ## Conventions
 
 - Never edit a migration that has been applied. Add a numbered one.
-- The Go parser keeps its own IR types. It cannot import `packages/shared`, and it should not try.
+- Route handlers validate and reply. SQL lives in `graph/queries.ts`.
+- Shared types and schemas go in `packages/shared`, never duplicated between api and web.
 - Tests go in the commit with the code they test.
 - One concern per commit, imperative message.

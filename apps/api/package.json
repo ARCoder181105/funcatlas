@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^10.0.2",
     "@fastify/rate-limit": "^10.1.1",
     "@funcatlas/shared": "workspace:*",
