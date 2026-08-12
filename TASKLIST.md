@@ -9,14 +9,14 @@ persisted, confidence-tagged edges in Postgres, and gives the API a way to trave
 
 ## How to work through this
 
-You write the code; I review, debug, and unblock. Take one chunk at a time, top to bottom — the
-order is load-bearing, C0 unblocks C4 and C1 unblocks C5. Each chunk lists:
+Claude implements; you review at the phase gate. One chunk at a time, top to bottom — the order is
+load-bearing, C0 unblocks C4 and C1 unblocks C5. Each chunk lists:
 
-- **Why** — the reason it exists, so you can push back if the reason is wrong.
+- **Why** — the reason it exists, so it can be pushed back on if the reason is wrong.
 - **Where** — the files it touches.
 - **Do** — the work, broken into steps.
 - **Done when** — the objective test. Not "the code compiles".
-- **Watch for** — the specific bugs I'll be looking for when you submit it.
+- **Watch for** — the specific bugs to check for before the chunk is committed.
 
 Write the test in the same commit as the code it tests. Commit one chunk at a time with an
 imperative message. `[ ]` todo · `[~]` in progress · `[x]` done.
@@ -39,7 +39,7 @@ and doing it by hand once teaches more than reading about it ten times.
 
 ---
 
-## C0 — Complete the IR so resolution is possible  `[ ]`
+## C0 — Complete the IR so resolution is possible  `[x]`
 
 **Why.** Phase 1 emits an IR that's correct to *read* but not sufficient to *resolve*. Three gaps
 block the resolver, and no amount of clever resolver code works around them:
@@ -322,7 +322,7 @@ was decided. Mark Phase 2 done in `CLAUDE.md` and `PLAN.md`.
 
 Phase 2 is finished when all of these hold:
 
-- [ ] The IR carries file attribution, call receivers, and correct import locals (C0).
+- [x] The IR carries file attribution, call receivers, and correct import locals (C0).
 - [ ] Migrations roll forward and back cleanly, and an unresolved edge is storable (C1).
 - [ ] The Drizzle schema and the SQL migration describe the same database (C2).
 - [ ] The parser writes a complete graph transactionally, and re-running is safe (C3).

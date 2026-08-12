@@ -24,9 +24,33 @@ Active task list: `TASKLIST.md`.
 
 ## How to work here
 
-The user writes the code — they are building this to learn the internals. Your job is to review,
-debug, catch bugs before they're committed, suggest simpler approaches, and unblock when they're
-stuck. Do not implement whole chunks unless asked. Keep `TASKLIST.md` checkboxes current.
+You implement, phase by phase, with tests. The user reviews at each phase gate.
+
+- **One PR per phase**, on a `phase-N/<name>` branch. Push at the phase gate, never mid-phase, never
+  to `main`. Commit one concern at a time with an imperative subject.
+- **Stop at every phase gate.** Run the phase's exit test from `PLAN.md`, mark the PR ready, and wait
+  for the user before opening the next branch.
+- **A test ships in the same commit as the code it tests.** Keep `TASKLIST.md` checkboxes current.
+- **Never duplicate code.** A second occurrence gets extracted in that same commit — see the shared-
+  helper homes below. Do not create a generic `utils/` package; a helper lives in the package that
+  owns the concern.
+- **Ask when a choice changes the product**, not for routine judgment calls.
+
+This reverses the earlier arrangement, where the user wrote the code and the assistant only
+reviewed. Do not revert to review-only mode.
+
+### Where shared code goes
+
+| Concern | Home |
+|---|---|
+| AST scope walking, enclosing-declaration lookup | `services/parser/internal/ts/scope.go` |
+| Module specifier → repo file path | `services/parser/internal/resolver/modpath.go` |
+| Chunked multi-row `INSERT`, pgx scanning | `services/parser/internal/db/sqlutil.go` |
+| Test Postgres connect / skip / truncate | `services/parser/internal/db/dbtest/` |
+| Types and Zod schemas used by both api and web | `packages/shared/src/` |
+| Session verification for gated routes | `apps/api/src/auth/session.ts` |
+| Graph SQL, including the recursive CTE | `apps/api/src/graph/queries.ts` |
+| Browser API calls | `apps/web/src/lib/api.ts` — extend `request<T>`, never bare `fetch` |
 
 ## Locked stack — do not re-decide without an explicit reason
 
