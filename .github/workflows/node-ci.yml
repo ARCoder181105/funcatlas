@@ -10,6 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      DATABASE_URL: postgres://funcatlas:funcatlas@localhost:5432/funcatlas?sslmode=disable
+    # The API's graph tests run against a real Postgres. Without one they skip,
+    # which passes CI while proving nothing.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: funcatlas
+          POSTGRES_PASSWORD: funcatlas
+          POSTGRES_DB: funcatlas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U funcatlas"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,4 +42,8 @@ jobs:
       - run: pnpm -r lint
       - run: pnpm -r typecheck
       - run: pnpm -r build
+      - name: Apply migrations
+        run: |
+          docker run --rm --network host -v $(pwd)/services/parser/migrations:/migrations \
+            migrate/migrate -path /migrations -database "${DATABASE_URL}" up
       - run: pnpm -r test
