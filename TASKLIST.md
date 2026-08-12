@@ -224,13 +224,14 @@ routes too — including the login that is supposed to be reachable logged out.
 
 ---
 
-## A5 — Repo registration runs a parse  `[ ]`
+## A5 — Repo registration runs a parse  `[x]`
 
 **Why.** Nothing can put a repository into the database except a human running the parser CLI. The
 product's first action is "paste a GitHub URL".
 
 **Where.** `services/parser/internal/clone/clone.go`, `services/parser/cmd/parser/main.go`,
-`apps/api/src/repos/register.ts` (new), `apps/api/src/routes/repos.ts` (new), `apps/api/src/env.ts`,
+`apps/api/src/repos/register.ts` (new), `apps/api/src/routes/repos.ts` (new),
+`apps/api/src/routes/index.ts` (new), `packages/shared/src/validation.ts`, `apps/api/src/env.ts`,
 `Makefile`
 
 **Do.**
@@ -243,11 +244,24 @@ product's first action is "paste a GitHub URL".
    `execFile` with an **argv array**. Never a shell, never string interpolation: the URL is user
    input, and `; rm -rf` is a valid substring of a string that passes a URL check.
 4. New env `PARSER_BIN` and `PARSE_TIMEOUT_MS`, plus a Makefile target that builds the binary.
-5. Non-zero exit becomes a 502 carrying the tail of stderr, not a 500.
+5. Non-zero exit becomes a 502 carrying the tail of stderr, not a 500. A timeout becomes a 504,
+   because one is worth retrying and the other is not.
+6. Detect the branch as well as the commit. `--branch` defaulted to `main`, and a shallow clone
+   takes whatever the remote's default actually is — so every `master` repository was being
+   recorded under the wrong branch.
+7. Tighten `repoUrlSchema`, which checked `.includes("github.com")` and therefore accepted
+   `https://evil.com/#github.com`. Parse the URL and compare the host.
+8. Collapse the two gated scopes into one. A5 adding a second route group with its own copy of
+   the hook is how a third group ends up without one.
 
-**Done when.** A Go test asserts the resolved SHA is 40 hex characters. API tests use a stub script
-as `PARSER_BIN` to drive both exits: an invalid URL is 400, a parser failure is 502, and success
-returns the repo row.
+**Done when.** Go tests pin the SHA at 40 hex characters, the branch as never the literal `HEAD`,
+and both as empty on a directory that is not a repository. API tests split in two: stub binaries
+exercise the real spawn (clean exit, non-zero exit, hang, missing binary, and an argument
+containing `; touch` that must not execute), and a mocked `runParser` exercises the route (201,
+400 without spawning, 502, 504, and 502 when the parser exits clean having written nothing).
+
+Verified end to end against the real binary: parsing a local path recorded the working branch and
+the current commit rather than the hardcoded `main`.
 
 **Watch for.** `exec` instead of `execFile`. No timeout — a hung clone holds the connection until the
 client gives up. Trusting `repoUrlSchema` as a security boundary: it checks the string contains
@@ -313,7 +327,7 @@ Phase 3a is finished when all of these hold:
 - [x] OAuth state is random per login, verified on callback, and single-use (A2).
 - [x] The dev-login route does not exist in production (A3).
 - [x] Every `/api/*` route 401s without a session (A4).
-- [ ] A GitHub URL posted to `/api/repos` ends with that repo's graph in Postgres (A5).
+- [x] A GitHub URL posted to `/api/repos` ends with that repo's graph in Postgres (A5).
 - [ ] All six graph endpoints return real data, and 404 on an unknown id (A6).
 - [ ] `pnpm -r build`, `pnpm -r test` and the Go suite are green, and CI passes (A7).
 

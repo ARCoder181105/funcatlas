@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  GITHUB_HOSTS,
   TRAVERSAL_DEFAULT_DEPTH,
   TRAVERSAL_DIRECTIONS,
   TRAVERSAL_MAX_DEPTH,
@@ -21,9 +22,26 @@ export const traversalQuerySchema = z.object({
 
 export type TraversalQueryInput = z.infer<typeof traversalQuerySchema>;
 
+/** Substring matching would accept https://evil.com/#github.com. The host has
+ *  to be parsed out and compared, not searched for. */
+function isGitHubRepoUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" || !GITHUB_HOSTS.includes(url.hostname)) {
+    return false;
+  }
+  // Exactly owner/repo. Anything shorter is not a repository, anything longer
+  // is a path inside one.
+  return url.pathname.replace(/\.git$/, "").split("/").filter(Boolean).length === 2;
+}
+
 export const repoUrlSchema = z.object({
-  githubUrl: z.string().url().refine((s) => s.includes("github.com"), {
-    message: "Must be a GitHub repository URL",
+  githubUrl: z.string().url().refine(isGitHubRepoUrl, {
+    message: "Must be a GitHub repository URL, like https://github.com/owner/repo",
   }),
 });
 

@@ -2,7 +2,7 @@
 # Run `make <target>`. Most targets shell out to pnpm/turbo or docker.
 
 .PHONY: install dev build lint typecheck test migrate up down health \
-        go-build go-test go-vet go-run go-tidy go-lint clean
+        go-build go-build-bin go-test go-vet go-run go-tidy go-lint clean
 
 install: ## Install all workspace dependencies
 	pnpm install
@@ -38,6 +38,9 @@ health: ## Check the API health endpoint
 # --- Go (services/parser) ---
 go-build: ## Build the Go parser
 	cd services/parser && go build ./...
+
+go-build-bin: ## Build the parser binary the API spawns (PARSER_BIN)
+	cd services/parser && go build -o bin/parser ./cmd/parser
 
 go-test: ## Run Go parser tests
 	cd services/parser && go test ./...

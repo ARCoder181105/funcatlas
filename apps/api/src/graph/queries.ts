@@ -111,6 +111,32 @@ export async function directEdges(db: Db, functionId: number) {
   }));
 }
 
+/** The repo row for a canonical URL. The parser owns the insert, so
+ *  registration reads back what it wrote rather than writing its own. */
+export async function repoByUrl(db: Db, githubUrl: string) {
+  const rows = await db.execute<{
+    id: number;
+    github_url: string;
+    default_branch: string;
+    last_synced_commit: string | null;
+  }>(sql`
+    SELECT id, github_url, default_branch, last_synced_commit
+    FROM repos
+    WHERE github_url = ${githubUrl}
+  `);
+
+  const row = rows[0];
+  if (row === undefined) {
+    return null;
+  }
+  return {
+    id: Number(row.id),
+    githubUrl: row.github_url,
+    defaultBranch: row.default_branch,
+    lastSyncedCommit: row.last_synced_commit,
+  };
+}
+
 /** Whether a function row exists, so the route can 404 rather than return an
  *  empty traversal that looks like "this function calls nothing". */
 export async function functionExists(db: Db, functionId: number): Promise<boolean> {

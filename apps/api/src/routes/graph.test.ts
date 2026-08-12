@@ -8,13 +8,14 @@ import { devLogin } from "../test-helpers.js";
  * Every /api route, so adding one without gating it fails here. The ids do not
  * have to exist -- the gate runs before the handler, which is the point.
  */
-const GATED = [
-  "/api/repos",
-  "/api/repos/1/tree",
-  "/api/files/1/functions",
-  "/api/functions/1/source",
-  "/api/functions/1/edges",
-  "/api/repos/1/search?query=x",
+const GATED: { method: "GET" | "POST"; url: string }[] = [
+  { method: "GET", url: "/api/repos" },
+  { method: "POST", url: "/api/repos" },
+  { method: "GET", url: "/api/repos/1/tree" },
+  { method: "GET", url: "/api/files/1/functions" },
+  { method: "GET", url: "/api/functions/1/source" },
+  { method: "GET", url: "/api/functions/1/edges" },
+  { method: "GET", url: "/api/repos/1/search?query=x" },
 ];
 
 /** Reachable logged out, by necessity: you cannot log in through a gate that
@@ -41,14 +42,14 @@ afterAll(async () => {
 });
 
 describe("the /api gate", () => {
-  it.each(GATED)("401s %s with no cookie", async (url) => {
-    const res = await app.inject({ method: "GET", url });
+  it.each(GATED)("401s $method $url with no cookie", async ({ method, url }) => {
+    const res = await app.inject({ method, url });
     expect(res.statusCode).toBe(401);
   });
 
-  it.each(GATED)("401s %s with a forged cookie", async (url) => {
+  it.each(GATED)("401s $method $url with a forged cookie", async ({ method, url }) => {
     const res = await app.inject({
-      method: "GET",
+      method,
       url,
       // Well-formed, unsigned, and never issued.
       headers: { cookie: `${env.SESSION_COOKIE_NAME}=${"a".repeat(64)}` },
@@ -56,8 +57,8 @@ describe("the /api gate", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it.each(GATED)("lets a session through to %s", async (url) => {
-    const res = await app.inject({ method: "GET", url, headers: { cookie: await sessionCookie() } });
+  it.each(GATED)("lets a session through to $method $url", async ({ method, url }) => {
+    const res = await app.inject({ method, url, headers: { cookie: await sessionCookie() } });
 
     // What comes back is A6's problem -- 501 from a stub, 404 from the live
     // traversal against an empty database. Only "not 401" is being asserted.

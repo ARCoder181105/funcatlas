@@ -5,7 +5,7 @@ import rateLimit from "@fastify/rate-limit";
 import { env } from "./env.js";
 import { redis } from "./redis.js";
 import { registerAuth } from "./auth/routes.js";
-import { registerGraph } from "./routes/graph.js";
+import { registerApi } from "./routes/index.js";
 
 /**
  * Builds the app without listening, so tests drive it through app.inject()
@@ -31,7 +31,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get("/healthz", async () => ({ status: "ok", env: env.NODE_ENV }));
 
   registerAuth(app);
-  await registerGraph(app);
+  await registerApi(app);
 
   return app;
 }

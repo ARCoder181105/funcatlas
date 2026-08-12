@@ -44,6 +44,33 @@ func (c *Cloner) Prepare(repo string) (string, error) {
 	return abs, nil
 }
 
+// HeadCommit returns the checked-out commit SHA, or "" when dir is not a git
+// repository -- a local path being parsed need not be one.
+func HeadCommit(dir string) string {
+	return gitOutput(dir, "rev-parse", "HEAD")
+}
+
+// HeadBranch returns the checked-out branch, or "" on a detached head or a
+// non-repository. Cloning takes whatever the remote's default is, so assuming
+// "main" records the wrong branch for every repo that still uses "master".
+func HeadBranch(dir string) string {
+	branch := gitOutput(dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if branch == "HEAD" {
+		return ""
+	}
+	return branch
+}
+
+// gitOutput runs git in dir and returns trimmed stdout, or "" on any failure.
+// Callers treat absence as "unknown", not as an error.
+func gitOutput(dir string, args ...string) string {
+	out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 type CloneError struct{ Msg string }
 
 func (e *CloneError) Error() string { return "clone failed: " + e.Msg }
