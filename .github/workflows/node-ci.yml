@@ -40,6 +40,17 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
+      # Sessions live in Redis. Without one the session tests fail rather than
+      # skip -- REDIS_URL is always set, so there is nothing to skip on.
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
         with:

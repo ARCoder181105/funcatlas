@@ -2,9 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { GitHub } from "arctic";
 import { env } from "../env.js";
 
-// GitHub OAuth (arctic). Session handling via oslo is wired in Phase 3.
-// For Phase 0 this registers the authorize/callback routes as stubs that
-// return 501 until session storage is implemented.
+// GitHub OAuth via arctic. Still stubs: the real state handling, code exchange
+// and logout land in A2. "state-placeholder" below is a live CSRF hole.
 export function registerAuth(app: FastifyInstance) {
   const github = new GitHub(
     env.GITHUB_CLIENT_ID,

@@ -85,7 +85,7 @@ order is load-bearing. `import.meta.dirname` needs Node 20.11+; CI is on 22.
 
 ---
 
-## A1 — Sessions in Redis  `[ ]`
+## A1 — Sessions in Redis  `[x]`
 
 **Why.** There is no session anywhere in the codebase. `/auth/callback` returns 501 and every
 `/api/*` route is open to the internet. Sessions come before OAuth because the callback's last step
@@ -96,7 +96,7 @@ signed blob of claims — a key into Redis. Anything in the cookie is in the bro
 the browser is a token in whatever reads it.
 
 **Where.** `apps/api/src/auth/session.ts` (new), `apps/api/src/auth/session.test.ts` (new),
-`apps/api/src/env.ts`
+`apps/api/src/redis.ts` (new), `.github/workflows/node-ci.yml`
 
 **Do.**
 
@@ -107,12 +107,22 @@ the browser is a token in whatever reads it.
    `maxAge` matching the Redis TTL so the two expire together.
 4. `requireSession` — a Fastify `preHandler` that reads the cookie, looks Redis up, attaches the
    session to the request, and replies 401 otherwise.
-5. Drop the now-unused `oslo` dependency. `node:crypto` covers the randomness, and oslo is
+5. Sign the cookie with `SESSION_SECRET`, so a forged id is rejected before Redis is touched.
+6. Give the session store its own Redis connection. `queue.ts` set `maxRetriesPerRequest: null`,
+   which BullMQ requires and a request path must never have — it turns an outage into a hung
+   request. That file is unused, so it goes; Phase 4 opens its own connection.
+7. Drop the now-unused `oslo` dependency. `node:crypto` covers the randomness, and oslo is
    deprecated upstream.
+8. Add a Redis service to node-ci. `REDIS_URL` is always set, so there is no skip path: without
+   a server the tests fail.
 
 **Done when.** Tests cover: a created session reads back; the Redis key carries a TTL within a second
-of `SESSION_TTL`; a destroyed session reads back as null; `requireSession` 401s with no cookie, with
-a syntactically valid but unknown id, and with an expired one.
+of `SESSION_TTL`; a destroyed session reads back as null; a corrupt value reads as null rather than
+throwing; `requireSession` 401s with no cookie, on an unknown id, and on a destroyed session.
+
+The signature test is written so it can fail: it presents a **live, real** session id with no
+signature attached. Only the signature check can produce the 401, so deleting that check turns the
+test green at 200 — which is how you know it is testing something.
 
 **Watch for.** `SameSite=Strict` breaks the OAuth redirect — the browser arrives from github.com and
 a strict cookie is not sent. Reusing one Redis key prefix for sessions and BullMQ jobs. Returning
@@ -262,18 +272,17 @@ pattern, which are wildcards the user did not ask for.
 
 ## A7 — CI, docs, and the exit gate  `[ ]`
 
-**Why.** The session tests need a Redis that CI does not have, and they *skip* rather than fail
-without one — a green tick proving nothing. Phase 2 hit exactly this with Postgres.
+**Why.** The docs still describe a phase that has not shipped, and a document that lies is worse
+than no document. This is the chunk where the ones this phase invalidated get corrected, while the
+reasons are still fresh.
 
-**Where.** `.github/workflows/node-ci.yml`, `.env.example`, `DEVELOPMENT.md`, `CLAUDE.md`,
-`PLAN.md`, `docs/RISKS.md`
+**Where.** `.env.example`, `DEVELOPMENT.md`, `CLAUDE.md`, `PLAN.md`, `docs/RISKS.md`
 
-**Do.** Add a Redis service to node-ci. Document the new env keys and how to log in and register a
-repo locally. Record the `read:user` scope decision in the risk list. Update the phase status and the
-known-gaps section in `CLAUDE.md`.
+**Do.** Document the new env keys and how to log in and register a repo locally. Record the
+`read:user` scope decision in the risk list. Update the phase status and the known-gaps section in
+`CLAUDE.md`.
 
-**Done when.** No document describes behaviour the code does not have, and CI runs the session tests
-rather than skipping them.
+**Done when.** No document describes behaviour the code does not have.
 
 ---
 
@@ -282,7 +291,7 @@ rather than skipping them.
 Phase 3a is finished when all of these hold:
 
 - [x] The app can be built and injected without binding a port, from any working directory (A0).
-- [ ] A session is an opaque id in a `HttpOnly` cookie and its data never leaves Redis (A1).
+- [x] A session is an opaque id in a `HttpOnly` cookie and its data never leaves Redis (A1).
 - [ ] OAuth state is random per login, verified on callback, and single-use (A2).
 - [ ] The dev-login route does not exist in production (A3).
 - [ ] Every `/api/*` route 401s without a session (A4).

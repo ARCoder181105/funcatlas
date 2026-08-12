@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import { env } from "./env.js";
+import { redis } from "./redis.js";
 import { registerAuth } from "./auth/routes.js";
 import { registerGraph } from "./routes/graph.js";
 
@@ -20,6 +21,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: env.CORS_ORIGIN, credentials: true });
   await app.register(cookie, { secret: env.SESSION_SECRET });
   await app.register(rateLimit, { max: 100, timeWindow: "1 minute" });
+
+  // The session client holds an open socket, which keeps the process alive on
+  // shutdown and stops vitest from exiting.
+  app.addHook("onClose", async () => {
+    await redis.quit();
+  });
 
   app.get("/healthz", async () => ({ status: "ok", env: env.NODE_ENV }));
 
