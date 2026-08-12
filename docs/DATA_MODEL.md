@@ -1,33 +1,33 @@
 # Data Model
 
-The Postgres schema. This document describes what is **currently applied** —
-`services/parser/migrations/0001_init.up.sql` — plus a pending change at the bottom that Phase 2
-needs. The migration directory is the single source of truth; `packages/shared/src/schema.ts` is a
-Drizzle description of the same tables for the API to read through, and the two must agree.
+The Postgres schema as **currently applied**, through
+`services/parser/migrations/0002_edge_callee_name.up.sql`. The migration directory is the single
+source of truth; `packages/shared/src/schema.ts` is a Drizzle description of the same tables for the
+API to read through, and the two must agree.
 
 ```sql
 -- A registered repository
 CREATE TABLE repos (
     id                  SERIAL PRIMARY KEY,
-    github_url          TEXT NOT NULL,
+    github_url          TEXT NOT NULL UNIQUE,  -- the writer upserts on this
     default_branch      TEXT NOT NULL,
     last_synced_commit  TEXT,
-    created_at          TIMESTAMP DEFAULT now()
+    created_at          TIMESTAMP NOT NULL DEFAULT now()
 );
 
 -- One row per file in the repo
 CREATE TABLE files (
     id          SERIAL PRIMARY KEY,
-    repo_id     INTEGER REFERENCES repos(id),
+    repo_id     INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
     path        TEXT NOT NULL,       -- repo-relative, e.g. src/services/auth.ts
     language    TEXT NOT NULL,       -- 'typescript' (only language in the MVP)
-    UNIQUE (repo_id, path)
+    UNIQUE (repo_id, path)           -- constraint name: files_repo_id_path_key
 );
 
 -- One row per function/method definition
 CREATE TABLE functions (
     id              SERIAL PRIMARY KEY,
-    file_id         INTEGER REFERENCES files(id) ON DELETE CASCADE,
+    file_id         INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
     package_path    TEXT NOT NULL,          -- file's directory relative to repo root; '' at root
     name            TEXT NOT NULL,          -- bare name, e.g. sync
     qualified_name  TEXT NOT NULL,          -- dot-joined scope path, e.g. Repo.sync
@@ -36,7 +36,7 @@ CREATE TABLE functions (
     end_line        INTEGER NOT NULL,
     source_blob_ref TEXT,                  -- the function's source text (plain column for MVP)
     parsed_commit   TEXT,                  -- commit SHA this row was parsed from (incremental diff)
-    updated_at      TIMESTAMP DEFAULT now(),
+    updated_at      TIMESTAMP NOT NULL DEFAULT now(),
     UNIQUE (file_id, qualified_name, overload_index)
 );
 
@@ -47,34 +47,40 @@ CREATE INDEX idx_functions_pkg_name ON functions (package_path, name);
 CREATE TABLE edges (
     id                    SERIAL PRIMARY KEY,
     caller_function_id    INTEGER REFERENCES functions(id) ON DELETE CASCADE,
-    callee_function_id    INTEGER REFERENCES functions(id) ON DELETE CASCADE,
+    callee_function_id    INTEGER REFERENCES functions(id) ON DELETE CASCADE,  -- null iff unresolved
+    callee_name           TEXT NOT NULL DEFAULT '',  -- the name as written at the call site
+    call_line             INTEGER,        -- the line the call is on, so the UI can jump to it
     resolution_confidence TEXT NOT NULL   -- 'exact' | 'name_match' | 'unresolved'
         CHECK (resolution_confidence IN ('exact', 'name_match', 'unresolved')),
     parsed_commit         TEXT,           -- commit SHA this edge was derived from
-    updated_at            TIMESTAMP DEFAULT now()
+    updated_at            TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT edges_callee_consistency
+        CHECK (callee_function_id IS NOT NULL OR resolution_confidence = 'unresolved')
 );
 
 CREATE INDEX idx_edges_caller ON edges (caller_function_id);
 CREATE INDEX idx_edges_callee ON edges (callee_function_id);
 ```
 
-## Pending change — Phase 2, `TASKLIST.md` C1
+## Why an edge keeps the callee's name
 
-The schema above has a hole: **it cannot store an unresolved edge.** An edge records
-`callee_function_id`, so when a call resolves to nothing there is nothing to point at, the column is
-null, and the callee's name is lost. The row then says only "something unresolved happened here",
-which is not useful to anyone. Two of the three confidence values are effectively unstorable.
+Before migration `0002` the `edges` table **could not store an unresolved edge.** It recorded only
+`callee_function_id`, so a call that resolved to nothing left that column null with the callee's name
+lost — a row saying "something unresolved happened here" and nothing more. Two of the three
+confidence values were effectively unstorable, which made the confidence tiers in
+[`../PRD.md`](../PRD.md#8-the-design-commitment) a promise the schema could not keep.
 
-Migration `0002` fixes it:
+`callee_name` is populated on **every** edge, not only unresolved ones. On an `exact` edge it is
+redundant with the target row, and that redundancy is deliberate: it is what lets a caller keep saying
+something true after the function it pointed at is deleted, and it is what the canvas renders on a
+dotted edge.
 
-```sql
-ALTER TABLE edges ADD COLUMN callee_name TEXT NOT NULL DEFAULT '';  -- name as written at the call site
-ALTER TABLE edges ADD COLUMN call_line   INTEGER;                   -- so the UI can jump to the call
--- callee_function_id stays nullable; it is null exactly when confidence is 'unresolved'
+`edges_callee_consistency` makes "null exactly when unresolved" a database rule rather than a
+convention the writer has to remember. A resolver bug that emits a confident edge pointing at nothing
+now fails at write time instead of rendering as a confident line to nowhere.
 
--- and, separately: files.repo_id gains ON DELETE CASCADE and NOT NULL,
--- so deleting a repo cleans up under it instead of erroring.
-```
+`repos.github_url` is `UNIQUE` because the writer upserts a repo by URL, and `ON CONFLICT
+(github_url)` needs a constraint to conflict against.
 
 ## Design notes
 

@@ -89,7 +89,7 @@ Breaking the existing golden JSON without regenerating it.
 
 ---
 
-## C1 — Migration 0002: make an unresolved edge storable  `[ ]`
+## C1 — Migration 0002: make an unresolved edge storable  `[x]`
 
 **Why.** The `edges` table cannot currently represent two of its own three confidence values. An
 edge stores `callee_function_id`; if a call is `unresolved` there is no function to point at, so the
@@ -323,7 +323,7 @@ was decided. Mark Phase 2 done in `CLAUDE.md` and `PLAN.md`.
 Phase 2 is finished when all of these hold:
 
 - [x] The IR carries file attribution, call receivers, and correct import locals (C0).
-- [ ] Migrations roll forward and back cleanly, and an unresolved edge is storable (C1).
+- [x] Migrations roll forward and back cleanly, and an unresolved edge is storable (C1).
 - [ ] The Drizzle schema and the SQL migration describe the same database (C2).
 - [ ] The parser writes a complete graph transactionally, and re-running is safe (C3).
 - [ ] Every call site gets a confidence tag, and ambiguity resolves to `unresolved` (C4).
