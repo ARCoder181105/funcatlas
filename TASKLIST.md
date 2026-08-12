@@ -161,7 +161,7 @@ does not match the database. Actually run a query.
 
 ---
 
-## C3 — Parser writes the graph to Postgres  `[ ]`
+## C3 — Parser writes the graph to Postgres  `[x]`
 
 **Why.** `db.Writer.WriteGraph` is a stub that returns nil. This is the chunk that makes the parser
 stop being a JSON printer.
@@ -240,7 +240,7 @@ self-edge you didn't expect.
 
 ---
 
-## C5 — Edges, and re-parsing without orphans  `[ ]`
+## C5 — Edges, and re-parsing without orphans  `[x]`
 
 **Why.** NFR-3 says a re-parse after a rename leaves no orphan edges. That property has to be
 designed in, because the naive version — insert everything again — produces a graph that grows a
@@ -325,9 +325,9 @@ Phase 2 is finished when all of these hold:
 - [x] The IR carries file attribution, call receivers, and correct import locals (C0).
 - [x] Migrations roll forward and back cleanly, and an unresolved edge is storable (C1).
 - [x] The Drizzle schema and the SQL migration describe the same database (C2).
-- [ ] The parser writes a complete graph transactionally, and re-running is safe (C3).
+- [x] The parser writes a complete graph transactionally, and re-running is safe (C3).
 - [x] Every call site gets a confidence tag, and ambiguity resolves to `unresolved` (C4).
-- [ ] A re-parse after a rename leaves zero orphan edges (C5).
+- [x] A re-parse after a rename leaves zero orphan edges (C5).
 - [ ] The API answers a depth-bounded N-hop traversal over a cyclic graph (C6).
 - [ ] `make go-test`, `make go-vet`, and `pnpm -r build` are green, and CI passes (C7).
 
