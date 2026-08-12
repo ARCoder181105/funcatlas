@@ -178,7 +178,7 @@ app registration byte for byte, trailing slash included.
 
 ---
 
-## A3 — Dev login, gated  `[ ]`
+## A3 — Dev login, gated  `[x]`
 
 **Why.** Phase 3b and every route test need a session. Going through GitHub for one makes tests
 depend on the network and a live OAuth app.
@@ -188,8 +188,12 @@ depend on the network and a live OAuth app.
 **Do.** Register `POST /auth/dev-login` only when `NODE_ENV` is `development` or `test`. It creates a
 session for a fixed fake user with no token. Comment it as Phase 4 removal.
 
-**Done when.** It returns a usable session cookie under `test`, and the route does not exist — 404,
-not 401 — when `NODE_ENV=production`.
+**Done when.** It returns a usable session cookie under `test` without any call to GitHub, and the
+route does not exist — 404, not 401 — when `NODE_ENV=production`.
+
+`env` is parsed once at import, so the production test rebuilds the whole module graph under a
+stubbed `NODE_ENV` rather than trying to mutate it in place. It also asserts `/auth/login` still
+answers 302 in that same rebuilt app, so a broken build cannot masquerade as a working gate.
 
 **Watch for.** Gating inside the handler instead of around the registration. A production 401 says
 "this endpoint exists, bring credentials"; a 404 says nothing.
@@ -303,7 +307,7 @@ Phase 3a is finished when all of these hold:
 - [x] The app can be built and injected without binding a port, from any working directory (A0).
 - [x] A session is an opaque id in a `HttpOnly` cookie and its data never leaves Redis (A1).
 - [x] OAuth state is random per login, verified on callback, and single-use (A2).
-- [ ] The dev-login route does not exist in production (A3).
+- [x] The dev-login route does not exist in production (A3).
 - [ ] Every `/api/*` route 401s without a session (A4).
 - [ ] A GitHub URL posted to `/api/repos` ends with that repo's graph in Postgres (A5).
 - [ ] All six graph endpoints return real data, and 404 on an unknown id (A6).
