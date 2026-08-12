@@ -200,7 +200,7 @@ answers 302 in that same rebuilt app, so a broken build cannot masquerade as a w
 
 ---
 
-## A4 — Gate every `/api/*` route  `[ ]`
+## A4 — Gate every `/api/*` route  `[x]`
 
 **Why.** All six graph endpoints are open. `docs/SECURITY.md:19`: every graph-serving endpoint is
 session-gated, anonymous requests rejected even in single-user mode.
@@ -212,8 +212,12 @@ session-gated, anonymous requests rejected even in single-user mode.
 `addHook("preHandler", requireSession)`. One hook for the subtree, not one line per route — a
 per-route gate is a gate someone forgets to copy onto route seven.
 
-**Done when.** A table-driven test walks every `/api/*` route and asserts 401 with no cookie and 401
-with a forged one, and that the same routes answer with a dev-login session.
+**Done when.** A table-driven test walks all six `/api/*` routes three ways — no cookie, forged
+cookie, dev-login session — and asserts `/healthz` and `/auth/login` stay open.
+
+The session is fetched lazily rather than in `beforeAll`. A gate wide enough to catch
+`/auth/dev-login` aborts the suite in setup, and vitest reports that as *20 skipped*, which hides
+which rule broke. Fetched inside the test, the same mistake produces eight named failures.
 
 **Watch for.** Registering the hook outside the plugin scope, which gates `/healthz` and the auth
 routes too — including the login that is supposed to be reachable logged out.
@@ -308,7 +312,7 @@ Phase 3a is finished when all of these hold:
 - [x] A session is an opaque id in a `HttpOnly` cookie and its data never leaves Redis (A1).
 - [x] OAuth state is random per login, verified on callback, and single-use (A2).
 - [x] The dev-login route does not exist in production (A3).
-- [ ] Every `/api/*` route 401s without a session (A4).
+- [x] Every `/api/*` route 401s without a session (A4).
 - [ ] A GitHub URL posted to `/api/repos` ends with that repo's graph in Postgres (A5).
 - [ ] All six graph endpoints return real data, and 404 on an unknown id (A6).
 - [ ] `pnpm -r build`, `pnpm -r test` and the Go suite are green, and CI passes (A7).

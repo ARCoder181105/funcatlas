@@ -31,7 +31,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get("/healthz", async () => ({ status: "ok", env: env.NODE_ENV }));
 
   registerAuth(app);
-  registerGraph(app);
+  await registerGraph(app);
 
   return app;
 }
