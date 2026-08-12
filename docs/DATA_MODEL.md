@@ -82,6 +82,26 @@ now fails at write time instead of rendering as a confident line to nowhere.
 `repos.github_url` is `UNIQUE` because the writer upserts a repo by URL, and `ON CONFLICT
 (github_url)` needs a constraint to conflict against.
 
+## How a re-parse avoids orphan edges
+
+The writer is **delete-and-reinsert per file, never an upsert**. In one transaction it upserts the
+repo and file rows, deletes the `functions` rows for every file it is about to write — `ON DELETE
+CASCADE` takes their edges — and inserts the new ones. File rows are never deleted: their ids are
+referenced elsewhere, and a file that reappears must keep the id it had.
+
+That is what makes re-running safe. A second run cannot duplicate rows or violate
+`(file_id, qualified_name, overload_index)`, because the previous rows are gone before the new ones
+land. And a rename leaves no orphan: the caller is re-resolved along with everything else, so its
+edge becomes `unresolved` carrying the name it can no longer find.
+
+Function ids are obtained with chunked multi-row `INSERT ... RETURNING`, not `pgx.CopyFrom`, because
+`CopyFrom` cannot `RETURNING` and the generated ids are exactly what the edges need. Edges do use
+`CopyFrom`, where nothing comes back. Both map returned rows back **by key, not by row order**,
+which is not guaranteed — least of all with `ON CONFLICT`.
+
+Phase 2 rewrites the whole graph each run. Scoping this to only the files a push changed is Phase 4;
+see `PARSING_STRATEGY.md` for the case that makes it harder than it looks.
+
 ## Design notes
 
 - **`(file_id, qualified_name, overload_index)` is the identity of a function.** Five functions

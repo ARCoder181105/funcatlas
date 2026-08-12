@@ -302,7 +302,7 @@ Forgetting that an edge with a null callee has nothing to traverse to.
 
 ---
 
-## C7 — Sync the docs to reality  `[ ]`
+## C7 — Sync the docs to reality  `[x]`
 
 **Why.** Docs that lie are worse than no docs, and this is the chunk where the ones you just
 invalidated get corrected — while you still remember why.
@@ -329,7 +329,7 @@ Phase 2 is finished when all of these hold:
 - [x] Every call site gets a confidence tag, and ambiguity resolves to `unresolved` (C4).
 - [x] A re-parse after a rename leaves zero orphan edges (C5).
 - [x] The API answers a depth-bounded N-hop traversal over a cyclic graph (C6).
-- [ ] `make go-test`, `make go-vet`, and `pnpm -r build` are green, and CI passes (C7).
+- [x] `make go-test`, `make go-vet`, and `pnpm -r build` are green, and CI passes (C7).
 
 ## Conventions
 

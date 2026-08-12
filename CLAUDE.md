@@ -16,8 +16,8 @@ The old working name "CodeCanvas" is retired; do not reintroduce it.
 
 - [x] Phase 0 — Bootstrap
 - [x] Phase 1 — Parser and isolation
-- [~] Phase 2 — Storage and resolution ← current, branch `phase-2/storage-and-resolution`
-- [ ] Phase 3 — API, auth, canvas, search
+- [x] Phase 2 — Storage and resolution
+- [ ] Phase 3 — API, auth, canvas, search ← next, split 3a (api/auth) and 3b (canvas/search)
 - [ ] Phase 4 — Webhooks, queue, hardening
 
 Active task list: `TASKLIST.md`.
@@ -74,12 +74,14 @@ You implement, phase by phase, with tests. The user reviews at each phase gate.
 - **API:** Fastify + Drizzle + postgres.js + Zod, arctic/oslo for GitHub OAuth, Redis sessions,
   `@fastify/rate-limit`.
 - **Parser:** Go + `tree-sitter/go-tree-sitter` v0.25.0 + `tree-sitter/tree-sitter-typescript`
-  v0.23.2 (both pinned in `go.mod`), sqlx + pgx with explicit SQL, zap.
+  v0.23.2 (both pinned in `go.mod`), pgx with explicit SQL, zap.
 - **Database:** Postgres — edge tables and recursive CTEs. Neo4j deferred indefinitely.
 - **Queue:** Redis + BullMQ.
 - **Migrations:** golang-migrate, plain SQL, single source at `services/parser/migrations/`, read by
   both the Go writer and the TypeScript reader. Never edit an applied migration.
-- **Tests:** Vitest, testify, testcontainers-go. CI: GitHub Actions. Local infra: docker-compose.
+- **Tests:** Vitest, testify. Integration tests use `TEST_DATABASE_URL` (falling back to
+  `DATABASE_URL`) and skip when unset; CI supplies a Postgres service container. No testcontainers.
+  CI: GitHub Actions. Local infra: docker-compose.
 
 No GORM. No Prisma. No full ORM on the Go side.
 
@@ -109,16 +111,21 @@ files over 1 MB skipped.
   dotted. Ambiguity resolves to `unresolved`, never to a guess. This is the product's core promise —
   see `PRD.md` §8.
 
-## Known gaps carried into Phase 2
+## Known gaps carried into Phase 3
 
-Documented in full in `TASKLIST.md` C0–C2; summarised here so they aren't rediscovered:
+The five Phase 2 gaps are all closed. What Phase 3 inherits:
 
-- `ir.CallSite` has no `FileID`, which blocks same-file and import-based resolution.
-- Member calls discard the receiver — `Repo.sync()` records only `sync`.
-- Import symbol extraction returns every identifier, so `import { a as b }` yields both `a` and `b`.
-- The `edges` table cannot store an unresolved edge, because it has no column for the callee's name.
-- The Drizzle schema and the SQL migration disagree on the confidence column type and on three
-  nullability constraints.
+- **Auth is a stub.** `/auth/callback` and `/auth/logout` return 501, and `createAuthorizationURL`
+  uses a literal `"state-placeholder"` — a CSRF hole that must be real random state before login
+  ships. The GitHub OAuth app itself does not exist yet (R4).
+- **Five graph endpoints are still 501.** Only `/api/functions/:fnId/edges` is real, and it is
+  ungated — nothing checks a session yet.
+- **The web app is a 114-line shell.** Canvas, FunctionCard and CodeBlock are placeholders.
+- **`pnpm start` cannot run the API.** `packages/shared` exports point at `./src/*.ts`, so plain
+  `node dist/index.js` cannot follow them. `pnpm dev` (tsx) works. Fix before containerising.
+- **Compiled test files land in `apps/api/dist`.** Harmless locally, wrong in an image.
+- **Resolution limits that are honest, not broken:** barrel re-export chains, default imports, and
+  `tsconfig` path aliases all resolve to `unresolved`. See `docs/PARSING_STRATEGY.md`.
 
 ## Verify state before trusting this file
 
@@ -126,8 +133,11 @@ Run these instead of reading source to find out where things stand. Commands can
 prose can — if one contradicts this document, the command is right and this document needs fixing.
 
 ```bash
-cd services/parser && go test ./... && go vet ./...   # is Phase 1 still green?
-go run ./cmd/parser --repo ./testdata/golden --format summary   # what does the parser actually emit?
+make up && make migrate                               # infra + schema
+cd services/parser && go test ./... && go vet ./...   # is the parser green?
+go run ./cmd/parser --repo ./testdata/resolve --format summary  # what does it emit, and how confident?
+go run ./cmd/parser --repo ./testdata/resolve --write --repo-url x --commit y  # full pipeline
+pnpm -r build && pnpm -r test                         # TypeScript side
 git log --oneline -5                                  # what happened last
 grep -c '\[x\]' TASKLIST.md                           # how far into the current phase
 ```

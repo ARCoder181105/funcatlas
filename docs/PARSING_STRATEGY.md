@@ -86,34 +86,71 @@ a conditional, for instance — not on TypeScript overload signatures, which are
 
 ### Resolution order
 
-For each call site, in order, stopping at the first rule that produces an unambiguous answer:
+Implemented in `services/parser/internal/resolver`. Every lookup is an in-memory index built once
+per repo; the resolver never queries the database per call site.
 
-1. **Same file** — is there a function with this qualified name in the file the call is in?
-   → `exact`
-2. **Imported symbol** — does this file import the callee's local name? Follow the import to its
-   module and find the definition there. → `exact`. If the module lies outside the repo, such as
-   `react` or `node:fs`, the honest answer is `unresolved`, not a failure.
-3. **Package fallback** — is there exactly one function with this name in the same `package_path`,
-   or failing that exactly one in the whole repo? → `name_match`
-4. **Otherwise** → `unresolved`, keeping the callee name as written so the edge still carries
-   information.
+A **member call is answered separately**, because `obj.method()` and `method()` are different
+callees and must never collapse into one. With a receiver, the resolver tries: a namespace import
+(`ns.fn()` where `ns` is `import * as ns`), then a class declared in this file (`Repo.sync()` is
+stored under the qualified name `Repo.sync`), then a class imported from elsewhere in the repo.
+Anything else is `unresolved`.
 
-Two rules override all of the above:
+For a bare call, in order, stopping at the first unambiguous answer:
 
-- **Ambiguity resolves to `unresolved`.** If more than one candidate matches, we do not pick one.
-- **Overloaded targets resolve to `unresolved`.** If the matched `qualified_name` has more than one
-  `overload_index` in its file, name and scope matching cannot choose between them, so it must not
-  pretend to.
+1. **Same file, honouring lexical scope.** Candidate qualified names are generated innermost-first:
+   a call to `cb()` inside `Repo.sync` tries `Repo.sync.cb`, then `Repo.cb`, then `cb`, so a nested
+   definition wins over a top-level one. → `exact`
+2. **Imported symbol.** The callee's local name is in this file's imports; follow the specifier to a
+   file in the repo and look up the name it is *exported* under, not the local alias. → `exact`.
+   A specifier resolving outside the repo (`react`, `node:fs`) → `unresolved`.
+3. **Package fallback.** Exactly one function with that name in the same `package_path`, or failing
+   that exactly one in the whole repo. → `name_match`
+4. **Otherwise** → `unresolved`, keeping the callee name as written.
 
-Every edge is written with its `resolution_confidence`, and the canvas renders `exact` solid,
-`name_match` dashed, and `unresolved` dotted. A guess is never drawn as a fact — see
-[`../PRD.md`](../PRD.md) §8 for why this is the product's core commitment rather than a detail.
+### Where it refuses to guess
+
+Each of these had a plausible wrong answer available, and each returns `unresolved` instead. This is
+the list to check against when a user asks why an edge is dotted.
+
+| Case | Why not resolved |
+|---|---|
+| More than one candidate | Ambiguity is never broken by picking. The whole product rests on this. |
+| Target has more than one `overload_index` in its file | Name and scope matching cannot choose an overload. |
+| `import def from "m"` then `def()` | A default import binds an arbitrary local name, so there is nothing to match a definition against. Picking the module's only function would be a coin flip. |
+| `a.b.c()` | A chained receiver cannot be followed by name. Not bailing here would let it match a function coincidentally nested as `a.b.c`. |
+| `this.x()` | The receiver is not a name that can be looked up. |
+| `obj.method()` where `obj` is unidentifiable | An unknown receiver ends the search rather than widening it to every `method` in the repo. |
+| A symbol re-exported through a barrel file | The importing file names a module that does not define the symbol. Following the chain needs the re-export graph, which is recorded but not yet walked. |
+| A specifier that only a `tsconfig` path alias resolves | Aliases are not consulted. |
+
+### Module specifier resolution
+
+Relative specifiers only, resolved against the importing file's directory and tried in the order
+TypeScript would: `foo.ts`, `foo.tsx`, `foo/index.ts`, `foo/index.tsx`, then the path as written. A
+`.js` or `.jsx` extension is rewritten to its TypeScript source, since ESM TypeScript writes
+`./foo.js` for what is really `./foo.ts`. A specifier that escapes the repo root resolves to nothing.
+
+### Edges, and what a caller is
+
+`Resolve` returns one `ir.Edge` per call site, in call-site order. It deliberately does not return a
+map keyed by the call: two identical calls on one line are two edges, and a map would silently merge
+them.
+
+An edge's caller is the **innermost captured function containing the call, by line** — not the call
+site's `CallerQualified`. A call inside an anonymous callback records a caller like
+`localCall.<anonymous>`, and that closure is not a function row anywhere, so matching on the name
+would attribute the edge to nothing. A call at module level has no caller function at all.
+
+Recursion produces a genuine self-edge, which is correct and which the API's traversal has to
+tolerate rather than treat as a cycle bug.
 
 ## Known limitation classes (v1, name/scope-based resolution)
 
-- **Re-exports / barrel files** (common in TypeScript) — a symbol may be re-exported through one or more intermediate files before reaching its real definition. v1 may under-resolve these; flagged as `unresolved` rather than guessed wrong.
-- **Overloading / shadowing** — languages that allow multiple definitions to share a name depending on context aren't disambiguated by name/scope matching alone.
-- **Cross-language repos** — name-only matching risks wiring a call in one language to an unrelated same-named function in another language. Mitigate by never resolving across a language boundary unless there's an explicit FFI/binding reference.
+Every one of these lands as `unresolved` rather than a wrong answer — see the refusal table above.
+
+- **Re-exports / barrel files** — a symbol may pass through several intermediate files before its real definition. The re-export edges are recorded in the IR (`KindReExport`, carrying the original name and no local binding) but not yet followed.
+- **Overloading / shadowing** — multiple definitions sharing a name are not disambiguated by name and scope alone.
+- **Cross-language repos** — name-only matching could wire a call in one language to an unrelated same-named function in another. Not reachable today, since TypeScript is the only language parsed.
 
 ## v2: LSP-based resolution
 
@@ -121,5 +158,12 @@ For one language at a time, once the rest of the pipeline is proven: query that 
 
 ## Incremental re-parsing
 
-- Tree-sitter supports incremental parsing — re-parsing only changed files, not the whole repo, on every webhook-triggered update.
-- The harder part is **re-linking edges** correctly: renaming or deleting a function must update every edge pointing at it, not just the node itself. This is where the confidence-tagging and qualified-key design (see `DATA_MODEL.md`) matter most — stale or orphaned edges are the failure mode to actively guard against here.
+Phase 2 writes the **whole repo graph** on every run, inside one transaction, deleting the functions
+for every file it is about to write. `ON DELETE CASCADE` takes their edges, and the resolver then
+re-derives every edge from scratch. That is what makes a re-parse after a rename leave no orphans:
+the caller is re-resolved too, so its edge becomes `unresolved` carrying the old name.
+
+Phase 4 narrows this to only the files a push changed. The subtle case it has to handle, which the
+full-graph write gets for free: if a function is deleted from file A while file B still calls it,
+B's edge is cascade-deleted with A's function, but nothing recreates it unless B is re-resolved as
+well. The changed-file set must therefore expand to include every file that imports a changed file.

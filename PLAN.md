@@ -56,7 +56,7 @@ first chunk of Phase 2; see [`TASKLIST.md`](TASKLIST.md) C0.
 
 ---
 
-## Phase 2 — Storage and resolution · in progress
+## Phase 2 — Storage and resolution · done
 
 Persist the IR to Postgres and turn raw call sites into confidence-tagged edges. Still no UI.
 
@@ -72,11 +72,16 @@ Builds:
 
 **Exit test:** parsing a fixture repo with a hand-known call graph produces the expected confidence
 distribution; re-parsing after a rename leaves zero orphan edges; the API returns a correct 3-hop
-traversal. Full criteria in [`TASKLIST.md`](TASKLIST.md).
+traversal. — passed.
+
+**Known carry-over into Phase 3** — auth is still a stub with a placeholder OAuth state, five graph
+endpoints are still 501 and none are session-gated, and the web app is a shell. See `CLAUDE.md`.
 
 ---
 
-## Phase 3 — API, auth, canvas and search · not started
+## Phase 3 — API, auth, canvas and search · next
+
+Split into two PRs: **3a** api and auth (curl-testable, no UI), **3b** canvas and search.
 
 The first phase a human can actually use.
 

@@ -12,6 +12,11 @@ const client = postgres(DATABASE_URL ?? "", { max: 1 });
 const db = drizzle(client, { schema });
 
 afterAll(async () => {
+  // Leave nothing behind: this database is shared with local development, and
+  // stray fixture rows show up as phantom functions in the next parse.
+  if (DATABASE_URL) {
+    await db.execute(sql`TRUNCATE repos, files, functions, edges RESTART IDENTITY CASCADE`);
+  }
   await client.end();
 });
 
