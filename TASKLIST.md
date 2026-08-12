@@ -272,7 +272,7 @@ file ids are stable when a file is deleted and recreated.
 
 ---
 
-## C6 — N-hop traversal in the API  `[ ]`
+## C6 — N-hop traversal in the API  `[x]`
 
 **Why.** "What's the blast radius of changing this function" is persona P2's entire reason to use
 this tool, and it's the one query a plain `SELECT` cannot answer.
@@ -328,7 +328,7 @@ Phase 2 is finished when all of these hold:
 - [x] The parser writes a complete graph transactionally, and re-running is safe (C3).
 - [x] Every call site gets a confidence tag, and ambiguity resolves to `unresolved` (C4).
 - [x] A re-parse after a rename leaves zero orphan edges (C5).
-- [ ] The API answers a depth-bounded N-hop traversal over a cyclic graph (C6).
+- [x] The API answers a depth-bounded N-hop traversal over a cyclic graph (C6).
 - [ ] `make go-test`, `make go-vet`, and `pnpm -r build` are green, and CI passes (C7).
 
 ## Conventions

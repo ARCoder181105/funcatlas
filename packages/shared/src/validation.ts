@@ -1,6 +1,25 @@
 import { z } from "zod";
+import {
+  TRAVERSAL_DEFAULT_DEPTH,
+  TRAVERSAL_DIRECTIONS,
+  TRAVERSAL_MAX_DEPTH,
+} from "./constants.js";
 
 /** Zod schemas for API I/O. Single source shared by api + web. */
+
+/** Depth is capped here, not just defaulted: an unbounded recursive CTE over a
+ *  cyclic graph does not return. */
+export const traversalQuerySchema = z.object({
+  depth: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(TRAVERSAL_MAX_DEPTH)
+    .default(TRAVERSAL_DEFAULT_DEPTH),
+  direction: z.enum(TRAVERSAL_DIRECTIONS).default("out"),
+});
+
+export type TraversalQueryInput = z.infer<typeof traversalQuerySchema>;
 
 export const repoUrlSchema = z.object({
   githubUrl: z.string().url().refine((s) => s.includes("github.com"), {
