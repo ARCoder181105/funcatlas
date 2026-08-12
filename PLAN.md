@@ -79,9 +79,10 @@ endpoints are still 501 and none are session-gated, and the web app is a shell. 
 
 ---
 
-## Phase 3 — API, auth, canvas and search · next
+## Phase 3 — API, auth, canvas and search · 3a done, 3b next
 
-Split into two PRs: **3a** api and auth (curl-testable, no UI), **3b** canvas and search.
+Split into two PRs: **3a** api and auth (curl-testable, no UI) — **done**; **3b** canvas and
+search — next.
 
 The first phase a human can actually use.
 
@@ -90,7 +91,13 @@ repo registration by URL; the graph endpoints behind that session gate; the Reac
 following [`docs/UI_GUIDE.md`](docs/UI_GUIDE.md) — sidebar file tree → card → function mind-map →
 Shiki code block, with edge style driven by resolution confidence; function-name search and a ⌘K palette.
 
-**Exit test:** a logged-in user explores a real repository end to end through the UI and finds a
+**3a exit test — passed.** With a session cookie: log in, register
+`https://github.com/ARCoder181105/funcatlas` (cloned and parsed in 2.2s, 41 files, commit recorded
+from the checkout), walk tree to functions to a 3-hop traversal to source, and search by name. Every
+one of the seven `/api` routes answers 401 without the cookie, and again after logout. All three
+confidence tiers present in `edges` with non-zero counts.
+
+**3b exit test:** a logged-in user explores a real repository end to end through the UI and finds a
 function by name.
 
 ---

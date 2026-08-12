@@ -309,7 +309,7 @@ pattern, which are wildcards the user did not ask for.
 
 ---
 
-## A7 — CI, docs, and the exit gate  `[ ]`
+## A7 — CI, docs, and the exit gate  `[x]`
 
 **Why.** The docs still describe a phase that has not shipped, and a document that lies is worse
 than no document. This is the chunk where the ones this phase invalidated get corrected, while the
@@ -336,7 +336,7 @@ Phase 3a is finished when all of these hold:
 - [x] Every `/api/*` route 401s without a session (A4).
 - [x] A GitHub URL posted to `/api/repos` ends with that repo's graph in Postgres (A5).
 - [x] All six graph endpoints return real data, and 404 on an unknown id (A6).
-- [ ] `pnpm -r build`, `pnpm -r test` and the Go suite are green, and CI passes (A7).
+- [x] `pnpm -r build`, `pnpm -r test` and the Go suite are green, and CI passes (A7).
 
 **The gate itself:** with the session cookie, `curl` through login → register a repo → tree →
 functions → edges → source → search. Then repeat one of them without the cookie and get a 401.

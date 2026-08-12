@@ -21,6 +21,10 @@ it was.
 | **R20** | The Drizzle schema and the SQL migration disagreed in six places, each a runtime error waiting for whichever path reached it first. | Reconciled in C2. `resolution_confidence` is `text().$type<ResolutionConfidence>()` matching the real `TEXT` + `CHECK` column; nullability and constraint names now match what Postgres actually assigned. Verified by querying every table through Drizzle against the migrated database, not by building. |
 | **R21** | No down migrations existed, so `make down` failed and nothing could be rolled back. | `0001_init.down.sql` backfilled and `0002` ships with its own. Verified by round-tripping up, down -all, up. |
 | **R22** | `testcontainers-go` was named in the stack but never added to `go.mod`, so how integration tests reach Postgres was undefined. | Tests read `TEST_DATABASE_URL`, falling back to `DATABASE_URL`, and skip when neither is set. CI already runs a Postgres service container, so this needs no new dependency and no second code path. |
+| **R26** | OAuth scope: `PLAN.md` and `docs/SECURITY.md` both said "repo-read", which GitHub OAuth apps do not offer. | **`read:user`.** The only scope that reads private repositories is `repo`, which also grants *write* to every private repository the user can reach -- a very large permission for a tool that only reads source. Nothing in Phase 3a touches a private repository: the parser clones over public HTTPS and never uses the session's token. Public repositories only until a phase genuinely needs otherwise, at which point the widening is one constant in `auth/routes.ts` and a re-consent. |
+| **R27** | Registration runs the parser inline, so a large repository holds an HTTP request open for the length of the parse. | Accepted for 3a and bounded by `PARSE_TIMEOUT_MS`, which answers **504** rather than hanging. Phase 4's queue replaces the spawn with an enqueue; the code carries a `ponytail:` comment naming that upgrade path. Building the queue early would have pulled a whole phase forward to fix a problem the phase after it removes. |
+| **R28** | `repoUrlSchema` accepted `https://evil.com/#github.com`, because it tested `.includes("github.com")`. | Fixed in A5: the URL is parsed, the **host compared**, and the path required to be exactly `owner/repo`. The real boundary is that the parser is spawned with an argv array and never a shell, so a hostile URL was already inert -- this is defence in depth, and the argv test is the one that matters. |
+| **R29** | Every repository defaulting to `master` was recorded as being on `main`. | The parser's `--branch` defaulted to `"main"` while a shallow clone checks out whatever the remote's default actually is. Branch and commit are now read off the checkout with `git rev-parse`; the caller hands over a URL and never clones, so it could not have known either. |
 | **R9** | The Go parser cannot import `packages/shared`, so it has no shared types. | The parser keeps **Go-native IR types** in `internal/ir/ir.go`, mirroring the schema by hand. The duplication is accepted; generating Go structs from the migration was judged more machinery than the drift is worth at four tables. |
 | **R10** | Single migration source, so the parser and API can't drift. | **`services/parser/migrations/`**, plain SQL via golang-migrate. Both the Go writer and the TypeScript reader use it. CI runs the migrations against a live Postgres on every PR. |
 | **R11** | Dev and prod modes differ — prod is `docker compose up`, dev needs HMR and watch. | Both documented in `DEVELOPMENT.md`. Dev runs infra in compose and the three services natively; prod runs everything in compose. |
@@ -34,7 +38,7 @@ it was.
 
 ### Before Phase 2 closes
 
-Nothing outstanding -- R19, R20, R21 and R22 all closed; see Decided above.
+Nothing outstanding -- R19 through R22 and R26 through R29 all closed; see Decided above.
 
 ### Before Phase 3
 
@@ -45,6 +49,12 @@ Nothing outstanding -- R19, R20, R21 and R22 all closed; see Decided above.
 | **R4** | The GitHub OAuth app does not exist yet. Manual setup: register it, record the client id and secret, set the redirect URI, generate a webhook secret. | Not code. Blocks all of Phase 3, so do it before starting, not during. |
 | **R15** | Canvas scale — even with expand-on-click, the first paint of a large repo's file tree needs virtualization. | State the node ceiling as a constant in code, not just in a document. Target is 2,000 visible nodes. |
 | **R14** | Deleting a registered repo must cascade its rows *and* clean the clone off disk. | The database half is done: `ON DELETE CASCADE` on `files.repo_id`, covered by a test that deletes a repo and asserts files, functions and edges all go. The disk half is still unwritten. |
+
+### Before Phase 3b
+
+| | Risk | Notes |
+|---|---|---|
+| **R30** | `/auth/dev-login` mints a session with no GitHub round trip. Gated to non-production, so the route does not exist there at all -- but it is still a login with no credential. | Deleted in Phase 4 hardening. Until then, never run a non-production `NODE_ENV` on a reachable host. |
 
 ### Before Phase 4
 
