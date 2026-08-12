@@ -1,8 +1,7 @@
+// Package ir is the intermediate representation the tree-sitter pass emits and
+// the resolver and DB writer consume. Mirrors docs/DATA_MODEL.md, but Go-native
+// -- the parser does not import packages/shared (R9).
 package ir
-
-// Intermediate representation emitted by the tree-sitter pass and consumed by
-// the resolver + DB writer. Mirrors docs/DATA_MODEL.md (functions/edges/files)
-// but is Go-native — the parser does NOT import the TS shared package (R9).
 
 type File struct {
 	Path     string
@@ -10,7 +9,7 @@ type File struct {
 }
 
 type Function struct {
-	FileID        int // resolved after DB insert
+	FileID        int
 	PackagePath   string
 	Name          string
 	QualifiedName string
@@ -21,15 +20,36 @@ type Function struct {
 }
 
 type CallSite struct {
+	FileID          int
 	CallerQualified string
-	CalleeName      string
-	Line            int
+	// Raw text of a member call's receiver: Repo.sync() -> "Repo",
+	// a.b.c() -> "a.b". Empty for a bare call.
+	CalleeObject string
+	CalleeName   string
+	Line         int
+}
+
+type ImportedSymbol struct {
+	Local    string // bound in this file; empty for side-effect and re-export
+	Original string // exported name when it differs: import { a as b } -> "a"
+	Kind     string // one of the utils.Kind* constants
 }
 
 type Import struct {
 	FileID  int
-	Symbols []string
 	From    string
+	Symbols []ImportedSymbol
+}
+
+// Edge is one resolved call. Indexes point into Graph.Functions; the writer
+// maps them to primary keys. CalleeName survives when CalleeFuncIdx is NoFunc,
+// so an unresolved edge still says what it failed to resolve.
+type Edge struct {
+	CallerFuncIdx int
+	CalleeFuncIdx int
+	CalleeName    string
+	Line          int
+	Confidence    string
 }
 
 // Graph is the full extraction result for one repo.

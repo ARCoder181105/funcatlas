@@ -87,42 +87,58 @@
   ],
   "Calls": [
     {
+      "FileID": 0,
       "CallerQualified": "localCall",
+      "CalleeObject": "obj",
       "CalleeName": "method",
       "Line": 2
     },
     {
+      "FileID": 0,
       "CallerQualified": "localCall",
+      "CalleeObject": "a.b",
       "CalleeName": "c",
       "Line": 3
     },
     {
+      "FileID": 0,
       "CallerQualified": "localCall",
+      "CalleeObject": "",
       "CalleeName": "setTimeout",
       "Line": 4
     },
     {
+      "FileID": 0,
       "CallerQualified": "localCall.\u003canonymous\u003e",
+      "CalleeObject": "",
       "CalleeName": "innerCall",
       "Line": 5
     },
     {
+      "FileID": 0,
       "CallerQualified": "\u003cmodule\u003e",
+      "CalleeObject": "a.b",
       "CalleeName": "c",
       "Line": 8
     },
     {
+      "FileID": 2,
       "CallerQualified": "Repo.sync",
+      "CalleeObject": "",
       "CalleeName": "cb",
       "Line": 4
     },
     {
+      "FileID": 2,
       "CallerQualified": "caller",
+      "CalleeObject": "Repo",
       "CalleeName": "sync",
       "Line": 22
     },
     {
+      "FileID": 2,
       "CallerQualified": "caller",
+      "CalleeObject": "",
       "CalleeName": "greet",
       "Line": 23
     }
@@ -130,56 +146,91 @@
   "Imports": [
     {
       "FileID": 1,
+      "From": "a",
       "Symbols": [
-        "def"
-      ],
-      "From": "a"
+        {
+          "Local": "def",
+          "Original": "",
+          "Kind": "default"
+        }
+      ]
     },
     {
       "FileID": 1,
+      "From": "b",
       "Symbols": [
-        "named"
-      ],
-      "From": "b"
+        {
+          "Local": "named",
+          "Original": "named",
+          "Kind": "named"
+        }
+      ]
     },
     {
       "FileID": 1,
+      "From": "c",
       "Symbols": [
-        "ns"
-      ],
-      "From": "c"
+        {
+          "Local": "ns",
+          "Original": "",
+          "Kind": "namespace"
+        }
+      ]
     },
     {
       "FileID": 1,
-      "Symbols": null,
-      "From": "d"
+      "From": "d",
+      "Symbols": [
+        {
+          "Local": "",
+          "Original": "",
+          "Kind": "side-effect"
+        }
+      ]
     },
     {
       "FileID": 1,
+      "From": "e",
       "Symbols": [
-        "reexport"
-      ],
-      "From": "e"
+        {
+          "Local": "",
+          "Original": "reexport",
+          "Kind": "re-export"
+        }
+      ]
     },
     {
       "FileID": 2,
+      "From": "x",
       "Symbols": [
-        "a",
-        "b"
-      ],
-      "From": "x"
+        {
+          "Local": "b",
+          "Original": "a",
+          "Kind": "named"
+        }
+      ]
     },
     {
       "FileID": 2,
+      "From": "y",
       "Symbols": [
-        "ns"
-      ],
-      "From": "y"
+        {
+          "Local": "ns",
+          "Original": "",
+          "Kind": "namespace"
+        }
+      ]
     },
     {
       "FileID": 2,
-      "Symbols": null,
-      "From": "z"
+      "From": "z",
+      "Symbols": [
+        {
+          "Local": "",
+          "Original": "",
+          "Kind": "side-effect"
+        }
+      ]
     }
   ]
 }

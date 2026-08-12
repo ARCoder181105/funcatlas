@@ -1,5 +1,20 @@
 // Shared TS types. Row types are inferred from the Drizzle schema in
-// ./schema.ts (see `export type Repo = typeof repos.$inferSelect` etc.),
-// so they are intentionally NOT re-declared here to avoid name collisions.
+// ./schema.ts, so they are not re-declared here.
 
-export type ResolutionConfidence = "exact" | "name_match" | "unresolved";
+import type { RESOLUTION_CONFIDENCE, TRAVERSAL_DIRECTIONS } from "./constants.js";
+
+export type ResolutionConfidence = (typeof RESOLUTION_CONFIDENCE)[number];
+export type TraversalDirection = (typeof TRAVERSAL_DIRECTIONS)[number];
+
+/** One function reached by a traversal, with how it was reached. */
+export interface ReachableFunction {
+  id: number;
+  name: string;
+  qualifiedName: string;
+  fileId: number;
+  depth: number;
+  /** Confidence of the edge that reached it; null for the starting function. */
+  confidence: ResolutionConfidence | null;
+  /** The function the edge came from; null for the starting function. */
+  viaFunctionId: number | null;
+}

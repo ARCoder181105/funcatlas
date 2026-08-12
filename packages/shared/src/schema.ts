@@ -5,26 +5,24 @@ import {
   smallint,
   text,
   timestamp,
-  uniqueIndex,
+  unique,
   index,
-  pgEnum,
 } from "drizzle-orm/pg-core";
+import type { ResolutionConfidence } from "./types.js";
 
 /**
- * Schema mirrors docs/DATA_MODEL.md exactly.
- * Single source of truth shared by the API (Drizzle read) and the migration
- * SQL consumed by the Go parser (golang-migrate). Keep them in sync.
+ * Drizzle description of the schema in services/parser/migrations/, which is
+ * the single source of truth. This file must describe the database that
+ * actually exists -- TypeScript will happily agree with a schema Postgres does
+ * not have, so changes here are verified with a real query, not just a build.
+ *
+ * Constraint and index names match what Postgres actually assigned; check with
+ * `\d <table>` before renaming anything here.
  */
-
-export const resolutionConfidence = pgEnum("resolution_confidence", [
-  "exact",
-  "name_match",
-  "unresolved",
-]);
 
 export const repos = pgTable("repos", {
   id: serial("id").primaryKey(),
-  githubUrl: text("github_url").notNull(),
+  githubUrl: text("github_url").notNull().unique(),
   defaultBranch: text("default_branch").notNull(),
   lastSyncedCommit: text("last_synced_commit"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -34,12 +32,14 @@ export const files = pgTable(
   "files",
   {
     id: serial("id").primaryKey(),
-    repoId: integer("repo_id").references(() => repos.id),
+    repoId: integer("repo_id")
+      .references(() => repos.id, { onDelete: "cascade" })
+      .notNull(),
     path: text("path").notNull(),
     language: text("language").notNull(),
   },
   (t) => ({
-    unq: uniqueIndex("idx_files_repo_path").on(t.repoId, t.path),
+    unq: unique("files_repo_id_path_key").on(t.repoId, t.path),
   }),
 );
 
@@ -61,7 +61,7 @@ export const functions = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (t) => ({
-    unq: uniqueIndex("idx_functions_file_qual_overload").on(
+    unq: unique("functions_file_id_qualified_name_overload_index_key").on(
       t.fileId,
       t.qualifiedName,
       t.overloadIndex,
@@ -75,13 +75,26 @@ export const edges = pgTable(
   "edges",
   {
     id: serial("id").primaryKey(),
-    callerFunctionId: integer("caller_function_id")
-      .references(() => functions.id, { onDelete: "cascade" })
+    // Both sides are nullable in SQL. A caller is null for a call made at
+    // module level, outside any function.
+    callerFunctionId: integer("caller_function_id").references(() => functions.id, {
+      onDelete: "cascade",
+    }),
+    // Null exactly when the confidence is 'unresolved' -- enforced in the
+    // database by the edges_callee_consistency CHECK, not here.
+    calleeFunctionId: integer("callee_function_id").references(() => functions.id, {
+      onDelete: "cascade",
+    }),
+    // The name as written at the call site, kept whatever the confidence, so an
+    // unresolved edge still carries information.
+    calleeName: text("callee_name").notNull(),
+    callLine: integer("call_line"),
+    // TEXT with a CHECK constraint in the database, not a Postgres enum -- no
+    // enum type named resolution_confidence exists. The CHECK is the real
+    // enforcement; $type only narrows it for TypeScript.
+    resolutionConfidence: text("resolution_confidence")
+      .$type<ResolutionConfidence>()
       .notNull(),
-    calleeFunctionId: integer("callee_function_id")
-      .references(() => functions.id, { onDelete: "cascade" })
-      .notNull(),
-    resolutionConfidence: resolutionConfidence("resolution_confidence").notNull(),
     parsedCommit: text("parsed_commit"),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

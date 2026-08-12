@@ -14,7 +14,7 @@ This project clones and reads arbitrary user-supplied repositories. That's a rea
 ## Concrete input hardening (enforced in the clone/parse step)
 
 - **Symlink / path-traversal guard.** Never follow symlinks. Resolve every file path and reject it unless it is strictly inside the clone root (rejects `../../etc/passwd` and symlinks pointing outside the repo). This applies to both parsing and to serving raw source.
-- **Repo/clone bombs.** Cap total file count, per-file size (skip files >1MB), and directory depth. Skip binary/non-text files and anything under `node_modules`/`.git`/build output (respect `.gitignore`). A 100k-file repo or a 50MB minified file must not OOM the parser.
+- **Repo/clone bombs.** Cap total file count, per-file size (skip files >1MB), and directory depth. Skip binary/non-text files and anything under `node_modules`/`.git`/build output. A 100k-file repo or a 50MB minified file must not OOM the parser. Respecting `.gitignore` is deferred post-MVP — the skip-list already covers where the volume is.
 - **Webhook DoS / replay.** HMAC verification alone is insufficient: enforce a timestamp/replay window, per-repo job throttling, and a max-concurrent-parse cap so a flood of webhooks can't exhaust resources.
 - **API authorization.** Every graph-serving endpoint is session-gated; anonymous requests are rejected even in single-user mode.
 - **SQL / CTE safety.** All queries are parameterized; the recursive N-hop traversal CTE is depth-bounded to prevent runaway queries.

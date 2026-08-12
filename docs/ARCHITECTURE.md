@@ -6,34 +6,34 @@
 GitHub repo URL
       │
       ▼
-┌─────────────┐      ┌───────────────┐      ┌─────────────────┐
-│ Clone Service│ ──▶ │ Parser Worker  │ ──▶ │ Graph Builder /   │
-│ (isolated)   │      │ (Go+tree-sitter)│    │ Resolver          │
-└─────────────┘      └───────────────┘      └─────────────────┘
-                                                       │
-                                                       ▼
-                                              ┌──────────────┐
-                                              │  Postgres    │
-                                              │ (functions,  │
-                                              │  edges, repos)│
-                                              └──────────────┘
-                                                       │
-                                                       ▼
-                                              ┌──────────────┐
-                                              │  API (TS)    │
-                                              └──────────────┘
-                                                       │
-                                                       ▼
-                                              ┌──────────────┐
-                                              │ Canvas (React│
-                                              │ Flow + Excali│
-                                              │ draw)        │
-                                              └──────────────┘
+┌──────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│ Clone step   │──▶ │ Parser Worker    │──▶ │ Resolver         │
+│ (network on, │    │ (Go+tree-sitter, │    │ (name and scope  │
+│  isolated)   │    │  network none)   │    │  matching)       │
+└──────────────┘    └──────────────────┘    └──────────────────┘
+                                                      │
+                                                      ▼
+                                             ┌──────────────────┐
+                                             │ Postgres         │
+                                             │ repos, files,    │
+                                             │ functions, edges │
+                                             └──────────────────┘
+                                                      │
+                                                      ▼
+                                             ┌──────────────────┐
+                                             │ API (Fastify)    │
+                                             └──────────────────┘
+                                                      │
+                                                      ▼
+                                             ┌──────────────────┐
+                                             │ Canvas           │
+                                             │ (React Flow)     │
+                                             └──────────────────┘
 
-GitHub Webhook (on push/merge)
+GitHub webhook on push
       │
       ▼
-Job Queue ──▶ diff changed files ──▶ re-parse only those ──▶ re-link affected edges
+Job queue ──▶ diff changed files ──▶ re-parse only those ──▶ relink affected edges
 ```
 
 ## Components
@@ -78,12 +78,13 @@ Job Queue ──▶ diff changed files ──▶ re-parse only those ──▶ r
 - Edges are visually distinguished by `resolution_confidence`: solid (`exact`), dashed (`name_match`), dotted (`unresolved`) — a guess is never shown as fact.
 - A function-name **search box** lets users jump to any function across the repo (core to the product's value).
 - Multiple files/mind-maps can be open on the same canvas at once.
-- Excalidraw layer is **deferred to post-MVP** (see `ROADMAP.md`).
+- A freehand annotation layer is **deferred to post-MVP** (see `../PLAN.md`).
 
-### 7. Job Queue Renames/deletes update every edge pointing at the old function, so no orphans remain.
-- A max-concurrent-parse cap and per-repo throttle prevent a webhook flood from exhausting resources.
-- Redis + BullMQ (or equivalent) sits between the webhook listener and the parser worker.
-- On a push/merge: diff the changed files → enqueue only those for re-parsing → re-link only the edges touching those functions (not a full repo re-parse).
+### 7. Job Queue
+- Redis + BullMQ sits between the webhook listener and the parser worker.
+- On a push: diff the changed files → enqueue only those for re-parsing → relink only the edges touching those functions, not a full repo re-parse.
+- Renames and deletions update every edge pointing at the old function, so no orphans remain.
+- A max-concurrent-parse cap and a per-repo throttle prevent a webhook flood from exhausting resources.
 
 ## Why this shape
 

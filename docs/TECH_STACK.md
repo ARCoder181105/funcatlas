@@ -5,7 +5,6 @@ The project splits into two workloads with different needs, so the stack is spli
 | Concern | Choice | Why |
 |---|---|---|
 | Frontend canvas | **TypeScript + React + React Flow** | React Flow is purpose-built for draggable/zoomable node-link canvases; TS catches mismatched IDs (function vs file vs edge) at compile time instead of at runtime inside a render. |
-| Drawing/annotation layer | **Excalidraw** (embedded component) | Open source and embeddable — no reason to hand-build freehand drawing. |
 | App backend / API | **TypeScript (Node)** | I/O-bound work (auth, DB queries, serving graph JSON) — Node handles this well, and staying in TS end-to-end on the app side means shared types between frontend and backend. |
 | Parsing worker | **Go + tree-sitter** | Parsing thousands of files is CPU-bound. Node is single-threaded for CPU work and degrades under concurrent parsing load; Go has official tree-sitter bindings and native concurrency (goroutines) that scale across cores without extra ceremony. |
 | Database | **Postgres** | The function/edge data is graph-shaped, but a dedicated graph DB (Neo4j) is unnecessary complexity for v1 — Postgres with edge tables and recursive CTEs is enough until query complexity or scale genuinely demands more. One DB also holds users/repos/auth, so there's no reason to run two datastores yet. |
@@ -28,7 +27,9 @@ The project splits into two workloads with different needs, so the stack is spli
 
 **Function-name search is in the MVP.** Finding a function by name across a large repo is core to the product's value ("codebases hard to hold in your head"), so a simple name-search endpoint + UI box ships with the canvas, not after.
 
-**A migration tool is chosen up front.** Schema lives in versioned migrations (golang-migrate or Flyway) rather than ad-hoc `CREATE TABLE` scripts, to avoid drift between the parser's schema and the API's expectations.
+**A migration tool is chosen up front: golang-migrate.** Schema lives in versioned plain-SQL migrations rather than ad-hoc `CREATE TABLE` scripts. Plain SQL specifically, because the schema has two consumers in two languages — the Go parser writes to it and the TypeScript API reads from it — and a migration format owned by either language's ORM would put the other one downstream of a translation. The single source is `services/parser/migrations/`.
+
+**A freehand annotation layer (Excalidraw) was considered and cut.** It is embeddable and would have been cheap to add, but it has no bearing on whether the call graph is correct or trustworthy, which is the only thing that determines whether this product is worth using. Deferred until the core is proven — see `../PLAN.md`.
 
 ## Pre-bootstrap tech-stack lock-in
 
@@ -58,7 +59,7 @@ the granular decisions that were gaps (ORM, monorepo tooling, frameworks, valida
 | Auth (OAuth) | **arctic** + **oslo** | Minimal, modern GitHub OAuth + session primitives; token scoped to repo-read. |
 | Sessions | **Redis-backed** (reuse Redis) | Safer than stateless JWT for production; single datastore already present. |
 | API rate limit | **@fastify/rate-limit** | Protects graph endpoints. |
-| Parser tree-sitter | **smacker/tree-sitter-go** + **tree-sitter-typescript** grammar | Mature Go bindings + first-language TS grammar. |
+| Parser tree-sitter | **tree-sitter/go-tree-sitter** v0.25.0 + **tree-sitter/tree-sitter-typescript** v0.23.2 | Official Go bindings and the first-language grammar. Both versions pinned in `go.mod` — a grammar bump can silently change node kinds. |
 | Parser DB access | **sqlx** + **pgx** (`jackc/pgx/v5`) | Explicit SQL + high-performance pool for bulk function/edge writes. |
 | Migrations | **golang-migrate** (SQL) | Language-agnostic; same migrated schema used by Go writer and TS reader. |
 | Logging | **pino** (Node) + **zap** (Go) | Structured logs; cheap in hot paths. |
@@ -78,23 +79,14 @@ the granular decisions that were gaps (ORM, monorepo tooling, frameworks, valida
   /web                  → Vite + React + React Flow + Tailwind + TanStack Query + Zustand + Shiki
   /api                  → Node/TS (Fastify + Drizzle + postgres.js + arctic/oslo) — auth, repo mgmt, graph endpoints, webhook receiver
 /services
-  /parser               → Go (smacker/tree-sitter-go + tree-sitter-typescript, sqlx + pgx, zap) — clone, parse, resolve, write to Postgres
+  /parser               → Go (go-tree-sitter + tree-sitter-typescript, sqlx + pgx, zap) — clone, parse, resolve, write to Postgres
 /docs                   → project documentation
 ```
 
 The parser worker communicates with the rest of the system only through the job queue and Postgres — it doesn't need to share a language or a repo boundary with the TS app, which keeps the CPU-heavy piece isolated and independently scalable.
 
-## UI / UX direction (decided up front)
+## UI direction
 
-The product must feel **premium and "crazy-cool"**, not default — on par with polished developer
-tools. The foundation is locked above (Tailwind + shadcn/ui + Framer Motion + React Flow + Shiki +
-cmdk + lucide). Intentions to carry into Phase 3:
-
-- **Theme:** dark-mode-first with a signature accent; design tokens (color/space/radius) defined once in Tailwind config. Cohesive theme = "designed" not "default".
-- **Landing page** (`/` route, same app): hero with animated graph visualization, feature highlights, a live "try a repo" CTA. Framer Motion for scroll/entrance animations.
-- **Motion polish:** edge-draw animations on the canvas, card spring-in on expand, smooth route transitions, ⌘K command palette for instant function jump.
-- **Interaction quality:** collapsible IDE-like sidebar, minimap, focus-mode on a selected function, confident empty/loading/error states (these separate "cool" from "amateur").
-- **Confidence as visual language:** edges styled solid (`exact`) / dashed (`name_match`) / dotted (`unresolved`) — informative *and* visually distinctive.
-- **Excalidraw** annotations remain deferred to post-MVP (see `ROADMAP.md`); revisit as a cool-layer later.
-
-See `docs/UI_GUIDE.md` for the detailed UI/UX spec.
+The frontend libraries are locked in the table above — Tailwind, shadcn/ui, Framer Motion, React
+Flow, Shiki, cmdk, lucide. What to build with them is decided in [`UI_GUIDE.md`](UI_GUIDE.md), which
+owns the theme, motion principles, and surface designs.

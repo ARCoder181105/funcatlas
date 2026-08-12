@@ -47,6 +47,9 @@ jobs:
       - name: go vet
         working-directory: services/parser
         run: go vet ./...
+      - name: migration check
+        run: |
+          docker run --rm --network host -v $(pwd)/services/parser/migrations:/migrations migrate/migrate -path /migrations -database "${DATABASE_URL}" up
       - name: go test
         working-directory: services/parser
         run: go test -race ./...
@@ -56,6 +59,3 @@ jobs:
       - name: parser sample check
         working-directory: services/parser
         run: ./parser --repo ./testdata/sample --format summary
-      - name: migration check
-        run: |
-          docker run --rm --network host -v $(pwd)/services/parser/migrations:/migrations migrate/migrate -path /migrations -database "${DATABASE_URL}" up

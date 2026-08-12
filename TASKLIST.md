@@ -1,228 +1,339 @@
-# TASKLIST — guided Phase 1 build (parser core + isolation)
+# Phase 2 — Storage and Resolution
 
-> Working contract for the build. **You write the code; Copilot debugs/reviews/guides.**
-> Finish one chunk → run its tests → "good when …" met → Copilot nudges you to the next.
-> Source of truth: `PLAN.md` §3 Phase 1, `docs/PHASE1_TASKS.md`, `docs/PARSING_STRATEGY.md`,
-> `docs/SECURITY.md`, `docs/DATA_MODEL.md`, and `PRD.md`.
+The live task list. Phase 2 turns the intermediate representation the parser already produces into
+persisted, confidence-tagged edges in Postgres, and gives the API a way to traverse them.
 
-**Current branch:** `phase-1/parser-core-and-isolation` · **PR:** #21.
-**Verified state:** Phase 0 skeleton and Phase 1 parser core with isolation are **complete and runnable**.
+**Branch:** `phase-2/storage-and-resolution`
+**Reference:** [`PLAN.md`](PLAN.md) Phase 2 · [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) ·
+[`docs/PARSING_STRATEGY.md`](docs/PARSING_STRATEGY.md)
 
-## Legend
-- `[ ]` todo · `[~]` in progress · `[x]` done
-- **Good when:** the objective acceptance test for the chunk (automated or manual).
-- **Watch outs:** bugs Copilot will check when you submit the chunk.
+## How to work through this
 
----
+Claude implements; you review at the phase gate. One chunk at a time, top to bottom — the order is
+load-bearing, C0 unblocks C4 and C1 unblocks C5. Each chunk lists:
 
-## Phase 1 — chunks
+- **Why** — the reason it exists, so it can be pushed back on if the reason is wrong.
+- **Where** — the files it touches.
+- **Do** — the work, broken into steps.
+- **Done when** — the objective test. Not "the code compiles".
+- **Watch for** — the specific bugs to check for before the chunk is committed.
 
-### C1 — Runtime-load `queries/typescript.scm`  `[x]`
-**Approach:** Add `services/parser/internal/ts/queries.go`. The `.scm` source is embedded at build time (via `//go:embed`) and compiled at runtime with
-`tree_sitter.NewQuery(language, source)`. Expose `func loadQueries(lang tree_sitter.Language) (*Queries, error)`
-returning one compiled query per node pattern (`function.def`, `function.call`, `import.from`).
-Wire `extract.go` to call it once per run (not per file).
-**Good when:** `go test ./internal/ts/...` has a test that compiles the bundled `.scm` against the
-TypeScript language without error and the four pattern names are reachable.
-**Watch outs:** using the wrong grammar (`LanguageTypescript` vs `LanguageTSX`); compiling queries
-per-file (slow); missing `//go:embed` tag; query capture names not matching `@function.def` etc.
+Write the test in the same commit as the code it tests. Commit one chunk at a time with an
+imperative message. `[ ]` todo · `[~]` in progress · `[x]` done.
 
-### C2 — Populate `ir.Function` from `@function.def`  `[x]`
-**Approach:** Extend `extract.go` to run the `function.def`/`function.call` queries per file via
-`QueryCursor`. For each `@function.def` capture: `Name` = identifier text; `StartLine`/`EndLine`
-from the declaration node's start/end row; `Source` = `src` sliced between `StartLine-1` and
-`EndLine`; `PackagePath` = `filepath.Dir(rel)` relative to repo root (`""` for repo-root files);
-`QualifiedName` and `OverloadIndex` left to C4/C4b (set bare `Name` for now).
-**Good when:** `make go-run REPO=./services/parser/testdata/sample` prints `Function` rows for
-`getUser`, `fetchName`, and `Repo.sync` with correct line ranges and `Source`.
-**Watch outs:** byte→line conversion (use the node's `start_point`/`end_point` row, not byte
-offset); off-by-one on `EndLine`; slicing `src` using line indices without splitting cleanly on
-`\n`; not handling `function_declaration` inside class context.
+## What this phase actually teaches
 
-### C3 — Add arrow/function-expression capture  `[x]`
-**Approach:** Extend `queries/typescript.scm` to capture
-`(lexical_declaration (variable_declarator name: (identifier) @function.def value: [(arrow_function) (function_expression)]))`
-(and the `const`/`let` → `var_declaration` variant). Handle named function expressions where
-present. Treat the variable name as the function name.
-**Good when:** a fixture with `const greet = (n) => {...}` and `let f = function(){}` extracts two
-`Function` rows with the variable name as `Name`.
-**Watch outs:** matching `variable_declarator` whose value is *not* a function (e.g. a plain
-object) — your query must require the `arrow_function`/`function_expression` child; arrow bodies
-that are single *expressions* (no `statement_block`); async/generator modifiers.
+Worth knowing up front, because each of these is a transferable idea wearing a funcatlas costume.
+If a chunk feels like busywork, it's probably because the underlying idea hasn't clicked yet — stop
+and ask rather than pushing through.
 
-### C4 — Qualified-name scope walk  `[x]`
-**Approach:** Add `services/parser/internal/ts/scope.go` with `func qualifiedName(node Node) string`
-that walks parents collecting `class_declaration`/`function_declaration`/`method_definition`/
-`arrow_function`/`function_expression` names (the variable name for arrows), then joins with `.`.
-Convention (lock into `docs/PARSING_STRATEGY.md` in C14):
-- top-level function → bare `Name` (e.g. `getUser`);
-- class method → `Repo.sync`;
-- nested function → `getUser.inner`;
-- module-level call (no enclosing function) → caller `qualified_name = "<module>"`;
-- `package_path` = `filepath.Dir(rel)` relative to repo root, `""` at repo root.
-**Good when:** a `testdata/nested/` fixture produces qualified names `Repo.sync`, `Repo.sync.cb`,
-`getUser`, `getUser.inner` (assert in C11).
-**Watch outs:** order of parent walk (innermost scope first) — join in reverse so outer comes
-first; arrow functions where the "name" lives on the `variable_declarator`, not on the arrow node;
-anonymous functions nested with no enclosing name (use a placeholder like `<anonymous>` and
-document it).
+| Chunks | Concept | Where else you'll meet it |
+|---|---|---|
+| C1, C5 | Referential integrity and cascade semantics — letting the database enforce correctness instead of application code remembering to | Every relational schema you ever design |
+| C3 | Transactional bulk writes — why a half-written graph is worse than none, and why per-row inserts don't scale | Any ETL, importer, or sync job |
+| C4 | Symbol resolution and scoping — how a name becomes a reference, and what to do when it can't | Compilers, linters, language servers, import systems |
+| C6 | Recursive queries and cycle detection — traversing a graph in SQL without hanging | Org charts, dependency trees, permission hierarchies, category nesting |
 
-### C4b — Overload `overload_index` post-pass (future-proof)  `[x]`
-**Approach:** After building the per-file `[]ir.Function`, run `assignOverloadIndices(funcs)`:
-group by `qualified_name`, sort each group by `start_line` ascending, assign `overload_index =
-0..n-1`. Single-declaration `qualified_name`s get `0`. Because the scope walk (C4) already gives
-different `qualified_name`s to same-name-different-scope functions, those do **not** collide and
-each gets `0` — only genuine TS overloads (same `qualified_name`, several declarations) get
-0,1,2,…
-**Why future-proof (decision locked in `PRD.md` §11):** `overload_index` is part of the DB
-`UNIQUE (file_id, qualified_name, overload_index)` key, so Phase 4's delete-then-reinsert
-incremental relink never hits a `UNIQUE` collision; keyed by `start_line` ⇒ stable across identical
-re-parses (no flapping rows on webhook updates). Phase 2's resolver tags edges to overloaded
-`qualified_name`s `unresolved` (R8) — no rework later.
-**Good when:** `(file, qualified_name)` is unique in every fixture output; an `overloads/`
-fixture with two `fetch` declarations yields `overload_index` 0 and 1.
-**Watch outs:** mutating the slice in place vs. building a map — be consistent; off-by on `n`; not
-re-running the pass when a chunk re-extracts a file later.
-
-### C5 — Populate `ir.CallSite` with `CallerQualified`  `[x]`
-**Approach:** For each `@function.call` capture, set `CalleeName` = identifier / property name,
-`Line` = call node start row, `CallerQualified` = `qualifiedName(enclosingFunction)` (reuse C4's
-walk from the call node up to the nearest function ancestor). Module-level call (no enclosing
-function) → `CallerQualified = "<module>"`.
-**Good when:** `testdata/calls/` fixture yields `CallSite`s for local calls, `obj.method()`,
-chained `a.b.c()`, and a call inside an arrow callback — with correct `CallerQualified`.
-**Watch outs:** not actually walking up (off-by parent index); member calls vs. identifier calls
-(`@function.call` matches both via the `[…]` alternation — verify the capture lands on the right
-sub-node); calls inside comments/strings must NOT match (tree-sitter node matching handles this,
-but verify with a fixture).
-
-### C6 — Populate `ir.Import`  `[x]`
-**Approach:** Parse `import_statement` clauses: default (`import x from "y"`), named
-(`import {a, b} from "y"`), namespace (`import * as ns from "y"`), side-effect (`import "y"`),
-re-export (`export … from "y"`), and dynamic `import("y")`. `From` = string literal value (strip
-quotes); store the set of imported local names on `ir.Import` so the Phase 2 resolver can match.
-Add a field to `ir.Import` if needed (e.g. `Symbols []string`, `IsDefault bool`, `Namespace string`).
-**Good when:** `testdata/imports/` fixture yields `Import` rows with the right `From` and local names.
-**Watch outs:** dynamic `import()` is a *call_expression* with a string arg, not an
-`import_statement` — handle separately or skip and document; named-import aliases
-(`{a as b}`) — local name is `b`; re-exports that don't bind a local name.
-
-### C7 — Return `ir.Graph`; `main.go` JSON dump + `--format summary`  `[x]`
-**Approach:** Change `extract.go`'s return from `[]ir.File` to `ir.Graph`. In `main.go`, marshal
-`graph` to JSON → write to `--out` (default `out.json`, `/dev/stdout` for streaming). Add
-`--format json|summary`; `summary` prints counts (`files`, `functions`, `calls`, `imports`). Keep
-the `db.NewWriter` reference intact behind a comment so Phase 2 wiring isn't lost.
-**Good when:** `make go-run REPO=./services/parser/testdata/sample` writes a complete `out.json`
-with the expected functions/calls/imports, and `--format summary` prints human counts.
-**Watch outs:** leaving the `db.Writer` import unused (Go will refuse to compile) — keep a
-`var _ = db.NewWriter` like `config.go` does, or move it behind a flag; `os.WriteFile` perms.
-
-### C8 — Harden `security.Walk`  `[x]`
-**Approach:** (1) **Symlink hard-fail** — in `Walk`, before accepting any path, `os.Lstat` and
-return error if `info.Mode() & os.ModeSymlink != 0` (do not readlink). (2) **Binary sniff** — read
-first ~512 bytes, skip if `bytes.IndexByte(buf, 0) != -1`. (3) **Fix depth** — replace
-`strings.Count(path, sep) - strings.Count(root, sep)` with `filepath.Rel(root, path)` and count
-separators (robust to trailing slash / symlinked roots). (4) **Cap sentinel** — return a typed
-error (`ErrFileCapReached`) so Phase 4's queue can distinguish "capped" from "clean walk".
-Add tests: `TestWalkSkipsBinary`, `TestWalkRejectsSymlinkOutsideRoot`, `TestWalkRespectsFileCountCap`,
-`TestWalkRespectsDepth`.
-**Good when:** `go test ./internal/security/...` is green and covers every gap above.
-**Watch outs:** `filepath.WalkDir` follows symlinks for the *walked* path — the Lstat guard must
-catch symlinks inside the tree, not just the root; `SkipDir` vs. `SkipAll` semantics; reading 512
-bytes for every file is cheap but measure; **decision not to respect `.gitignore`** — note in
-`docs/RISKS.md` during C14.
-
-### C9 — Bounded read at read site  `[x]`
-**Approach:** In `extract.go`, use `io.LimitReader` bound to `MaxFileBytes+1` so a large file can't OOM you (truncating reads that exceed the cap); also reuse C8's binary sniff at read time.
-**Good when:** a 5MB `.ts` fixture is skipped with a warning, never read in full.
-**Watch outs:** `io.LimitReader` returns fewer bytes — handle the EOF cleanly; reconciling C8's
-size check (already done in `Walk`) with this one — keep both (Walk gates discovery, read gates the
-actual read); not logging path + reason consistently.
-
-### C10 — Fixtures  `[x]`
-**Approach:** Add under `services/parser/testdata/`:
-- `nested/` — 3-level nesting + class methods + arrow consts (drives C4 assertions);
-- `imports/` — default/named/namespace/side-effect/re-export/dynamic `import()` (drives C6);
-- `calls/` — local, `obj.method()`, chained `a.b.c()`, imported-symbol call, call in string/comment
-  (must NOT capture), call inside arrow callback (drives C5);
-- `overloads/` — two `fetch` declarations (drives C4b);
-- `edge/` — empty file, only-comments file, a huge minified-looking single line (size cap), `.tsx`
-  with JSX (grammar branch), a `.ts` file with a symlink sibling (symlink rejected, target parsed
-  if real — drives C8).
-For each, add `_expected.json` (or expected counts) that the test in C11 diff-asserts.
-**Good when:** every fixture parses and dumps an `out.json` matching its `_expected.json`.
-**Watch outs:** Windows line endings in fixtures (normalize `\n`); JSX mandating the `LanguageTSX`
-binding — verify the `tree_sitter-typescript/bindings/go` exposes both; huge-line fixture must be
-*under* the size cap or its purpose (size test) is moot.
-
-### C11 — Golden `extract_test.go`  `[x]`
-**Approach:** Table-driven tests over the C10 fixtures asserting: every node type we rely on
-(`function_declaration`, `method_definition`, `call_expression`, `import_statement`,
-`variable_declarator` with arrow/fn-expr) actually matches; comments and string literals
-containing the word `function` or call-shaped text produce **no** spurious matches; qualified-name
-scope walk on `nested/` matches expectations (C4); overload indices on `overloads/` are `0,1` (C4b).
-**Good when:** all golden tests green; `cd services/parser && go test ./...` clean.
-**Watch outs:** golden JSON that records unstable fields (absolute paths, byte sizes) — keep only
-rel paths + structural fields; not regenerating goldens when queries intentionally change.
-
-writable via tmpfs); the parser-clone sidecar forgetting to clean the tmpfs between runs.
-
-### C13 — CI for the parser  `[x]`
-**Approach:** Update `.github/workflows/go-ci.yml` and `.github/workflows/node-ci.yml`:
-- `parser` job: `setup-go`, `go mod tidy` check, `go vet ./...`, `go test -race ./...`,
-  `go build ./...`; cache `~/go/pkg/mod` + build cache.
-- `parser-sample` job: build the binary, run `--repo ./testdata/sample --format summary`, assert counts.
-- `migration-check` job: pull `golang-migrate/migrate`, start Postgres via `services:`, run
-  `migrate -path services/parser/migrations -database $DATABASE_URL up`, assert the four tables
-  exist. (DB writes are Phase 2, but this guards the schema now.)
-**Good when:** a PR touching `services/parser/**` runs all jobs and they pass on the sample repo.
-**Watch outs:** CGO is required by `tree-sitter` (already installed in the existing `go` job);
-`go mod tidy` check needs `GOFLAGS=-mod=mod` or it can falsely fail; the migration job must not
-leave Postgres running.
-
-### C14 — Docs sync  `[x]`
-**Approach:**
-- `docs/PARSING_STRATEGY.md`: write the `qualified_name` convention (C4), `overload_index` post-pass
-  (C4b), the runtime `.scm` load approach (C1), and known limitations hit (arrows, JSX, dynamic
-  `import()`).
-- `docs/RISKS.md`: flip R9 OPEN → DECIDED (Go IR is native — `internal/ir/ir.go`), R16 OPEN →
-  DECIDED (pin the grammar version named in `go.mod`); record the R8 decision (edges to overloaded
-  `qualified_name`s → `unresolved`) and the `.gitignore` DEFER decision.
-- `docs/SECURITY.md`: replace aspirational bullets with the **implemented** controls (non-root,
-  `--network none`, read-only rootfs, no caps, no symlink follow, size/count/binary caps) and the
-  clone-vs-parse container split.
-- `DEVELOPMENT.md`: refresh the Phase 1 section with the real commands now that they exist.
-**Good when:** docs match the code; no aspirational "TODO" bullets in any Phase 1 section.
-**Watch outs:** stale `ARCHITECTURE.md` still mentions Excalidraw in the canvas diagram — leave a
-note that it's deferred; the `samples` for ` qualified_name` must match exactly what C4 produces.
+C4 is the one worth slowing down for. Resolution is the core of how every compiler and IDE works,
+and doing it by hand once teaches more than reading about it ten times.
 
 ---
 
-## Phase 1 exit gate (Definition of Done)
+## C0 — Complete the IR so resolution is possible  `[x]`
 
-All of the following pass:
-- [x] `cd services/parser && go test ./...` green — `internal/security` + `internal/ts` (all
-      fixtures) + golden tests.
-- [x] `make go-run REPO=./services/parser/testdata/sample` emits a correct `out.json`.
-- [x] `make go-vet` clean.
-- [x] `docker compose run --rm parser …` runs isolated (non-root, read-only rootfs, `network none`,
-      no caps) and parses the sample.
-- [x] Negative tests green: symlink-to-escape rejected; 5MB file skipped; binary file skipped.
-- [x] CI workflow green on a PR (parser + parser-sample + migration-check jobs).
-- [x] `docs/PARSING_STRATEGY.md`, `docs/RISKS.md`, `docs/SECURITY.md`, `DEVELOPMENT.md` reflect
-      implemented behavior — no aspirational TODOs.
+**Why.** Phase 1 emits an IR that's correct to *read* but not sufficient to *resolve*. Three gaps
+block the resolver, and no amount of clever resolver code works around them:
+
+1. `ir.CallSite` has no file. The first two resolution rules are "is the callee defined in this
+   same file?" and "does this file import it?" — both need to know which file the call came from.
+   Run `make go-run REPO=./services/parser/testdata/golden` and you'll see calls from `calls.ts`
+   and `repo.ts` in one flat list with no way to tell them apart.
+2. Method calls lose their receiver. `Repo.sync()` is recorded as callee `sync` with `Repo`
+   discarded, so the resolver cannot distinguish it from `anythingElse.sync()`.
+3. Import symbols are collected by walking the statement for every `identifier` node. For
+   `import { a as b } from "x"` that yields **both** `a` and `b`. The resolver matches call sites
+   against *local* names, so `b` is the correct answer and `a` is noise that will cause false matches.
+
+**Where.** `services/parser/internal/ir/ir.go`, `services/parser/internal/ts/extract.go`,
+`services/parser/queries/typescript.scm`, `services/parser/internal/ts/extract_test.go`
+
+**Do.**
+
+1. Add `FileID int` to `ir.CallSite` and populate it — `fileID` is already in scope in the extract
+   loop, it just isn't being copied onto the call.
+2. Add `CalleeObject string` to `ir.CallSite`. For a `member_expression` callee, capture the object
+   as well as the property; leave it empty for a plain identifier call. This needs a second capture
+   in the `.scm` — something like `object: (identifier) @call.object` alongside the existing
+   `@function.call`.
+3. Rewrite import symbol extraction to collect **local binding names only**, and record which kind
+   of import each is. Walk the `import_clause` properly rather than grabbing every identifier:
+   - `import def from "m"` → local `def`, kind default
+   - `import { a } from "m"` → local `a`, kind named
+   - `import { a as b } from "m"` → local `b`, kind named, original `a`
+   - `import * as ns from "m"` → local `ns`, kind namespace
+   - `import "m"` → no locals, kind side-effect
+
+   A small `ir.ImportedSymbol{Local, Original, Kind string}` is cleaner than three parallel slices.
+4. While you're in `extract.go`, two cleanups: `strings.Split(string(src), "\n")` runs *inside* the
+   per-function loop, re-splitting the whole file for every function found — hoist it above the
+   loop. And the nil-tree check appears twice (once before the file is appended, once after);
+   delete the second.
+
+**Done when.** A test over `testdata/golden` asserts: every `CallSite` carries the `FileID` of the
+file it was found in; `Repo.sync()` yields `CalleeObject: "Repo", CalleeName: "sync"`; and
+`import { a as b } from "x"` yields exactly one symbol whose local name is `b`.
+
+**Watch for.** Populating `FileID` after `graph.Files` has already grown (off by one). Capturing the
+property of a *chained* call `a.b.c()` — decide what `CalleeObject` means there and write it down.
+Breaking the existing golden JSON without regenerating it.
 
 ---
 
-## Working conventions (so we pair smoothly)
+## C1 — Migration 0002: make an unresolved edge storable  `[x]`
 
-- **You code, I debug.** Submit a chunk via your usual edit; I'll review for: correctness vs.
-  IR/schema/contract → bugs (byte→line, off-by-one, nil, OS path separators, false captures) →
-  style/duplication (e.g. reuse the C4 scope walk in both `Function` C2/C4 and `CallSite` C5) →
-  tests (table-driven, one-concern fixtures, golden JSON diffs) → nudge to the next chunk.
-- **Commits:** imperative, one concern each (e.g. `add parser symlink hard-fail`), scoped to the
-  chunk. Squash-merge into the Phase 1 branch at the end.
-- **Don't delete Phase 2 wiring.** Keep `db.NewWriter` referenced so the storage handoff is clean.
-- **Migrations:** never edit a merged migration; add a new numbered file instead.
-- **Tests first mentality:** when a chunk's "good when" is a test, write the test alongside the
-  code, not after.
+**Why.** The `edges` table cannot currently represent two of its own three confidence values. An
+edge stores `callee_function_id`; if a call is `unresolved` there is no function to point at, so the
+column is null and the callee's *name* is lost entirely. An unresolved edge that doesn't record what
+it failed to resolve is not a data point, it's a blank row. Same for `name_match` where the target
+is ambiguous. This has to be fixed before the resolver writes anything, because the resolver's whole
+output depends on it.
+
+Two smaller things ride along: there is no down migration at all, so `make down` fails and you can
+never roll back a mistake; and `files.repo_id` has no `ON DELETE CASCADE`, so deleting a repo will
+either error or strand every file row under it.
+
+**Where.** `services/parser/migrations/` (new `0002_*.up.sql` and `.down.sql`, plus a backfilled
+`0001_init.down.sql`), `docs/DATA_MODEL.md`
+
+**Do.**
+
+1. Write `0001_init.down.sql` — drop the four tables in reverse dependency order. Never edit
+   `0001_init.up.sql`; it's already applied.
+2. Write `0002_edge_callee_name.up.sql`:
+   - `ALTER TABLE edges ALTER COLUMN callee_function_id DROP NOT NULL` if it is not null already,
+     and confirm it is nullable.
+   - `ADD COLUMN callee_name TEXT NOT NULL DEFAULT ''` — the name as written at the call site.
+   - `ADD COLUMN call_line INTEGER` — so the UI can jump to the call, not just the function.
+   - `ALTER TABLE files DROP CONSTRAINT files_repo_id_fkey`, re-add it with
+     `ON DELETE CASCADE`, and make `repo_id` `NOT NULL`.
+3. Write the matching `0002_*.down.sql`.
+4. Update `docs/DATA_MODEL.md` to match, including a note on why an edge keeps the callee name.
+
+**Done when.** `migrate up` → `migrate down` → `migrate up` runs clean against a fresh Postgres, and
+`\d edges` in `psql` shows a nullable `callee_function_id` alongside `callee_name` and `call_line`.
+
+**Watch for.** Postgres names the constraint `files_repo_id_fkey` by default, but verify with `\d files`
+rather than assuming. A `NOT NULL DEFAULT ''` on an existing table rewrites it — fine at this size,
+worth knowing. Down migrations that drop data silently.
+
+---
+
+## C2 — Close the schema drift in `packages/shared`  `[x]`
+
+**Why.** The Drizzle schema and the SQL migration are supposed to be the same schema described
+twice, and right now they disagree in three places. Each disagreement is a runtime error waiting
+for whichever code path hits it first:
+
+- `resolutionConfidence` is declared as a Drizzle `pgEnum`, but the migration creates the column as
+  `TEXT` with a `CHECK` constraint. There is no Postgres enum type named `resolution_confidence` in
+  the database at all.
+- `edges.calleeFunctionId` is `.notNull()` in Drizzle; the SQL allows null, and after C1 it *must*
+  allow null.
+- `functions.fileId` is `.notNull()` in Drizzle; the SQL column is nullable.
+
+**Where.** `packages/shared/src/schema.ts`, `packages/shared/src/types.ts`
+
+**Do.**
+
+1. Replace the `pgEnum` with `text("resolution_confidence").$type<ResolutionConfidence>().notNull()`,
+   importing the union type that already exists in `types.ts`. The `CHECK` constraint in the database
+   stays as the actual enforcement — Drizzle just needs to describe it accurately.
+2. Make `calleeFunctionId` nullable and add `calleeName` and `callLine` from C1.
+3. Reconcile the `notNull` mismatches on `fileId` and `repoId` — pick whichever the SQL says, or
+   change the SQL in C1 and make both say the same thing. Just don't leave them disagreeing.
+4. Regenerate or hand-update the inferred row types and make sure `pnpm -r build` still passes.
+
+**Done when.** `pnpm -r build` passes, and a scratch script that selects one row from each table
+through Drizzle against the real migrated database returns without a type or runtime error.
+
+**Watch for.** "It compiles" is not the test here — TypeScript will happily agree with a schema that
+does not match the database. Actually run a query.
+
+---
+
+## C3 — Parser writes the graph to Postgres  `[x]`
+
+**Why.** `db.Writer.WriteGraph` is a stub that returns nil. This is the chunk that makes the parser
+stop being a JSON printer.
+
+**Where.** `services/parser/internal/db/writer.go`, `services/parser/cmd/parser/main.go`
+
+**Do.**
+
+1. Take a repo identifier and a commit SHA as inputs. Upsert the `repos` row and get its id.
+2. Insert files, then functions, inside a **single transaction** — a half-written graph is worse
+   than no graph, because the API cannot tell the difference.
+3. Batch the function inserts. Use `pgx.CopyFrom`, or multi-row `INSERT` in chunks of a few hundred.
+   Do not insert one row per round trip; the 300-file target in NFR-1 will not survive it.
+4. Store `ir.Function.Source` into `source_blob_ref`. The data model already permits a plain text
+   column at this stage — no object storage.
+5. Return a `map[qualifiedNameKey]int64` of the inserted function ids, because C4 needs to turn
+   resolved calls into edges pointing at real primary keys.
+6. Wire it into `main.go` behind a `--write` flag so `--format json` still works for inspection.
+   Drop the `_ = db.NewWriter` placeholder line while you're there.
+
+**Done when.** `make go-run REPO=./services/parser/testdata/golden --write` populates a local
+Postgres, row counts in `files` and `functions` match the counts `--format summary` reports, and
+running it a second time neither duplicates rows nor violates the unique constraint.
+
+**Watch for.** Forgetting to roll back on a mid-transaction error. `UNIQUE (file_id, qualified_name,
+overload_index)` violations from the second run — decide up front whether re-running is an upsert or
+a delete-and-reinsert, and be consistent with C5. Holding one transaction open for a very large repo.
+
+---
+
+## C4 — The resolver  `[x]`
+
+**Why.** This is the chunk the whole product rests on. Everything before it is plumbing; this is
+where a raw call site becomes a claim about the code, and where the honesty commitment in
+[`PRD.md`](PRD.md#8-the-design-commitment) is either kept or quietly broken.
+
+**Where.** `services/parser/internal/resolver/resolver.go` (+ tests), `services/parser/internal/ir/ir.go`
+
+**Do.**
+
+1. Change the signature. `Resolve` currently returns `map[ir.CallSite]ResolutionConfidence`, which
+   has two problems: it never says *what the call resolved to*, and keying a map by the struct
+   silently collapses two identical calls on the same line into one edge. Return a slice instead —
+   add an `ir.Edge{CallerFuncIdx, CalleeFuncIdx int, CalleeName string, Line int, Confidence string}`
+   where an unresolved callee is `-1`.
+2. Build two in-memory indexes up front, once:
+   - functions by file: `map[fileID]map[qualifiedName][]funcIdx`
+   - imports by file: `map[fileID]map[localName]importSource`
+
+   The entire repo graph is already in memory. Do not query the database per call site — that's the
+   O(N²) trap the old plan warned about, and the fix is to not go to the database at all.
+3. Apply the rules in order, per call site:
+   - **Same file.** A function in this file whose qualified name matches → `exact`.
+   - **Imported symbol.** The callee's local name is in this file's imports → follow to the source
+     module, find the definition → `exact`. If the module resolves outside the repo (`react`,
+     `node:fs`) → `unresolved`; that's an honest answer, not a failure.
+   - **Package fallback.** Exactly one function with that name in the same `package_path` →
+     `name_match`. Exactly one in the whole repo → `name_match`.
+   - **Otherwise** → `unresolved`, keeping `CalleeName` so the edge still says something.
+4. Two rules on top:
+   - If a match is ambiguous — more than one candidate — the answer is `unresolved`, never a
+     coin flip.
+   - If the matched `qualified_name` has more than one `overload_index` in that file, the answer is
+     `unresolved`. Name and scope matching cannot pick an overload, so it must not pretend to.
+5. Use `CalleeObject` from C0: when it's set and names an imported namespace or a local class, that
+   narrows the search. When it's set and you can't identify it, that's `unresolved`.
+
+**Done when.** A table-driven test over a fixture with a hand-written expected confidence for every
+call passes — including at least one `exact` same-file, one `exact` via import, one `name_match`
+package fallback, one `unresolved` external module, and one `unresolved` overload.
+
+**Watch for.** Resolving to a function in a file that doesn't export it. Treating a bare `foo()` and
+`obj.foo()` as the same callee. Silently picking the first candidate when there are several — that's
+the exact failure this product exists to avoid. Recursion (a function calling itself) producing a
+self-edge you didn't expect.
+
+---
+
+## C5 — Edges, and re-parsing without orphans  `[x]`
+
+**Why.** NFR-3 says a re-parse after a rename leaves no orphan edges. That property has to be
+designed in, because the naive version — insert everything again — produces a graph that grows a
+duplicate set of edges on every push, and Phase 4's webhook loop will run this constantly.
+
+**Where.** `services/parser/internal/db/writer.go`, a new integration test
+
+**Do.**
+
+1. Write the resolved edges from C4, mapping function indexes to the real ids returned by C3.
+   Unresolved edges get a null `callee_function_id` and a populated `callee_name`.
+2. Implement re-parse as **delete-then-reinsert scoped to the files that changed**: within the
+   transaction, delete the `functions` rows for those files (the `ON DELETE CASCADE` on `edges`
+   takes their edges with them), then insert the new ones. Do not delete the `files` rows — their
+   ids are referenced elsewhere.
+3. Set `parsed_commit` on every row you write, so Phase 4 can diff.
+4. The subtle case, and the one the test must cover: a function is deleted from file A, but file B
+   still calls it. B's edge is cascade-deleted along with A's function — correct — but B was not
+   re-parsed, so nothing re-creates that edge as `unresolved`. Decide how you handle this and write
+   the decision down. Re-resolving every file that imports a changed file is the straightforward
+   answer.
+
+**Done when.** An integration test parses a fixture, renames a function in it, re-parses, and asserts:
+the old function row is gone, no edge points at a non-existent function, and callers of the renamed
+function now hold `unresolved` edges carrying the old name.
+
+**Watch for.** Cascade deletes taking more than you meant. Deleting outside the transaction. Assuming
+file ids are stable when a file is deleted and recreated.
+
+---
+
+## C6 — N-hop traversal in the API  `[x]`
+
+**Why.** "What's the blast radius of changing this function" is persona P2's entire reason to use
+this tool, and it's the one query a plain `SELECT` cannot answer.
+
+**Where.** `apps/api/src/graph/` (new), `apps/api/src/routes/graph.ts`
+
+**Do.**
+
+1. Write a depth-bounded recursive CTE that walks `edges` from a starting `function_id` and returns
+   each reachable function with the depth it was found at.
+2. Bound the depth with a **parameter**, defaulting to 5, capped server-side. An unbounded recursive
+   CTE over a cyclic graph does not return.
+3. Guard against cycles explicitly — mutual recursion is normal in real code. Carry the visited path
+   in an array column and filter, or use `UNION` rather than `UNION ALL` and accept the dedupe.
+4. Parameterize everything. This is raw SQL through Drizzle's `sql` template; string-concatenating a
+   depth or an id into it is a SQL injection hole.
+5. Replace the `/api/functions/:fnId/edges` 501 stub with a real handler. Leave the rest stubbed —
+   they're Phase 3.
+
+**Done when.** A Vitest test against a real Postgres (testcontainers, or the compose instance) inserts
+a small known graph *including a cycle*, and asserts the traversal returns the right functions at the
+right depths and terminates.
+
+**Watch for.** A CTE that returns rows but never terminates on the cyclic fixture — make sure the
+test actually has a cycle, or it proves nothing. Depth off by one (is the start node depth 0 or 1?).
+Forgetting that an edge with a null callee has nothing to traverse to.
+
+---
+
+## C7 — Sync the docs to reality  `[x]`
+
+**Why.** Docs that lie are worse than no docs, and this is the chunk where the ones you just
+invalidated get corrected — while you still remember why.
+
+**Where.** `docs/DATA_MODEL.md`, `docs/PARSING_STRATEGY.md`, `docs/RISKS.md`, `CLAUDE.md`, `PLAN.md`
+
+**Do.** Record the new `edges` columns and the re-parse strategy in the data model. Write the actual
+resolution algorithm you built into the parsing strategy, including the rules where it chose
+`unresolved` over a guess. Flip R6, R7, and R8 to DECIDED in the risk list with one line each on what
+was decided. Mark Phase 2 done in `CLAUDE.md` and `PLAN.md`.
+
+**Done when.** No document describes behaviour that the code does not have.
+
+---
+
+## Exit gate
+
+Phase 2 is finished when all of these hold:
+
+- [x] The IR carries file attribution, call receivers, and correct import locals (C0).
+- [x] Migrations roll forward and back cleanly, and an unresolved edge is storable (C1).
+- [x] The Drizzle schema and the SQL migration describe the same database (C2).
+- [x] The parser writes a complete graph transactionally, and re-running is safe (C3).
+- [x] Every call site gets a confidence tag, and ambiguity resolves to `unresolved` (C4).
+- [x] A re-parse after a rename leaves zero orphan edges (C5).
+- [x] The API answers a depth-bounded N-hop traversal over a cyclic graph (C6).
+- [x] `make go-test`, `make go-vet`, and `pnpm -r build` are green, and CI passes (C7).
+
+## Conventions
+
+- Never edit a migration that has been applied. Add a numbered one.
+- The Go parser keeps its own IR types. It cannot import `packages/shared`, and it should not try.
+- Tests go in the commit with the code they test.
+- One concern per commit, imperative message.
