@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -196,4 +197,52 @@ func TestExtract_OverloadIndicesAreAssignedByStartLine(t *testing.T) {
 			assert.Equal(t, 0, f.OverloadIndex)
 		}
 	}
+}
+
+// The TypeScript grammar cannot parse JSX: a component body becomes one ERROR
+// node, the declaration still matches, and every call inside the JSX is lost.
+// That failure is invisible -- the file appears to parse -- so this test pins
+// the calls rather than just the functions.
+func TestExtract_TSXCallsInsideJSX(t *testing.T) {
+	g := testutil.Extract(t, "../../testdata/tsx")
+
+	var called []string
+	for _, c := range g.Calls {
+		called = append(called, c.CalleeName)
+	}
+
+	// formatLabel sits above the return; the other three are inside the JSX.
+	for _, name := range []string{"formatLabel", "cx", "renderTitle", "helper"} {
+		assert.Contains(t, called, name, "call %q lost -- is .tsx using the TSX grammar?", name)
+	}
+}
+
+// Both extensions are parsed, and nothing else is.
+func TestExtract_OnlyTypeScriptExtensions(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"a.ts":   "export function fromTs() {}\n",
+		"b.tsx":  "export function FromTsx() { return <div />; }\n",
+		"c.js":   "export function fromJs() {}\n",
+		"d.jsx":  "export function FromJsx() { return <div />; }\n",
+		"e.py":   "def from_python(): pass\n",
+		"f.go":   "package main\nfunc FromGo() {}\n",
+		"g.json": `{"not": "source"}`,
+	} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644))
+	}
+
+	g := testutil.Extract(t, dir)
+
+	var paths []string
+	for _, f := range g.Files {
+		paths = append(paths, f.Path)
+	}
+	assert.ElementsMatch(t, []string{"a.ts", "b.tsx"}, paths)
+
+	var names []string
+	for _, fn := range g.Functions {
+		names = append(names, fn.Name)
+	}
+	assert.ElementsMatch(t, []string{"fromTs", "FromTsx"}, names)
 }

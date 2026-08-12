@@ -2,7 +2,6 @@ package ts
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,7 +9,6 @@ import (
 	"strings"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
-	bindings "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 
 	"go.uber.org/zap"
 
@@ -21,27 +19,21 @@ import (
 
 // Extract walks the repo, parses each TypeScript file, and returns the IR.
 func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, error) {
-	lang := tree_sitter.NewLanguage(bindings.LanguageTypescript())
-	parser := tree_sitter.NewParser()
-	if err := parser.SetLanguage(lang); err != nil {
-		return ir.Graph{}, fmt.Errorf("failed to set language: %w", err)
+	grammars, err := loadGrammars()
+	if err != nil {
+		return ir.Graph{}, err
 	}
-	defer parser.Close()
+	defer grammars.Close()
 
 	paths, err := security.Walk(logger, root, cfg)
 	if err != nil {
 		return ir.Graph{}, err
 	}
 
-	qs, err := loadQueries(lang)
-	if err != nil {
-		return ir.Graph{}, fmt.Errorf("loadQueries: %w", err)
-	}
-	defer qs.Close()
-
 	var graph ir.Graph
 	for _, p := range paths {
-		if !utils.IsSourceFile(p) {
+		g := grammars.forFile(p)
+		if g == nil {
 			continue
 		}
 
@@ -50,10 +42,17 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 			continue
 		}
 
-		tree := parser.Parse(src, nil)
+		tree := g.parser.Parse(src, nil)
 		if tree == nil {
 			logger.Warn("parse returned nil tree", zap.String("path", p))
 			continue
+		}
+		// A tree with errors still yields whatever parsed cleanly, so this is a
+		// warning rather than a skip -- but it means edges are being lost, and
+		// the usual cause is a grammar mismatch.
+		if tree.RootNode().HasError() {
+			logger.Warn("file parsed with errors; some calls may be missing",
+				zap.String("path", p))
 		}
 
 		rel, _ := filepath.Rel(root, p)
@@ -69,7 +68,7 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 		// Split once per file, not once per function found in it.
 		lines := strings.Split(string(src), "\n")
 
-		eachCapture(qs.def, rootNode, src, "function.def", func(nameNode tree_sitter.Node) {
+		eachCapture(g.queries.def, rootNode, src, "function.def", func(nameNode tree_sitter.Node) {
 			declNode := nameNode.Parent()
 			if declNode == nil {
 				return
@@ -96,7 +95,7 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 		})
 		assignOverloadIndices(graph.Functions[startLen:])
 
-		eachCapture(qs.call, rootNode, src, "function.call", func(callNode tree_sitter.Node) {
+		eachCapture(g.queries.call, rootNode, src, "function.call", func(callNode tree_sitter.Node) {
 			graph.Calls = append(graph.Calls, ir.CallSite{
 				FileID:          fileID,
 				CallerQualified: enclosingQualifiedName(callNode, src),
@@ -106,7 +105,7 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 			})
 		})
 
-		eachCapture(qs.imp, rootNode, src, "import.from", func(sourceNode tree_sitter.Node) {
+		eachCapture(g.queries.imp, rootNode, src, "import.from", func(sourceNode tree_sitter.Node) {
 			stmt := sourceNode.Parent()
 			if stmt == nil {
 				return

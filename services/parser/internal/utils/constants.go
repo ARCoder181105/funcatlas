@@ -33,10 +33,17 @@ const (
 	KindReExport   = "re-export"
 )
 
+// Source extensions. .tsx needs its own grammar -- the TypeScript grammar
+// cannot parse JSX, and fails silently by dropping calls inside it.
+const (
+	ExtTS  = ".ts"
+	ExtTSX = ".tsx"
+)
+
 // Extensions a module specifier is resolved against, in order.
 var (
-	SourceExtensions = []string{".ts", ".tsx"}
-	IndexFiles       = []string{"/index.ts", "/index.tsx"}
+	SourceExtensions = []string{ExtTS, ExtTSX}
+	IndexFiles       = []string{"/index" + ExtTS, "/index" + ExtTSX}
 )
 
 // Tree-sitter node kinds, so a grammar rename breaks in one place.

@@ -9,7 +9,17 @@ Tree-sitter is used for all extraction — fast, incremental, has a query langua
 ## What tree-sitter queries extract
 
 Using tree-sitter's query syntax rather than manual tree-walking. The live patterns are in
-`services/parser/queries/typescript.scm`, embedded into the binary at build time with `//go:embed`:
+`services/parser/queries/typescript.scm`, embedded into the binary at build time with `//go:embed`.
+
+**Two grammars, selected by extension.** `.ts` uses `LanguageTypescript()` and `.tsx` uses
+`LanguageTSX()`. This is not optional: the TypeScript grammar cannot parse JSX, and it fails
+*silently* — a component body becomes one `ERROR` node, the function declaration still matches, and
+every call inside the JSX disappears. The file looks parsed. On one small component that was three
+of four calls lost, which for a React codebase would mean a graph that renders plausibly and is
+missing most of its edges. The same `.scm` compiles against both grammars unchanged.
+
+A tree that still parses with errors is logged as a warning rather than skipped, since whatever
+parsed cleanly is worth keeping — but the warning is the signal that edges are being dropped.
 
 ```scheme
 (function_declaration
@@ -150,7 +160,7 @@ Every one of these lands as `unresolved` rather than a wrong answer — see the 
 
 - **Re-exports / barrel files** — a symbol may pass through several intermediate files before its real definition. The re-export edges are recorded in the IR (`KindReExport`, carrying the original name and no local binding) but not yet followed.
 - **Overloading / shadowing** — multiple definitions sharing a name are not disambiguated by name and scope alone.
-- **Cross-language repos** — name-only matching could wire a call in one language to an unrelated same-named function in another. Not reachable today, since TypeScript is the only language parsed.
+- **Cross-language repos** — name-only matching could wire a call in one language to an unrelated same-named function in another. Not reachable today: only `.ts` and `.tsx` are walked, and `.js`, `.jsx`, and every non-TypeScript extension are skipped entirely.
 
 ## v2: LSP-based resolution
 
