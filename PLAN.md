@@ -108,6 +108,38 @@ rejected; a webhook flood is throttled; the parser still works with no network e
 
 ---
 
+## Phase 5 — Go, Rust and Python · not started
+
+Extraction only. Each language gets functions, call sites and imports in the IR, and same-file
+resolution, which is language-agnostic. Cross-file calls resolve to `name_match` or `unresolved`,
+never `exact`.
+
+**Why the split.** Extraction is a grammar, a `.scm`, and a set of node kinds — cheap and testable.
+Resolution is not, and it is the whole product. Go resolves through package clauses and
+capitalisation-based export, Rust through `mod`/`use`/crate paths and `impl` blocks, Python through
+`sys.path` and `__init__.py`. Sharing one resolver across them would emit confident wrong edges,
+which is worse than admitting ignorance — see [`PRD.md`](PRD.md#8-the-design-commitment). The
+confidence tiers already carry that admission to the user honestly.
+
+**Never resolve across a language boundary** (`docs/RISKS.md`), so a call in `main.go` can never
+match a same-named function in `main.py`.
+
+The precedent for taking this seriously: `.tsx` was parsed with the TypeScript grammar through all
+of Phase 2. The failure was silent — the component's declaration still matched, so the file looked
+parsed while three of four calls inside its JSX were dropped. One wrong grammar, most of a file's
+edges gone, no error anywhere. Every language added multiplies that risk, which is why each one
+needs its own fixture pinning *calls*, not just functions.
+
+**Builds:** `tree-sitter-go`, `tree-sitter-rust`, `tree-sitter-python`; one `.scm` per language;
+per-language node-kind constants; `files.language` populated per file rather than hardcoded;
+extraction fixtures per language. The UI learns to show language per node.
+
+**Exit test:** a polyglot fixture repo produces correct functions and call sites for all four
+languages, no edge crosses a language boundary, and `.tsx`-style silent grammar mismatch is
+impossible because every language's fixture pins the calls inside its hardest construct.
+
+---
+
 ## Cut from the MVP
 
 Each of these was considered and deliberately deferred, not forgotten.
@@ -116,7 +148,7 @@ Each of these was considered and deliberately deferred, not forgotten.
 |---|---|
 | LSP-based resolution | Accurate but slow to build and RPC-heavy on re-export chains. Name/scope resolution ships first, honestly tagged; LSP upgrades `name_match` to `exact` later. |
 | Freehand annotation layer | Pure nice-to-have. Zero bearing on whether the core graph is trustworthy. |
-| Languages beyond TypeScript | Depth before breadth. A second grammar multiplies the resolution edge cases before the first is proven. |
+| ~~Languages beyond TypeScript~~ | **Reinstated as Phase 5** (extraction only). Full per-language resolution is still cut. |
 | Neo4j | Recursive CTEs over an edge table handle this scale. Revisit when traversal is measurably the bottleneck. |
 | Saved canvas layouts | Positions resetting on reload is a papercut, not a blocker. |
 | Multi-tenancy and RBAC | Single-user MVP. Each repo is already an isolated workspace, so this stays cheap to add. |

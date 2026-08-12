@@ -7,7 +7,8 @@ contract is in `PRD.md` and the phase plan is in `PLAN.md`.
 
 An interactive visual map of a codebase. Clone a repo → tree-sitter extracts functions and call
 sites → resolve calls to definitions → store the graph in Postgres → explore it on a React Flow
-canvas (file → card → function mind-map → code block). First and only language: **TypeScript**.
+canvas (file → card → function mind-map → code block). Language: **TypeScript** through Phase 4;
+Go, Rust and Python are added in Phase 5, extraction only.
 
 The product is called **funcatlas** everywhere — repo, module path, npm scope, database, cookie.
 The old working name "CodeCanvas" is retired; do not reintroduce it.
@@ -19,6 +20,7 @@ The old working name "CodeCanvas" is retired; do not reintroduce it.
 - [x] Phase 2 — Storage and resolution
 - [ ] Phase 3 — API, auth, canvas, search ← next, split 3a (api/auth) and 3b (canvas/search)
 - [ ] Phase 4 — Webhooks, queue, hardening
+- [ ] Phase 5 — Go, Rust, Python (extraction only; per-language resolution stays cut)
 
 Active task list: `TASKLIST.md`.
 
@@ -110,6 +112,10 @@ files over 1 MB skipped.
 - **`resolution_confidence`** ∈ `exact` / `name_match` / `unresolved`, rendered as solid / dashed /
   dotted. Ambiguity resolves to `unresolved`, never to a guess. This is the product's core promise —
   see `PRD.md` §8.
+- **One grammar per extension, never shared.** `.ts` uses `LanguageTypescript()`, `.tsx` uses
+  `LanguageTSX()`. A mismatched grammar fails *silently*: the body becomes an `ERROR` node, the
+  declaration still matches, and every call inside is dropped. Any new language needs a fixture that
+  pins the **calls** inside its hardest construct, not just the function names.
 
 ## Known gaps carried into Phase 3
 
