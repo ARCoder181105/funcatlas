@@ -56,7 +56,8 @@ export const oauthCallbackSchema = z.object({
   state: z.string().min(1),
 });
 
-export const functionIdSchema = z.coerce.number().int().positive();
+/** A positive-integer id path parameter. The same shape for every table. */
+export const idSchema = z.coerce.number().int().positive();
 
 export type RepoUrlInput = z.infer<typeof repoUrlSchema>;
 export type SearchQueryInput = z.infer<typeof searchQuerySchema>;

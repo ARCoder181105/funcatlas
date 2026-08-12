@@ -1,17 +1,13 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { repoUrlSchema } from "@funcatlas/shared";
 import { db } from "../db/index.js";
-import { repoByUrl } from "../graph/queries.js";
+import { listRepos, repoByUrl } from "../graph/queries.js";
 import { ParseError, normaliseRepoUrl, runParser } from "../repos/register.js";
 
 /** Repository registration. Registered inside the gated /api scope by
  *  routes/index.ts. */
 export function registerRepoRoutes(api: FastifyInstance) {
-  /** Real in A6. */
-  const notYet = async (_req: FastifyRequest, reply: FastifyReply) =>
-    reply.code(501).send({ error: "not implemented yet" });
-
-  api.get("/api/repos", notYet);
+  api.get("/api/repos", async (_req, reply) => reply.send({ repos: await listRepos(db) }));
 
   api.post("/api/repos", async (req, reply) => {
     const body = repoUrlSchema.safeParse(req.body);

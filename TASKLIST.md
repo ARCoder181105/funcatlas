@@ -270,7 +270,7 @@ harmless, not the schema.
 
 ---
 
-## A6 — The five 501 endpoints  `[ ]`
+## A6 — The five 501 endpoints  `[x]`
 
 **Why.** `routes/graph.ts:11-15` — five endpoints return 501. They are the entire read surface of the
 product, and 3b cannot render anything without them.
@@ -292,8 +292,15 @@ The tree stays flat — the client nests it. Building the hierarchy in SQL costs
 produce something the sidebar has to walk anyway. The function list omits source because a file with
 two hundred functions would ship two hundred function bodies to render a list of names.
 
-**Done when.** Each endpoint has a happy path and a 404 tested against real Postgres, and search has
-a test pinning that a prefix match outranks a substring match.
+**Done when.** Seventeen tests against real Postgres, over a fixture holding **two** repositories --
+an endpoint that forgets to scope by repository looks correct with one. Each endpoint has a happy
+path, a 404 on an unknown id and a 400 on a malformed one; search has tests for prefix ranking,
+case-insensitivity, repository scoping, `limit`, and `_` as a literal.
+
+Three of those were checked by breaking the code: dropping the `DISTINCT`, the `files.repo_id`
+join, and the `LIKE` escaping each turn tests red. The escaping test did **not** fail on the first
+attempt — `get_user` unescaped needs eight characters and `getUser` has seven, so it matched
+neither way. A `getXuser` fixture was added to make the assertion discriminating.
 
 **Watch for.** Returning `[]` for an unknown id — "this repo has no files" and "this repo does not
 exist" are different answers and the UI cannot tell them apart. Search that forgets to scope through
@@ -328,7 +335,7 @@ Phase 3a is finished when all of these hold:
 - [x] The dev-login route does not exist in production (A3).
 - [x] Every `/api/*` route 401s without a session (A4).
 - [x] A GitHub URL posted to `/api/repos` ends with that repo's graph in Postgres (A5).
-- [ ] All six graph endpoints return real data, and 404 on an unknown id (A6).
+- [x] All six graph endpoints return real data, and 404 on an unknown id (A6).
 - [ ] `pnpm -r build`, `pnpm -r test` and the Go suite are green, and CI passes (A7).
 
 **The gate itself:** with the session cookie, `curl` through login → register a repo → tree →
