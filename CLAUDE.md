@@ -18,7 +18,8 @@ The old working name "CodeCanvas" is retired; do not reintroduce it.
 - [x] Phase 0 — Bootstrap
 - [x] Phase 1 — Parser and isolation
 - [x] Phase 2 — Storage and resolution
-- [ ] Phase 3 — API, auth, canvas, search ← next, split 3a (api/auth) and 3b (canvas/search)
+- [x] Phase 3a — API and auth
+- [ ] Phase 3b — Canvas and search ← next
 - [ ] Phase 4 — Webhooks, queue, hardening
 - [ ] Phase 5 — Go, Rust, Python (extraction only; per-language resolution stays cut)
 
@@ -62,7 +63,10 @@ You implement, phase by phase, with tests. The user reviews at each phase gate.
 | Test Postgres connect / skip / truncate | `services/parser/internal/db/dbtest/` |
 | Types and Zod schemas used by both api and web | `packages/shared/src/` |
 | Shared TypeScript constants | `packages/shared/src/constants.ts` |
-| Session verification for gated routes | `apps/api/src/auth/session.ts` |
+| Session store, cookie helpers, `requireSession` | `apps/api/src/auth/session.ts` |
+| Signed-cookie set/read/clear, shared by session and OAuth state | `apps/api/src/auth/cookies.ts` |
+| The single session gate over every `/api` route | `apps/api/src/routes/index.ts` |
+| Spawning the parser, and canonical repo URLs | `apps/api/src/repos/register.ts` |
 | Graph SQL, including the recursive CTE | `apps/api/src/graph/queries.ts` |
 | Browser API calls | `apps/web/src/lib/api.ts` — extend `request<T>`, never bare `fetch` |
 
@@ -117,16 +121,17 @@ files over 1 MB skipped.
   declaration still matches, and every call inside is dropped. Any new language needs a fixture that
   pins the **calls** inside its hardest construct, not just the function names.
 
-## Known gaps carried into Phase 3
+## Known gaps carried into Phase 3b
 
-The five Phase 2 gaps are all closed. What Phase 3 inherits:
+Phase 3a closed the auth stub, the five 501 endpoints and the missing session gate. What is left:
 
-- **Auth is a stub.** `/auth/callback` and `/auth/logout` return 501, and `createAuthorizationURL`
-  uses a literal `"state-placeholder"` — a CSRF hole that must be real random state before login
-  ships. The GitHub OAuth app itself does not exist yet (R4).
-- **Five graph endpoints are still 501.** Only `/api/functions/:fnId/edges` is real, and it is
-  ungated — nothing checks a session yet.
-- **The web app is a 114-line shell.** Canvas, FunctionCard and CodeBlock are placeholders.
+- **The web app is a 114-line shell.** Canvas, FunctionCard and CodeBlock are placeholders, and
+  `apps/web/src/lib/api.ts` still types every response as `unknown`. That is 3b's job.
+- **`POST /api/repos` parses synchronously**, so a large repository holds the request open until
+  `PARSE_TIMEOUT_MS`. Phase 4's queue replaces the spawn; marked with a `ponytail:` comment.
+- **`/auth/dev-login` exists outside production.** Phase 4 hardening deletes it.
+- **Public repositories only.** The OAuth scope is `read:user`, and the parser clones over public
+  HTTPS. See R26 for why `repo` was not the answer.
 - **`pnpm start` cannot run the API.** `packages/shared` exports point at `./src/*.ts`, so plain
   `node dist/index.js` cannot follow them. `pnpm dev` (tsx) works. Fix before containerising.
 - **Compiled test files land in `apps/api/dist`.** Harmless locally, wrong in an image.

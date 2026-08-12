@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^10.0.2",
     "@fastify/rate-limit": "^10.1.1",
     "@funcatlas/shared": "workspace:*",
@@ -20,7 +21,6 @@
     "drizzle-orm": "^0.44.2",
     "fastify": "^5.2.1",
     "ioredis": "^5.4.2",
-    "oslo": "^1.2.1",
     "pino": "^9.6.0",
     "postgres": "^3.4.5",
     "zod": "^3.25.76"

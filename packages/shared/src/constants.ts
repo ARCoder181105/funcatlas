@@ -21,3 +21,10 @@ export const TRAVERSAL_MAX_DEPTH = 10;
 
 /** The starting function is depth 0; its direct calls are depth 1. */
 export const TRAVERSAL_ROOT_DEPTH = 0;
+
+/** The host a stored repository URL is normalised to. */
+export const GITHUB_HOST = "github.com";
+
+/** Hosts a repository URL may name. Compared against a parsed hostname, never
+ *  searched for as a substring. */
+export const GITHUB_HOSTS: readonly string[] = [GITHUB_HOST, "www.github.com"];

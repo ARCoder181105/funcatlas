@@ -12,6 +12,18 @@ jobs:
       contents: read
     env:
       DATABASE_URL: postgres://funcatlas:funcatlas@localhost:5432/funcatlas?sslmode=disable
+      # There is no .env in CI, and env.ts fails fast on a missing key. These
+      # are placeholders -- no test reaches GitHub.
+      NODE_ENV: test
+      APP_PUBLIC_URL: http://localhost:5173
+      CORS_ORIGIN: http://localhost:5173
+      REDIS_URL: redis://localhost:6379
+      QUEUE_NAME: funcatlas-parse
+      GITHUB_CLIENT_ID: ci-client-id
+      GITHUB_CLIENT_SECRET: ci-client-secret
+      GITHUB_REDIRECT_URI: http://localhost:3000/auth/callback
+      GITHUB_WEBHOOK_SECRET: ci-webhook-secret
+      SESSION_SECRET: ci-session-secret-not-a-real-one
     # The API's graph tests run against a real Postgres. Without one they skip,
     # which passes CI while proving nothing.
     services:
@@ -25,6 +37,17 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U funcatlas"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      # Sessions live in Redis. Without one the session tests fail rather than
+      # skip -- REDIS_URL is always set, so there is nothing to skip on.
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5

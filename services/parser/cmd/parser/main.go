@@ -17,6 +17,7 @@ import (
 	"github.com/ARCoder181105/funcatlas/parser/internal/resolver"
 	"github.com/ARCoder181105/funcatlas/parser/internal/security"
 	"github.com/ARCoder181105/funcatlas/parser/internal/ts"
+	"github.com/ARCoder181105/funcatlas/parser/internal/utils"
 )
 
 func main() {
@@ -33,8 +34,8 @@ func main() {
 	format := flag.String("format", "json", "output format: json|summary")
 	write := flag.Bool("write", false, "write the graph to Postgres (needs DATABASE_URL)")
 	repoURL := flag.String("repo-url", "", "repo identity for --write; defaults to --repo")
-	branch := flag.String("branch", "main", "default branch recorded on the repo row")
-	commit := flag.String("commit", "", "commit SHA recorded on every row written")
+	branch := flag.String("branch", "", "default branch recorded on the repo row; detected when empty")
+	commit := flag.String("commit", "", "commit SHA recorded on every row written; detected when empty")
 	flag.Parse()
 
 	if *repo == "" {
@@ -60,6 +61,20 @@ func main() {
 	if !*write {
 		return
 	}
+
+	// Read off the checkout rather than made a required flag: the caller that
+	// hands us a URL has not cloned anything and cannot know the SHA.
+	if *commit == "" {
+		if *commit = clone.HeadCommit(root); *commit == "" {
+			logger.Warn("no commit SHA; rows will be written without one")
+		}
+	}
+	if *branch == "" {
+		if *branch = clone.HeadBranch(root); *branch == "" {
+			*branch = utils.DefaultBranch
+		}
+	}
+
 	if err := writeGraph(logger, graph, edges, *repoURL, *repo, *branch, *commit); err != nil {
 		logger.Fatal("write failed", zap.Error(err))
 	}

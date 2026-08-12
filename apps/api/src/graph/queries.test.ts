@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import postgres from "postgres";
 import * as schema from "@funcatlas/shared/schema";
 import { edges, files, functions, repos } from "@funcatlas/shared/schema";
-import { directEdges, functionExists, traverse } from "./queries.js";
+import { directEdges, exists, traverse } from "./queries.js";
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 
@@ -125,7 +125,7 @@ describe.skipIf(!DATABASE_URL)("graph traversal", () => {
   });
 
   it("knows whether a function exists", async () => {
-    expect(await functionExists(db, id.a!)).toBe(true);
-    expect(await functionExists(db, 999_999)).toBe(false);
+    expect(await exists(db, "function", id.a!)).toBe(true);
+    expect(await exists(db, "function", 999_999)).toBe(false);
   });
 });

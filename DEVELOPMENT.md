@@ -28,9 +28,18 @@ pnpm install
 cp .env.example .env      # then fill in DATABASE_URL and REDIS_URL at minimum
 docker compose up -d postgres redis
 migrate -path services/parser/migrations -database "$DATABASE_URL" up
+make go-build-bin         # the binary the API spawns to register a repository
 ```
 
 Never commit `.env`. Only `.env.example` is tracked.
+
+`make go-build-bin` is easy to forget and the failure is not obvious: `POST /api/repos` answers 502
+because there is no binary at `PARSER_BIN`. Rebuild it after any change under `services/parser/`.
+
+For a real login you also need a GitHub OAuth app (Settings → Developer settings → OAuth Apps) with
+its callback URL set to exactly `GITHUB_REDIRECT_URI`, and `GITHUB_CLIENT_ID` /
+`GITHUB_CLIENT_SECRET` in `.env`. `SESSION_SECRET` is any 32 random bytes: `openssl rand -hex 32`.
+To work on the API without one, use `/auth/dev-login` below.
 
 ## Layout
 
@@ -68,6 +77,40 @@ cd services/parser && go run ./cmd/parser --repo ./testdata/sample   # terminal 
 
 `docker compose up` with no arguments runs the whole stack in prod mode, no hot reload. Use it to
 check that the thing actually works in a container, not to develop in.
+
+## Driving the API by hand
+
+Everything under `/api` needs a session, so start by getting one into a cookie jar. `/auth/dev-login`
+only exists outside production; the real flow is `/auth/login` in a browser.
+
+```bash
+curl -c jar -X POST localhost:3000/auth/dev-login    # 204, sets the session cookie
+curl -b jar localhost:3000/auth/me                   # {"userId":0,"login":"dev"}
+```
+
+Register a repository. This clones and parses inline, so the request takes as long as the parse:
+
+```bash
+curl -b jar -X POST localhost:3000/api/repos \
+  -H 'content-type: application/json' \
+  -d '{"githubUrl":"https://github.com/ARCoder181105/funcatlas"}'
+```
+
+Then walk the graph — file tree, a file's functions, one function's callees, its source, and search:
+
+```bash
+curl -b jar localhost:3000/api/repos
+curl -b jar localhost:3000/api/repos/1/tree
+curl -b jar localhost:3000/api/files/1/functions
+curl -b jar 'localhost:3000/api/functions/1/edges?depth=3&direction=out'
+curl -b jar localhost:3000/api/functions/1/source
+curl -b jar 'localhost:3000/api/repos/1/search?query=get&limit=10'
+curl -b jar -X POST localhost:3000/auth/logout       # 204; every route above now 401s
+```
+
+A 401 anywhere means the cookie jar is empty or the session expired — log in again. A 502 from
+`POST /api/repos` is the parser failing; the response carries the tail of its stderr, and the API log
+has the whole thing.
 
 ## Checks
 

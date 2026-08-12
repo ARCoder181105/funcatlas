@@ -6,6 +6,10 @@ package utils
 // Language is the only language the MVP parses.
 const Language = "typescript"
 
+// DefaultBranch is recorded when a checkout reports no branch of its own --
+// a detached head, or a path that is not a git repository at all.
+const DefaultBranch = "main"
+
 // Qualified-name sentinels.
 const (
 	ModuleCaller = "<module>" // caller of a call made outside any function
