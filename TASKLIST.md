@@ -128,7 +128,7 @@ worth knowing. Down migrations that drop data silently.
 
 ---
 
-## C2 — Close the schema drift in `packages/shared`  `[ ]`
+## C2 — Close the schema drift in `packages/shared`  `[x]`
 
 **Why.** The Drizzle schema and the SQL migration are supposed to be the same schema described
 twice, and right now they disagree in three places. Each disagreement is a runtime error waiting
@@ -324,7 +324,7 @@ Phase 2 is finished when all of these hold:
 
 - [x] The IR carries file attribution, call receivers, and correct import locals (C0).
 - [x] Migrations roll forward and back cleanly, and an unresolved edge is storable (C1).
-- [ ] The Drizzle schema and the SQL migration describe the same database (C2).
+- [x] The Drizzle schema and the SQL migration describe the same database (C2).
 - [ ] The parser writes a complete graph transactionally, and re-running is safe (C3).
 - [ ] Every call site gets a confidence tag, and ambiguity resolves to `unresolved` (C4).
 - [ ] A re-parse after a rename leaves zero orphan edges (C5).
