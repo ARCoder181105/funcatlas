@@ -130,7 +130,7 @@ the access token in any response body, including an error.
 
 ---
 
-## A2 — The real OAuth flow  `[ ]`
+## A2 — The real OAuth flow  `[x]`
 
 **Why.** `auth/routes.ts:16` passes the literal `"state-placeholder"` as the OAuth state. That is a
 CSRF hole with a name: an attacker sends a victim a crafted callback URL and the victim's browser
@@ -138,6 +138,7 @@ logs in as the attacker, because nothing ties the callback to the login that sta
 and logout are 501s.
 
 **Where.** `apps/api/src/auth/routes.ts`, `apps/api/src/auth/github.ts` (new),
+`apps/api/src/auth/cookies.ts` (new), `apps/api/src/test-helpers.ts` (new),
 `apps/api/src/auth/routes.test.ts` (new)
 
 **Do.**
@@ -156,11 +157,20 @@ and logout are 501s.
 5. `/auth/me` — the current user, or 401. 3b needs it to decide what to render.
 6. Every failure returns 400 with a flat message: missing state cookie, mismatched state, arctic
    `OAuth2RequestError`, non-200 from GitHub. None of them reach the default 500 handler.
+7. Logout is a POST. With `SameSite=Lax` a cross-site *GET* navigation still carries the cookie,
+   so any page that can make the browser navigate could log the user out; a cross-site POST
+   carries no Lax cookie at all.
+8. Extract the cookie plumbing into `auth/cookies.ts` — the state cookie is the second thing to
+   need signed set-and-read, so the helper stops being speculative and becomes a deduplication.
 
-**Done when.** Tests cover: `/auth/login` sets a state cookie and redirects to github.com with that
-same state in the query; a callback with no state cookie is 400; a callback whose state does not
-match the cookie is 400; logout clears the cookie and the Redis key. The exchange itself is not
-tested against live GitHub — A3 is how a session gets created in tests.
+**Done when.** Fourteen tests, with `fetch` stubbed so github.com is never contacted. They cover the
+full happy path through to `/auth/me`; a missing state cookie; a mismatched state; a replayed
+state; a rejected code; a failed user lookup; and logout destroying the Redis entry, not just the
+cookie.
+
+The rejection tests stub a *working* GitHub deliberately, so the exchange would succeed if it were
+reached. A 400 can then only have come from the state check — deleting that check turns four tests
+into 302s, which is how you know they test something. Verified by doing exactly that.
 
 **Watch for.** Comparing state with `===` (timing) or forgetting to clear the state cookie (replay).
 Trusting `code` before `state` — validate state first, always. `redirect_uri` must match the OAuth
@@ -292,7 +302,7 @@ Phase 3a is finished when all of these hold:
 
 - [x] The app can be built and injected without binding a port, from any working directory (A0).
 - [x] A session is an opaque id in a `HttpOnly` cookie and its data never leaves Redis (A1).
-- [ ] OAuth state is random per login, verified on callback, and single-use (A2).
+- [x] OAuth state is random per login, verified on callback, and single-use (A2).
 - [ ] The dev-login route does not exist in production (A3).
 - [ ] Every `/api/*` route 401s without a session (A4).
 - [ ] A GitHub URL posted to `/api/repos` ends with that repo's graph in Postgres (A5).

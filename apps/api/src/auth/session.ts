@@ -1,8 +1,8 @@
 import { randomBytes } from "node:crypto";
-import type { CookieSerializeOptions } from "@fastify/cookie";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../env.js";
 import { redis } from "../redis.js";
+import { clearCookie, readSignedCookie, setSignedCookie } from "./cookies.js";
 
 /**
  * Opaque server-side sessions.
@@ -30,24 +30,6 @@ declare module "fastify" {
     /** Set by requireSession. Undefined on any route that is not gated. */
     session?: Session;
   }
-}
-
-/**
- * Cookie options shared by the session cookie and A2's OAuth state cookie.
- *
- * SameSite=Lax, not Strict: the OAuth callback is a cross-site navigation from
- * github.com, and a Strict cookie is not sent on it -- login would fail with
- * "missing state" every time.
- */
-export function cookieOptions(maxAge: number): CookieSerializeOptions {
-  return {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    secure: env.NODE_ENV === "production",
-    signed: true,
-    maxAge,
-  };
 }
 
 /** Creates a session and returns its id. */
@@ -78,21 +60,15 @@ export async function destroySession(id: string): Promise<void> {
 /** Cookie and Redis entry expire together, so a live cookie always has a
  *  session behind it. */
 export function setSessionCookie(reply: FastifyReply, id: string): void {
-  reply.setCookie(env.SESSION_COOKIE_NAME, id, cookieOptions(env.SESSION_TTL));
+  setSignedCookie(reply, env.SESSION_COOKIE_NAME, id, env.SESSION_TTL);
 }
 
 export function clearSessionCookie(reply: FastifyReply): void {
-  reply.clearCookie(env.SESSION_COOKIE_NAME, { path: "/" });
+  clearCookie(reply, env.SESSION_COOKIE_NAME);
 }
 
-/** The session id from the request, or null if absent or tampered with. */
 export function sessionIdFrom(req: FastifyRequest): string | null {
-  const raw = req.cookies[env.SESSION_COOKIE_NAME];
-  if (raw === undefined) {
-    return null;
-  }
-  const unsigned = req.unsignCookie(raw);
-  return unsigned.valid ? unsigned.value : null;
+  return readSignedCookie(req, env.SESSION_COOKIE_NAME);
 }
 
 /**

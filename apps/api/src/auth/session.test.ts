@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { buildApp } from "../app.js";
 import { env } from "../env.js";
 import { redis } from "../redis.js";
+import { cookieHeader } from "../test-helpers.js";
 import {
   createSession,
   destroySession,
@@ -41,13 +42,11 @@ afterAll(async () => {
  *  and the session id behind it. */
 async function login(): Promise<{ cookie: string; id: string }> {
   const res = await app.inject({ method: "GET", url: "/probe-login" });
-  const header = res.headers["set-cookie"];
-  const first = Array.isArray(header) ? header[0] : header;
-  if (first === undefined) {
+  const cookie = cookieHeader(res, env.SESSION_COOKIE_NAME);
+  if (cookie === null) {
     throw new Error("login set no session cookie");
   }
-  // Everything before the first ';' is what a browser echoes back.
-  return { cookie: first.split(";")[0] ?? "", id: (res.json() as { id: string }).id };
+  return { cookie, id: (res.json() as { id: string }).id };
 }
 
 describe("the session store", () => {
