@@ -24,33 +24,47 @@ Active task list: `TASKLIST.md`.
 
 ## How to work here
 
+**These are standing instructions from the user. They persist across sessions — do not drift off
+them, and do not revert to an earlier arrangement.**
+
 You implement, phase by phase, with tests. The user reviews at each phase gate.
 
 - **One PR per phase**, on a `phase-N/<name>` branch. Push at the phase gate, never mid-phase, never
   to `main`. Commit one concern at a time with an imperative subject.
+- **Never put a `Co-Authored-By` trailer in a commit message.** No tool-attribution trailers or
+  "generated with" footers anywhere, including PR bodies.
 - **Stop at every phase gate.** Run the phase's exit test from `PLAN.md`, mark the PR ready, and wait
   for the user before opening the next branch.
 - **A test ships in the same commit as the code it tests.** Keep `TASKLIST.md` checkboxes current.
-- **Never duplicate code.** A second occurrence gets extracted in that same commit — see the shared-
-  helper homes below. Do not create a generic `utils/` package; a helper lives in the package that
-  owns the concern.
 - **Ask when a choice changes the product**, not for routine judgment calls.
 
-This reverses the earlier arrangement, where the user wrote the code and the assistant only
-reviewed. Do not revert to review-only mode.
+### Code style the user has asked for
+
+- **Comments are brief and to the point.** One line where one line does. Long comments invite
+  confusion and go stale. Explain *why*, never restate *what* the code plainly says.
+- **Never duplicate code.** The second occurrence of anything gets extracted into a shared helper in
+  that same commit, not later.
+- **Shared helpers live in a `utils` package, one file per concern**, plus a single `constants.go`
+  holding every shared literal. No magic strings or numbers inline.
 
 ### Where shared code goes
 
 | Concern | Home |
 |---|---|
-| AST scope walking, enclosing-declaration lookup | `services/parser/internal/ts/scope.go` |
-| Module specifier → repo file path | `services/parser/internal/resolver/modpath.go` |
-| Chunked multi-row `INSERT`, pgx scanning | `services/parser/internal/db/sqlutil.go` |
+| All parser constants — confidence tiers, node kinds, import kinds, limits | `services/parser/internal/utils/constants.go` |
+| Tree-sitter node traversal | `services/parser/internal/utils/nodes.go` |
+| Repo-relative paths, module specifier resolution | `services/parser/internal/utils/paths.go` |
+| Qualified-name building and scope candidates | `services/parser/internal/utils/qualnames.go` |
+| Generic slice helpers, chunking | `services/parser/internal/utils/slices.go` |
+| SQL helpers: chunked multi-row `INSERT`, pgx scanning | `services/parser/internal/db/sqlutil.go` |
 | Test Postgres connect / skip / truncate | `services/parser/internal/db/dbtest/` |
 | Types and Zod schemas used by both api and web | `packages/shared/src/` |
+| Shared TypeScript constants | `packages/shared/src/constants.ts` |
 | Session verification for gated routes | `apps/api/src/auth/session.ts` |
 | Graph SQL, including the recursive CTE | `apps/api/src/graph/queries.ts` |
 | Browser API calls | `apps/web/src/lib/api.ts` — extend `request<T>`, never bare `fetch` |
+
+`internal/utils` imports only `internal/ir` and stdlib, so any package can use it without a cycle.
 
 ## Locked stack — do not re-decide without an explicit reason
 

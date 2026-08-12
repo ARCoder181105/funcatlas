@@ -192,7 +192,7 @@ a delete-and-reinsert, and be consistent with C5. Holding one transaction open f
 
 ---
 
-## C4 — The resolver  `[ ]`
+## C4 — The resolver  `[x]`
 
 **Why.** This is the chunk the whole product rests on. Everything before it is plumbing; this is
 where a raw call site becomes a claim about the code, and where the honesty commitment in
@@ -326,7 +326,7 @@ Phase 2 is finished when all of these hold:
 - [x] Migrations roll forward and back cleanly, and an unresolved edge is storable (C1).
 - [x] The Drizzle schema and the SQL migration describe the same database (C2).
 - [ ] The parser writes a complete graph transactionally, and re-running is safe (C3).
-- [ ] Every call site gets a confidence tag, and ambiguity resolves to `unresolved` (C4).
+- [x] Every call site gets a confidence tag, and ambiguity resolves to `unresolved` (C4).
 - [ ] A re-parse after a rename leaves zero orphan edges (C5).
 - [ ] The API answers a depth-bounded N-hop traversal over a cyclic graph (C6).
 - [ ] `make go-test`, `make go-vet`, and `pnpm -r build` are green, and CI passes (C7).

@@ -16,10 +16,10 @@ import (
 
 	"github.com/ARCoder181105/funcatlas/parser/internal/ir"
 	"github.com/ARCoder181105/funcatlas/parser/internal/security"
+	"github.com/ARCoder181105/funcatlas/parser/internal/utils"
 )
 
-// Extract walks the repo, runs tree-sitter on .ts/.tsx files, and returns the
-// intermediate representation.
+// Extract walks the repo, parses each TypeScript file, and returns the IR.
 func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, error) {
 	lang := tree_sitter.NewLanguage(bindings.LanguageTypescript())
 	parser := tree_sitter.NewParser()
@@ -41,7 +41,7 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 
 	var graph ir.Graph
 	for _, p := range paths {
-		if !strings.HasSuffix(p, ".ts") && !strings.HasSuffix(p, ".tsx") {
+		if !utils.IsSourceFile(p) {
 			continue
 		}
 
@@ -57,16 +57,12 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 		}
 
 		rel, _ := filepath.Rel(root, p)
-		pkgPath := filepath.Dir(rel)
-		if pkgPath == "." {
-			pkgPath = ""
-		}
+		pkgPath := utils.PackagePath(rel)
 
-		// fileID is the index this file is about to take. Every CallSite and
-		// Import found below carries it, which is what lets the resolver ask
-		// "is the callee defined in, or imported by, this same file?".
+		// Every CallSite and Import below carries this, so the resolver can ask
+		// "same file?" and "imported by this file?".
 		fileID := len(graph.Files)
-		graph.Files = append(graph.Files, ir.File{Path: rel, Language: "typescript"})
+		graph.Files = append(graph.Files, ir.File{Path: rel, Language: utils.Language})
 
 		startLen := len(graph.Functions)
 		rootNode := tree.RootNode()
@@ -128,15 +124,14 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 	return graph, nil
 }
 
-// readSource reads one file subject to the security caps, returning ok=false
-// when the file should be skipped rather than parsed.
+// readSource applies the security caps, returning ok=false to skip the file.
 func readSource(logger *zap.Logger, path string, cfg security.Config) ([]byte, bool) {
 	f, err := os.Open(path)
 	if err != nil {
 		logger.Warn("open failed", zap.String("path", path), zap.Error(err))
 		return nil, false
 	}
-	// Read one byte past the cap so an oversized file is detectable.
+	// One byte past the cap, so oversize is detectable.
 	src, err := io.ReadAll(io.LimitReader(f, cfg.MaxFileBytes+1))
 	_ = f.Close()
 	if err != nil {
@@ -149,8 +144,8 @@ func readSource(logger *zap.Logger, path string, cfg security.Config) ([]byte, b
 	}
 
 	sniff := src
-	if len(sniff) > 512 {
-		sniff = sniff[:512]
+	if len(sniff) > utils.BinarySniffBytes {
+		sniff = sniff[:utils.BinarySniffBytes]
 	}
 	if bytes.IndexByte(sniff, 0) != -1 {
 		logger.Warn("binary file detected at read time, skipping", zap.String("path", path))
@@ -159,9 +154,8 @@ func readSource(logger *zap.Logger, path string, cfg security.Config) ([]byte, b
 	return src, true
 }
 
-// eachCapture runs a compiled query over root and calls fn for every node
-// captured under the given name, skipping missing or errored nodes. Owning the
-// cursor lifecycle here keeps the three extraction passes from repeating it.
+// eachCapture calls fn for every node captured under name, skipping missing and
+// errored ones. Owns the cursor lifecycle so the three passes need not repeat it.
 func eachCapture(q *tree_sitter.Query, root *tree_sitter.Node, src []byte, name string, fn func(tree_sitter.Node)) {
 	idx, ok := q.CaptureIndexForName(name)
 	if !ok {
@@ -185,16 +179,15 @@ func eachCapture(q *tree_sitter.Query, root *tree_sitter.Node, src []byte, name 
 	}
 }
 
-// calleeObject returns the raw source text of a member call's receiver:
-// Repo.sync() -> "Repo", a.b.c() -> "a.b". Empty for a bare identifier call.
+// calleeObject returns a member call's receiver: Repo.sync() -> "Repo",
+// a.b.c() -> "a.b". Empty for a bare call.
 //
-// Deliberately read from the tree rather than captured in the .scm: adding an
-// `object:` field to the member_expression pattern would make the pattern
-// require it, so a chained call whose object is itself a member_expression
-// would stop matching and the call site would vanish entirely.
+// Read from the tree, not captured in the .scm: an `object:` field would make
+// the member_expression pattern require it, so a.b.c() would stop matching
+// and the call site would vanish.
 func calleeObject(callNode tree_sitter.Node, src []byte) string {
 	parent := callNode.Parent()
-	if parent == nil || parent.Kind() != "member_expression" {
+	if parent == nil || parent.Kind() != utils.KindMemberExpression {
 		return ""
 	}
 	obj := parent.ChildByFieldName("object")
@@ -204,91 +197,64 @@ func calleeObject(callNode tree_sitter.Node, src []byte) string {
 	return obj.Utf8Text(src)
 }
 
-// importSymbols collects the names an import statement binds *locally*, since
-// that is what a call site in this file can reference. Walking the import_clause
-// by node kind rather than grabbing every identifier is what keeps
-// `import { a as b }` from yielding both a and b.
+// importSymbols collects only the names an import binds locally -- what a call
+// site here can actually reference. Walking by node kind rather than grabbing
+// every identifier is what keeps `import { a as b }` from yielding both a and b.
 func importSymbols(stmt *tree_sitter.Node, src []byte) []ir.ImportedSymbol {
-	// `export { x } from "m"` re-exports without binding anything locally.
-	// Recorded so barrel files can be followed later, with no Local name.
-	if stmt.Kind() == "export_statement" {
-		clause := childByKind(stmt, "export_clause")
+	// A re-export binds nothing locally; recorded for barrel-following later.
+	var out []ir.ImportedSymbol
+
+	if stmt.Kind() == utils.KindExportStatement {
+		clause := utils.ChildByKind(stmt, utils.KindExportClause)
 		if clause == nil {
-			return []ir.ImportedSymbol{{Kind: ir.KindReExport}}
+			return []ir.ImportedSymbol{{Kind: utils.KindReExport}} // export * from "m"
 		}
-		var out []ir.ImportedSymbol
-		for i := uint(0); i < clause.NamedChildCount(); i++ {
-			spec := clause.NamedChild(i)
-			if spec == nil || spec.Kind() != "export_specifier" {
-				continue
+		utils.NamedChildren(clause, func(spec *tree_sitter.Node) {
+			if spec.Kind() == utils.KindExportSpecifier {
+				out = append(out, ir.ImportedSymbol{
+					Original: utils.FieldText(spec, "name", src),
+					Kind:     utils.KindReExport,
+				})
 			}
-			out = append(out, ir.ImportedSymbol{
-				Original: fieldText(spec, "name", src),
-				Kind:     ir.KindReExport,
-			})
-		}
+		})
 		return out
 	}
 
-	clause := childByKind(stmt, "import_clause")
+	clause := utils.ChildByKind(stmt, utils.KindImportClause)
 	if clause == nil {
-		return []ir.ImportedSymbol{{Kind: ir.KindSideEffect}} // import "m"
+		return []ir.ImportedSymbol{{Kind: utils.KindSideEffect}} // import "m"
 	}
 
-	var out []ir.ImportedSymbol
-	for i := uint(0); i < clause.NamedChildCount(); i++ {
-		child := clause.NamedChild(i)
-		if child == nil {
-			continue
-		}
+	utils.NamedChildren(clause, func(child *tree_sitter.Node) {
 		switch child.Kind() {
-		case "identifier": // import def from "m"
-			out = append(out, ir.ImportedSymbol{Local: child.Utf8Text(src), Kind: ir.KindDefault})
+		case utils.KindIdentifier: // import def from "m"
+			out = append(out, ir.ImportedSymbol{Local: child.Utf8Text(src), Kind: utils.KindDefault})
 
-		case "namespace_import": // import * as ns from "m"
-			if id := childByKind(child, "identifier"); id != nil {
-				out = append(out, ir.ImportedSymbol{Local: id.Utf8Text(src), Kind: ir.KindNamespace})
+		case utils.KindNamespaceImport: // import * as ns from "m"
+			if id := utils.ChildByKind(child, utils.KindIdentifier); id != nil {
+				out = append(out, ir.ImportedSymbol{Local: id.Utf8Text(src), Kind: utils.KindNamespace})
 			}
 
-		case "named_imports": // import { a, b as c } from "m"
-			for j := uint(0); j < child.NamedChildCount(); j++ {
-				spec := child.NamedChild(j)
-				if spec == nil || spec.Kind() != "import_specifier" {
-					continue
+		case utils.KindNamedImports: // import { a, b as c } from "m"
+			utils.NamedChildren(child, func(spec *tree_sitter.Node) {
+				if spec.Kind() != utils.KindImportSpecifier {
+					return
 				}
-				name := fieldText(spec, "name", src)
-				local := fieldText(spec, "alias", src)
+				name := utils.FieldText(spec, "name", src)
+				local := utils.FieldText(spec, "alias", src)
 				if local == "" {
 					local = name
 				}
-				out = append(out, ir.ImportedSymbol{Local: local, Original: name, Kind: ir.KindNamed})
-			}
+				out = append(out, ir.ImportedSymbol{Local: local, Original: name, Kind: utils.KindNamed})
+			})
 		}
-	}
+	})
 	return out
 }
 
-func childByKind(node *tree_sitter.Node, kind string) *tree_sitter.Node {
-	for i := uint(0); i < node.NamedChildCount(); i++ {
-		if child := node.NamedChild(i); child != nil && child.Kind() == kind {
-			return child
-		}
-	}
-	return nil
-}
-
-func fieldText(node *tree_sitter.Node, field string, src []byte) string {
-	child := node.ChildByFieldName(field)
-	if child == nil {
-		return ""
-	}
-	return child.Utf8Text(src)
-}
-
-// assignOverloadIndices numbers functions that share a qualified_name within one
-// file, ordered by start_line so the numbering is stable across re-parses. This
-// is what keeps (file_id, qualified_name, overload_index) collision-free, which
-// the delete-and-reinsert relink depends on.
+// assignOverloadIndices numbers functions sharing a qualified_name in one file,
+// by start_line so it stays stable across re-parses. Keeps the uniqueness key
+// collision-free, which the delete-and-reinsert relink depends on.
 func assignOverloadIndices(funcs []ir.Function) {
 	groups := make(map[string][]int)
 	for i, f := range funcs {

@@ -8,24 +8,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
 	"github.com/ARCoder181105/funcatlas/parser/internal/ir"
-	"github.com/ARCoder181105/funcatlas/parser/internal/security"
-	"github.com/ARCoder181105/funcatlas/parser/internal/ts"
+	"github.com/ARCoder181105/funcatlas/parser/internal/testutil"
+	"github.com/ARCoder181105/funcatlas/parser/internal/utils"
 )
-
-// extractDir runs the extractor over a fixture directory with limits high
-// enough that nothing is skipped for size.
-func extractDir(t *testing.T, dir string) ir.Graph {
-	t.Helper()
-	graph, err := ts.Extract(zap.NewNop(), dir, security.Config{
-		MaxFiles:     100,
-		MaxFileBytes: 10 * 1024 * 1024,
-	})
-	require.NoError(t, err)
-	return graph
-}
 
 var update = flag.Bool("update", false, "rewrite golden files instead of comparing against them")
 
@@ -33,7 +20,7 @@ const goldenJSON = "../../testdata/golden/extract_expected.json"
 
 func extractGolden(t *testing.T) ir.Graph {
 	t.Helper()
-	return extractDir(t, "../../testdata/golden")
+	return testutil.Extract(t, "../../testdata/golden")
 }
 
 func TestExtract_Golden(t *testing.T) {
@@ -140,30 +127,30 @@ func TestExtract_ImportSymbols(t *testing.T) {
 	// `import { a as b }` binds b locally. Collecting every identifier in the
 	// statement would yield both a and b, and a is a name this file cannot call.
 	assert.Equal(t,
-		[]ir.ImportedSymbol{{Local: "b", Original: "a", Kind: ir.KindNamed}},
+		[]ir.ImportedSymbol{{Local: "b", Original: "a", Kind: utils.KindNamed}},
 		byFrom["x"], `import { a as b } from "x"`)
 
 	assert.Equal(t,
-		[]ir.ImportedSymbol{{Local: "def", Kind: ir.KindDefault}},
+		[]ir.ImportedSymbol{{Local: "def", Kind: utils.KindDefault}},
 		byFrom["a"], `import def from "a"`)
 
 	assert.Equal(t,
-		[]ir.ImportedSymbol{{Local: "named", Original: "named", Kind: ir.KindNamed}},
+		[]ir.ImportedSymbol{{Local: "named", Original: "named", Kind: utils.KindNamed}},
 		byFrom["b"], `import { named } from "b"`)
 
 	assert.Equal(t,
-		[]ir.ImportedSymbol{{Local: "ns", Kind: ir.KindNamespace}},
+		[]ir.ImportedSymbol{{Local: "ns", Kind: utils.KindNamespace}},
 		byFrom["c"], `import * as ns from "c"`)
 
 	assert.Equal(t,
-		[]ir.ImportedSymbol{{Kind: ir.KindSideEffect}},
+		[]ir.ImportedSymbol{{Kind: utils.KindSideEffect}},
 		byFrom["d"], `import "d" binds nothing`)
 
 	// A re-export binds nothing locally either, so it must not produce a Local
 	// name the resolver would then match call sites against.
 	require.Len(t, byFrom["e"], 1)
 	assert.Empty(t, byFrom["e"][0].Local, `export { reexport } from "e" binds no local name`)
-	assert.Equal(t, ir.KindReExport, byFrom["e"][0].Kind)
+	assert.Equal(t, utils.KindReExport, byFrom["e"][0].Kind)
 }
 
 func TestExtract_OverloadIndicesAreZeroWithoutDuplicates(t *testing.T) {
@@ -186,7 +173,7 @@ func TestExtract_OverloadIndicesAreZeroWithoutDuplicates(t *testing.T) {
 // in one file. Numbering by start_line keeps it stable across re-parses, which
 // is what makes the delete-and-reinsert relink collision-free.
 func TestExtract_OverloadIndicesAreAssignedByStartLine(t *testing.T) {
-	g := extractDir(t, "../../testdata/overloads")
+	g := testutil.Extract(t, "../../testdata/overloads")
 
 	var dups []ir.Function
 	for _, f := range g.Functions {
