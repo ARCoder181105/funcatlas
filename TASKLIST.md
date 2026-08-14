@@ -12,9 +12,9 @@ person can explore.
 ## How to work through this
 
 Claude implements; you review at the phase gate. One chunk at a time, top to bottom — the order is
-load-bearing: B0 unblocks every test and every typed call, B1 has to exist before anything can be
-seen logged in, B2 produces the ids B3 needs, and B4's node ids are what B5 and B6 select. Each
-chunk lists:
+load-bearing: B0 unblocks every test and every typed call, B1 defines the tokens every component
+consumes, B2 has to exist before anything can be seen logged in, B3 produces the ids B4 needs, and
+B5's node ids are what B6 and B7 select. Each chunk lists:
 
 - **Why** — the reason it exists, so it can be pushed back on if the reason is wrong.
 - **Where** — the files it touches.
@@ -30,12 +30,13 @@ imperative message. `[ ]` todo · `[~]` in progress · `[x]` done.
 | Chunks | Concept | Where else you'll meet it |
 |---|---|---|
 | B0 | One type definition serving both sides of the wire, so drift is a compile error | Every full-stack TypeScript codebase |
-| B1 | Authentication as *derived state* — the server owns it, the client only asks | Every SPA with a session behind it |
-| B2 | Pure transforms extracted out of components, so the hard logic is testable without a DOM | React, Vue, Svelte — the pattern outlives the framework |
-| B4 | Rendering uncertainty honestly instead of hiding it | Any tool whose output is inferred rather than known |
-| B6 | Debounce, cancellation, and why a search box is harder than it looks | Every type-ahead you will ever build |
+| B1 | A token system as the single source of visual truth, so a colour is never chosen in a component | Any design system that outlives its first designer |
+| B2 | Authentication as *derived state* — the server owns it, the client only asks | Every SPA with a session behind it |
+| B3 | Pure transforms extracted out of components, so the hard logic is testable without a DOM | React, Vue, Svelte — the pattern outlives the framework |
+| B5 | Rendering uncertainty honestly instead of hiding it | Any tool whose output is inferred rather than known |
+| B7 | Debounce, cancellation, and why a search box is harder than it looks | Every type-ahead you will ever build |
 
-B4 is the one worth slowing down for. It is where `resolution_confidence` stops being a database
+B5 is the one worth slowing down for. It is where `resolution_confidence` stops being a database
 column and becomes the product's central claim — PRD §8. An unresolved edge points at no function
 row, so a naive mapper silently drops it, and the canvas confidently shows a function calling
 nothing. That is precisely the failure the whole design exists to prevent.
@@ -44,15 +45,21 @@ nothing. That is precisely the failure the whole design exists to prevent.
 
 Asked and answered at planning time, so they are not re-litigated mid-phase.
 
+- **The visual direction is the survey chart** — `docs/UI_GUIDE.md` §1, rewritten for this phase.
+  Marine-ink ground, warm bone ink, and a confidence triad of verdigris / brass / slate that carries
+  the product's central claim. The tokens the project shipped with (`#0b0d12` plus `#7c5cff`) were a
+  textbook generated-design default and are replaced in B1.
 - **Login screen, not a landing page.** UI_GUIDE §3.1's animated marketing hero is its own surface
   and its own PR. Logged out shows a centred sign-in card. Nothing in the 3b exit test touches a
   landing page.
 - **One file card and one mind-map at a time.** UI_GUIDE §3.2's multi-open canvas multiplies canvas
   state — namespaced node ids, per-card layout, focus scoped across cards. Additive later, not a
   rewrite.
-- **No shadcn CLI.** `clsx` + `tailwind-merge` give a `cn()` helper; the three or four primitives
-  actually needed are hand-written against the tokens already in `tailwind.config.ts`. The generated
-  shadcn theme layer would duplicate those tokens.
+- **shadcn split in half: behaviour yes, styling no.** Its theme layer would duplicate the token
+  table in UI_GUIDE §1.1, so the CLI is not run. But anything whose hard part is accessibility —
+  focus trap, escape, `aria`, collision-aware positioning — comes from the Radix primitive
+  underneath it, styled with our tokens, using shadcn's own source as the reference. A `div` with
+  classes is hand-written; a component with keyboard semantics is not. See UI_GUIDE §2.
 - **Tests are logic-first.** Every non-trivial transform is a pure function tested directly, plus a
   render smoke test per surface. The smoke tests exist mainly to catch a component that throws.
 
@@ -107,7 +114,70 @@ apps/web/src/lib/api.ts` is 0. A deliberate field-name typo in `queries.ts` fail
 
 ---
 
-## B1 — Auth shell: login screen, session state, logout  `[ ]`
+## B1 — Design system: tokens, type, primitives  `[ ]`
+
+**Why.** Every component from B2 onward reaches for a colour, a font and a radius. If those are not
+defined first they get invented inline, six times, slightly differently — and the fix is then a
+sweep through every file instead of one config.
+
+There is a second reason, and it is the sharper one. The tokens this project shipped with are
+`#0b0d12` with a `#7c5cff` accent: a near-black ground with one bright violet accent. That is a
+textbook default — the look a generated design converges on regardless of subject. It says nothing
+about call graphs. `docs/UI_GUIDE.md` §1 now specifies the survey-chart direction instead, derived
+from the one thing this product actually claims: that it marks what it does not know, exactly as a
+chart marks a doubtful sounding. This chunk makes that real in code.
+
+**Where.** `apps/web/tailwind.config.ts`, `apps/web/src/index.css`,
+`apps/web/src/components/ui/` (`Button.tsx`, `Panel.tsx`, `Skeleton.tsx`),
+`apps/web/src/lib/motion.ts`, `apps/web/src/lib/confidence.ts`,
+`apps/web/src/lib/confidence.test.ts`, `apps/web/public/fonts/`.
+
+**Do.**
+
+1. Replace the colour scale in `tailwind.config.ts` with the token table in UI_GUIDE §1.1 —
+   `surface` / `surface.raised` / `surface.border`, `ink` / `ink.muted`, and `confidence.exact` /
+   `confidence.name` / `confidence.unresolved`. Names carry meaning; no `gray-700`.
+2. Self-host the three faces — Space Grotesk (display), IBM Plex Sans (UI), IBM Plex Mono (data) —
+   as woff2 under `public/fonts/`, wired through `@font-face` with `font-display: swap` and mapped
+   to `fontFamily.display` / `.sans` / `.mono`. Self-hosted, not a CDN link: a third-party font
+   request on every page load is a dependency and a privacy leak, and it is the reason a slow
+   network shows an unstyled page.
+3. `lib/confidence.ts` — the single place mapping a `ResolutionConfidence` to its stroke style,
+   colour token and human label. It reads `CONFIDENCE_STYLE` from `packages/shared` for the style
+   and adds only presentation. B5's edges, the legend and the code block all consume this one map.
+4. `lib/motion.ts` — the duration and spring constants from UI_GUIDE §4, plus a
+   `useReducedMotion()`-backed helper, so honouring the preference is the default path rather than
+   something each component remembers.
+5. Three primitives in `components/ui/`, hand-written against the tokens: `Button` (via `cva`,
+   already a dependency), `Panel`, `Skeleton`. All three are a `div` with classes, so there is
+   nothing to import. Nothing more until a second use appears — a component with keyboard or focus
+   semantics takes its behaviour from Radix instead (UI_GUIDE §2), and none is needed yet.
+6. Set the page background and base type in `index.css` from the tokens, replacing the hardcoded
+   `#e6e8ee` sitting in there now.
+
+**Done when.** `confidence.test.ts` proves all three tiers map to distinct styles, colours and
+labels, and that the styles agree with `CONFIDENCE_STYLE` in `packages/shared` — so the canvas and
+the schema can never disagree. `grep -rE '#[0-9a-fA-F]{6}' apps/web/src --include=*.tsx` returns
+nothing. The fonts render offline with the network throttled.
+
+**Watch for.**
+
+- A hex value in a component is the failure this chunk exists to prevent. The grep above is the
+  check, and it belongs in the commit, not in someone's memory.
+- `confidence.unresolved` must not be red. Unresolved is an honest admission, not an error, and
+  colouring it as a failure tells the user the opposite of what PRD §8 promises.
+- Do not re-declare the style mapping. `CONFIDENCE_STYLE` already exists in
+  `packages/shared/src/constants.ts`; a second copy in the web app is exactly the duplication the
+  shared package is for.
+- `font-display: swap` without a sized fallback shifts the layout when the real face lands. Match
+  the fallback metrics or accept the shift deliberately.
+- Tailwind cannot see a class name built by string concatenation. Confidence colours reaching the
+  canvas as `text-confidence-${tier}` will be purged from the production CSS and work only in dev.
+  Map to complete class strings.
+
+---
+
+## B2 — Auth shell: login screen, session state, logout  `[ ]`
 
 **Why.** Everything else in the phase is behind a session, and the web app currently has no concept
 of one. It also closes a bug found while planning: `APP_PUBLIC_URL` is `http://localhost:3000`, and
@@ -148,7 +218,7 @@ states against a mocked `/auth/me`.
 
 ---
 
-## B2 — Repo picker and the sidebar file tree  `[ ]`
+## B3 — Repo picker and the sidebar file tree  `[ ]`
 
 **Why.** The canvas needs a `repoId` and a `fileId` to show anything, and there is currently no way
 to obtain either. This is also where `GET /api/repos` and `POST /api/repos` stop being curl-only.
@@ -186,7 +256,7 @@ ordering and the empty repo. Registering a real repository through the UI produc
 
 ---
 
-## B3 — Canvas and the file card  `[ ]`
+## B4 — Canvas and the file card  `[ ]`
 
 **Why.** The first surface where React Flow does real work, and the first honest test of a risk
 carried since Phase 0: `reactflow@11.11.4` is the retired package name (v12 is `@xyflow/react`) and
@@ -201,11 +271,16 @@ reason this chunk comes before the mind-map.
 
 1. Smoke test first: mount a React Flow canvas with two nodes inside `<React.StrictMode>` and assert
    both render. If v11 cannot do that on React 19, stop and raise it before writing anything else.
-2. `Canvas` — `ReactFlowProvider`, background, controls, minimap, tokens from `tailwind.config.ts`.
-3. `FileCard` — a custom node: file path, language, the file's functions from
+2. `Canvas` — `ReactFlowProvider`, controls, minimap, all colour from the B1 tokens.
+3. **The graticule** — UI_GUIDE §3.2 signature 1. React Flow's `Background` in `lines` variant at
+   two scales, hairline in `surface.border`, so the surface reads as a chart rather than the
+   default dot grid. It is the cheapest of the three signatures and does the most work: it sets the
+   whole direction before a single node is drawn.
+4. `FileCard` — a custom node: file path in mono, language, the file's functions from
    `GET /api/files/:id/functions`. Springs in via Framer Motion. Clicking a function sets
    `selectedFunctionId`.
-4. Empty state per UI_GUIDE §3.3 — inviting, not a blank rectangle.
+5. Empty state per UI_GUIDE §3.3 — an invitation to act in the interface's voice ("Chart a
+   repository"), not a blank rectangle and not "No data".
 
 **Done when.** Clicking a file in the sidebar makes a card appear on the canvas listing that file's
 functions, and the StrictMode smoke test passes.
@@ -217,11 +292,11 @@ functions, and the StrictMode smoke test passes.
 - `nodeTypes` and `edgeTypes` defined inline re-create the object every render and remount every
   node. Hoist them to module scope.
 - The function list is intentionally source-free (`queries.ts` says why). Do not reach for `source`
-  here; that is B5's request.
+  here; that is B6's request.
 
 ---
 
-## B4 — Mind-map: traversal to nodes and edges, styled by confidence  `[ ]`
+## B5 — Mind-map: traversal to nodes and edges, styled by confidence  `[ ]`
 
 **Why.** This is the product. `resolution_confidence` has been carried faithfully through the
 parser, the resolver, the schema and the API for two phases specifically so that this chunk can draw
@@ -239,13 +314,20 @@ a guess differently from a fact. PRD §8 calls it the reason to trust the tool.
    return them — `directEdges` exists precisely to surface them. Each becomes a distinct *ghost*
    node built from `calleeName`, visibly not-a-function. Dropping them would show a function calling
    nothing, which is the exact dishonesty PRD §8 forbids.
-3. Edge style comes from `CONFIDENCE_STYLE` in `packages/shared/src/constants.ts` — solid, dashed,
-   dotted. Import it; never re-declare the mapping.
-4. A legend on the canvas saying what the three styles mean. An unexplained dotted line is noise.
-5. Direction and depth controls, bounded by `TRAVERSAL_MAX_DEPTH`.
-6. Node ceiling of 2000: truncate and say so rather than freezing the tab.
-7. Focus mode — the selected function's neighbourhood stays lit, the rest dims.
-8. `prefers-reduced-motion` disables the edge-draw animation.
+3. Edge style and colour come from `lib/confidence.ts` (B1), which reads `CONFIDENCE_STYLE` from
+   `packages/shared`. Never re-declare the mapping in a component.
+4. **The chart legend** — UI_GUIDE §3.2 signature 2. Bottom-left, where a chart carries it, drawing
+   the three line styles with their names. An unexplained dotted line is noise; an explained one is
+   the entire point of the product.
+5. **Ghost nodes as uncharted territory** — signature 3. Placed past the last resolved layer,
+   dotted, faded, labelled with the `calleeName` the parser saw. They are the map showing its own
+   boundary, so they must read as deliberate, not as broken nodes.
+6. Direction and depth controls, bounded by `TRAVERSAL_MAX_DEPTH`.
+7. Node ceiling of 2000: truncate and say so rather than freezing the tab.
+8. Focus mode — the selected function's neighbourhood stays lit, the rest dims.
+9. The edge-draw animation is this phase's one orchestrated moment (UI_GUIDE §4): edges draw in
+   staggered by depth, like a route being plotted. `prefers-reduced-motion` disables it, via the
+   B1 helper rather than a local check.
 
 **Done when.** `lib/graph.test.ts` proves: each confidence tier maps to its own style; an unresolved
 edge yields a ghost node rather than a dangling or dropped edge; depth becomes layers; a cycle
@@ -265,7 +347,7 @@ ceiling truncates. On a real repo, all three edge styles are visibly present.
 
 ---
 
-## B5 — The code block  `[ ]`
+## B6 — The code block  `[ ]`
 
 **Why.** The last step of the UI_GUIDE §3.2 chain — file, card, mind-map, code. Without it the
 canvas can show that a function exists and what it calls, but never what it does.
@@ -276,7 +358,10 @@ canvas can show that a function exists and what it calls, but never what it does
 **Do.**
 
 1. `lib/highlight.ts` — a lazily created Shiki highlighter, loading only the languages in use and a
-   single dark theme, behind a dynamic import so it stays out of the initial bundle.
+   single theme, behind a dynamic import so it stays out of the initial bundle. An off-the-shelf
+   theme (`github-dark`, `nord`) is cool-grey on near-black and will sit on the marine-ink ground
+   looking pasted in. Pass Shiki a theme derived from the §1.1 tokens instead — it accepts a plain
+   theme object, so this is data, not a fork.
 2. `CodeBlock` — fetches `GET /api/functions/:id/source`, renders it highlighted, with line numbers
    offset to the function's real `startLine` so they match the file on GitHub.
 3. `source` is nullable in the schema. Render a plain explanation when the parser stored none, never
@@ -296,7 +381,7 @@ absolute line numbers, and the null-source case is covered by a test.
 
 ---
 
-## B6 — Search and the ⌘K palette  `[ ]`
+## B7 — Search and the ⌘K palette  `[ ]`
 
 **Why.** The half of the phase's exit test that the canvas does not cover: *find a function by
 name*. `GET /api/repos/:id/search` already ranks prefix matches above substring matches; nothing
@@ -329,7 +414,7 @@ lands on that function with its source shown. The debounce hook has its own test
 
 ---
 
-## B7 — States, docs, and the exit gate  `[ ]`
+## B8 — States, docs, and the exit gate  `[ ]`
 
 **Why.** UI_GUIDE §3.3 calls the empty, loading and error states "the cool vs amateur line", and
 they are the easiest thing to leave half-done across six chunks. The docs are load-bearing for the
@@ -341,12 +426,18 @@ next phase and go stale the moment a phase closes.
 **Do.**
 
 1. Audit every surface for its three states. Skeletons, not spinners, wherever a shape is known.
-2. Error states name what failed and what to do — a failed parse says which repository and why.
+2. Error and empty copy against UI_GUIDE §3.4: user-facing nouns, active voice, an action that keeps
+   its name through the flow. A failed parse names the repository and the reason.
 3. Verify `prefers-reduced-motion` end to end, not per component.
-4. Keyboard: the tree, the palette and the canvas are all reachable and escapable.
-5. Update the docs: `CLAUDE.md` status and known gaps, `PLAN.md` Phase 3b result, `README.md`,
+4. Keyboard: the tree, the palette and the canvas are all reachable and escapable, with visible
+   focus.
+5. **Design critique with screenshots, then one round of fixes.** Screenshot each surface and judge
+   it against UI_GUIDE §7 — is anything here a generated-design default rather than a choice made
+   for a call graph? Then Chanel's rule: find the one element carrying the least meaning and remove
+   it. Record what was cut.
+6. Update the docs: `CLAUDE.md` status and known gaps, `PLAN.md` Phase 3b result, `README.md`,
    `DEVELOPMENT.md` for running the web app, `docs/RISKS.md` for anything new this phase surfaced.
-6. Run the exit gate and record what actually happened, including numbers.
+7. Run the exit gate and record what actually happened, including numbers.
 
 **Done when — the phase exit test.** Against a real repository, logged in through the browser:
 
@@ -355,6 +446,8 @@ next phase and go stale the moment a phase closes.
 - open a function's mind-map and see all three edge styles, with at least one unresolved ghost;
 - click a function and read its highlighted source at the correct line numbers;
 - ⌘K, type a function name, land on it;
+- the three signatures from UI_GUIDE §3.2 are all present and legible — graticule, chart legend,
+  ghosts at the boundary — and a screenshot of the canvas is worth looking at;
 - `pnpm -r build`, `pnpm -r test` and `pnpm -r lint` all clean.
 
 **Watch for.**
@@ -362,3 +455,5 @@ next phase and go stale the moment a phase closes.
 - A skeleton that never resolves is worse than a spinner. Every loading state needs its terminal
   state checked.
 - Docs claiming the phase did something it did not. The commands in `CLAUDE.md` are the arbiter.
+- Design drift across eight chunks. Colour invented in chunk seven does not match colour chosen in
+  chunk one; the B1 hex grep is the check, and it runs again here.
