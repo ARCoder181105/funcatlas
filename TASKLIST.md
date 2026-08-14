@@ -76,7 +76,7 @@ Not gaps — deliberate scope. Say so now if you disagree, not at the gate.
 
 ---
 
-## B0 — Typed client, test infrastructure, `cn()`  `[ ]`
+## B0 — Typed client, test infrastructure, `cn()`  `[x]`
 
 **Why.** `apps/web/src/lib/api.ts` types every response as `unknown`, so nothing downstream can be
 written safely and no wrong field access is a compile error. `apps/web` has no test runner at all

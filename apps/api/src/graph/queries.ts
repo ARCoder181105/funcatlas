@@ -1,8 +1,25 @@
 import { sql } from "drizzle-orm";
-import type { ReachableFunction, TraversalDirection } from "@funcatlas/shared";
+import type {
+  CallEdge,
+  FileNode,
+  FunctionSource,
+  FunctionSummary,
+  ReachableFunction,
+  RegisteredRepo,
+  RepoSummary,
+  ResolutionConfidence,
+  SearchResult,
+  TraversalDirection,
+} from "@funcatlas/shared";
 import type { Db } from "../db/index.js";
 
-/** All graph SQL lives here; route handlers stay thin. */
+/**
+ * All graph SQL lives here; route handlers stay thin.
+ *
+ * Every function is annotated with the shared response type it produces, so a
+ * column renamed here without renaming it in `@funcatlas/shared` fails
+ * typecheck instead of reaching the browser as `undefined`.
+ */
 
 /** Column pair per direction. Closed set, never user text -- see traverse(). */
 const DIRECTION_COLUMNS: Record<TraversalDirection, { from: string; to: string }> = {
@@ -88,13 +105,15 @@ export async function traverse(
 
 /** Direct edges out of a function, including unresolved ones -- which the
  *  traversal cannot return, because they reach no function row. */
-export async function directEdges(db: Db, functionId: number) {
+export async function directEdges(db: Db, functionId: number): Promise<CallEdge[]> {
   const rows = await db.execute<{
     id: number;
     callee_function_id: number | null;
     callee_name: string;
     call_line: number | null;
-    resolution_confidence: ReachableFunction["confidence"];
+    // NOT NULL on the column, unlike the traversal's, where the starting
+    // function is reached by no edge at all.
+    resolution_confidence: ResolutionConfidence;
   }>(sql`
     SELECT id, callee_function_id, callee_name, call_line, resolution_confidence
     FROM edges
@@ -113,7 +132,7 @@ export async function directEdges(db: Db, functionId: number) {
 
 /** The repo row for a canonical URL. The parser owns the insert, so
  *  registration reads back what it wrote rather than writing its own. */
-export async function repoByUrl(db: Db, githubUrl: string) {
+export async function repoByUrl(db: Db, githubUrl: string): Promise<RegisteredRepo | null> {
   const rows = await db.execute<{
     id: number;
     github_url: string;
@@ -157,7 +176,7 @@ export async function exists(
 }
 
 /** Every repository, with how much of each has been parsed. */
-export async function listRepos(db: Db) {
+export async function listRepos(db: Db): Promise<RepoSummary[]> {
   const rows = await db.execute<{
     id: number;
     github_url: string;
@@ -196,7 +215,7 @@ export async function listRepos(db: Db) {
  * The client nests them. Building the hierarchy in SQL costs a recursive query
  * to produce something the sidebar has to walk anyway.
  */
-export async function repoTree(db: Db, repoId: number) {
+export async function repoTree(db: Db, repoId: number): Promise<FileNode[]> {
   const rows = await db.execute<{
     id: number;
     path: string;
@@ -221,7 +240,7 @@ export async function repoTree(db: Db, repoId: number) {
 
 /** A file's functions, without their source: a file with two hundred functions
  *  would ship two hundred bodies to render a list of names. */
-export async function fileFunctions(db: Db, fileId: number) {
+export async function fileFunctions(db: Db, fileId: number): Promise<FunctionSummary[]> {
   const rows = await db.execute<{
     id: number;
     name: string;
@@ -242,7 +261,10 @@ export async function fileFunctions(db: Db, fileId: number) {
 
 /** One function's source, with the file it came from. Source is null when the
  *  parser stored none. */
-export async function functionSource(db: Db, functionId: number) {
+export async function functionSource(
+  db: Db,
+  functionId: number,
+): Promise<FunctionSource | null> {
   const rows = await db.execute<{
     id: number;
     source: string | null;
@@ -279,7 +301,12 @@ export async function functionSource(db: Db, functionId: number) {
  * repository's functions. Prefix matches rank above substring matches, then
  * shorter names, so searching "get" offers getUser before forgetPassword.
  */
-export async function searchFunctions(db: Db, repoId: number, query: string, limit: number) {
+export async function searchFunctions(
+  db: Db,
+  repoId: number,
+  query: string,
+  limit: number,
+): Promise<SearchResult[]> {
   const escaped = escapeLike(query);
 
   const rows = await db.execute<{

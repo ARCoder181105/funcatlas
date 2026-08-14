@@ -9,12 +9,13 @@
     "start": "vite preview",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"no tests yet\" && exit 0"
+    "test": "vitest run"
   },
   "dependencies": {
     "@funcatlas/shared": "workspace:*",
     "@tanstack/react-query": "^5.62.7",
     "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.469.0",
@@ -22,20 +23,26 @@
     "react-dom": "^19.2.0",
     "reactflow": "^11.11.4",
     "shiki": "^3.2.1",
+    "tailwind-merge": "^3.6.0",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
     "@funcatlas/eslint-config": "workspace:*",
     "@funcatlas/typescript-config": "workspace:*",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.4",
     "@types/node": "^22.15.3",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.39.1",
+    "jsdom": "^30.0.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "5.9.2",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "vitest": "^4.1.10"
   }
 }
