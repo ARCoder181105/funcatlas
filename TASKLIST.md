@@ -114,7 +114,7 @@ apps/web/src/lib/api.ts` is 0. A deliberate field-name typo in `queries.ts` fail
 
 ---
 
-## B1 — Design system: tokens, type, primitives  `[ ]`
+## B1 — Design system: tokens, type, primitives  `[x]`
 
 **Why.** Every component from B2 onward reaches for a colour, a font and a radius. If those are not
 defined first they get invented inline, six times, slightly differently — and the fix is then a
@@ -138,10 +138,12 @@ chart marks a doubtful sounding. This chunk makes that real in code.
    `surface` / `surface.raised` / `surface.border`, `ink` / `ink.muted`, and `confidence.exact` /
    `confidence.name` / `confidence.unresolved`. Names carry meaning; no `gray-700`.
 2. Self-host the three faces — Space Grotesk (display), IBM Plex Sans (UI), IBM Plex Mono (data) —
-   as woff2 under `public/fonts/`, wired through `@font-face` with `font-display: swap` and mapped
-   to `fontFamily.display` / `.sans` / `.mono`. Self-hosted, not a CDN link: a third-party font
-   request on every page load is a dependency and a privacy leak, and it is the reason a slow
-   network shows an unstyled page.
+   and map them to `fontFamily.display` / `.sans` / `.mono`. Self-hosted, not a CDN link: a
+   third-party font request on every page load is a dependency and a privacy leak, and it is the
+   reason a slow network shows an unstyled page. Via `@fontsource` packages rather than woff2 files
+   committed under `public/fonts/` — Vite bundles the same woff2 out of `node_modules` and serves it
+   from our origin, which is what "self-hosted" actually required, while keeping the fonts versioned
+   and out of git.
 3. `lib/confidence.ts` — the single place mapping a `ResolutionConfidence` to its stroke style,
    colour token and human label. It reads `CONFIDENCE_STYLE` from `packages/shared` for the style
    and adds only presentation. B5's edges, the legend and the code block all consume this one map.
@@ -174,6 +176,9 @@ nothing. The fonts render offline with the network throttled.
 - Tailwind cannot see a class name built by string concatenation. Confidence colours reaching the
   canvas as `text-confidence-${tier}` will be purged from the production CSS and work only in dev.
   Map to complete class strings.
+- React Flow styles edges as SVG, which takes no class name, so the confidence colours are needed as
+  raw values *and* as classes. Defining them twice is how they drift — `tailwind.config.ts` imports
+  `src/lib/tokens.ts` so there is one hex per colour.
 
 ---
 
