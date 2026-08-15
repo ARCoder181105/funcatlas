@@ -45,10 +45,11 @@ nothing. That is precisely the failure the whole design exists to prevent.
 
 Asked and answered at planning time, so they are not re-litigated mid-phase.
 
-- **The visual direction is the survey chart** — `docs/UI_GUIDE.md` §1, rewritten for this phase.
-  Marine-ink ground, warm bone ink, and a confidence triad of verdigris / brass / slate that carries
-  the product's central claim. The tokens the project shipped with (`#0b0d12` plus `#7c5cff`) were a
-  textbook generated-design default and are replaced in B1.
+- **The visual direction is certainty-as-temperature, in two themes** — `docs/UI_GUIDE.md` §1. Dark
+  is "Ember" (warm graphite ground, cyan / apricot / warm slate); light is "Vellum" (cool paper,
+  teal / burnt amber / cool slate). The tokens the project shipped with (`#0b0d12` plus `#7c5cff`)
+  were a textbook generated-design default. **Revised mid-phase:** B1 first shipped a survey-chart
+  palette, which was replaced after review — see UI_GUIDE §7.1 for what was tried and why it went.
 - **Login screen, not a landing page.** UI_GUIDE §3.1's animated marketing hero is its own surface
   and its own PR. Logged out shows a centred sign-in card. Nothing in the 3b exit test touches a
   landing page.
@@ -67,9 +68,14 @@ Asked and answered at planning time, so they are not re-litigated mid-phase.
 
 Not gaps — deliberate scope. Say so now if you disagree, not at the gate.
 
-- **No landing page, no marketing surface, no router.** One authenticated app at `/`.
+- **No landing page, no marketing surface, no router.** One authenticated app at `/`. The landing
+  page was requested during this phase and is confirmed as the branch immediately *after* the 3b
+  gate — it stays out of this PR so the gate keeps measuring what it was written to measure.
 - **No saved layouts.** Positions reset on reload; `PLAN.md` cut this from the MVP explicitly.
-- **No light theme.** Dark-mode-first per UI_GUIDE §1; light is a stretch goal.
+- ~~**No light theme.**~~ **Reversed mid-phase.** Both themes ship: dark "Ember" and light "Vellum",
+  UI_GUIDE §1.1. The cost was structural rather than cosmetic — a utility can no longer resolve to a
+  fixed hex, so semantic colours point at CSS variables and `confidenceColor(tier, mode)` exists for
+  the canvas, which styles SVG attributes that take neither a class nor an inherited variable.
 - **No queue and no webhooks.** Registering a repo still blocks. The UI shows honest progress
   instead of pretending it is fast. Phase 4 replaces the spawn.
 - **No mobile canvas.** Desktop-first, per UI_GUIDE §5. The canvas is a power-user surface.
@@ -123,9 +129,12 @@ sweep through every file instead of one config.
 There is a second reason, and it is the sharper one. The tokens this project shipped with are
 `#0b0d12` with a `#7c5cff` accent: a near-black ground with one bright violet accent. That is a
 textbook default — the look a generated design converges on regardless of subject. It says nothing
-about call graphs. `docs/UI_GUIDE.md` §1 now specifies the survey-chart direction instead, derived
-from the one thing this product actually claims: that it marks what it does not know, exactly as a
-chart marks a doubtful sounding. This chunk makes that real in code.
+about call graphs. `docs/UI_GUIDE.md` §1 specifies a deliberate direction instead, derived from the
+one thing this product actually claims: that it marks what it does not know.
+
+**Revised after the first pass.** B1 originally shipped a single dark survey-chart palette. On
+review it was replaced with a light/dark pair — "Ember" and "Vellum" — and three new typefaces. The
+survey-chart attempt is recorded in UI_GUIDE §7.1. The steps below describe what is now in the tree.
 
 **Where.** `apps/web/tailwind.config.ts`, `apps/web/src/index.css`,
 `apps/web/src/components/ui/` (`Button.tsx`, `Panel.tsx`, `Skeleton.tsx`),
@@ -134,10 +143,12 @@ chart marks a doubtful sounding. This chunk makes that real in code.
 
 **Do.**
 
-1. Replace the colour scale in `tailwind.config.ts` with the token table in UI_GUIDE §1.1 —
-   `surface` / `surface.raised` / `surface.border`, `ink` / `ink.muted`, and `confidence.exact` /
-   `confidence.name` / `confidence.unresolved`. Names carry meaning; no `gray-700`.
-2. Self-host the three faces — Space Grotesk (display), IBM Plex Sans (UI), IBM Plex Mono (data) —
+1. Both palettes in `src/lib/tokens.ts` — `surface` / `surface.raised` / `surface.border`, `ink` /
+   `ink.muted`, and `confidence.exact` / `confidence.name` / `confidence.unresolved`, once per
+   theme. Names carry meaning; no `gray-700`. `tailwind.config.ts` exposes them under a non-colour
+   `palette` key and maps the semantic utilities to CSS variables, which `index.css` fills per
+   theme; the theme itself is resolved by an inline script in `index.html` before React boots.
+2. Self-host the three faces — Bricolage Grotesque (display), Geist (UI), JetBrains Mono (data) —
    and map them to `fontFamily.display` / `.sans` / `.mono`. Self-hosted, not a CDN link: a
    third-party font request on every page load is a dependency and a privacy leak, and it is the
    reason a slow network shows an unstyled page. Via `@fontsource` packages rather than woff2 files
@@ -145,22 +156,28 @@ chart marks a doubtful sounding. This chunk makes that real in code.
    from our origin, which is what "self-hosted" actually required, while keeping the fonts versioned
    and out of git.
 3. `lib/confidence.ts` — the single place mapping a `ResolutionConfidence` to its stroke style,
-   colour token and human label. It reads `CONFIDENCE_STYLE` from `packages/shared` for the style
-   and adds only presentation. B5's edges, the legend and the code block all consume this one map.
+   colour and human label. It reads `CONFIDENCE_STYLE` from `packages/shared` for the style and adds
+   only presentation. B5's edges, the legend and the code block all consume this one map. Colour is
+   `confidenceColor(tier, mode)` rather than a field, because the canvas needs a raw value and the
+   DOM does not.
 4. `lib/motion.ts` — the duration and spring constants from UI_GUIDE §4, plus a
    `useReducedMotion()`-backed helper, so honouring the preference is the default path rather than
    something each component remembers.
-5. Three primitives in `components/ui/`, hand-written against the tokens: `Button` (via `cva`,
-   already a dependency), `Panel`, `Skeleton`. All three are a `div` with classes, so there is
-   nothing to import. Nothing more until a second use appears — a component with keyboard or focus
-   semantics takes its behaviour from Radix instead (UI_GUIDE §2), and none is needed yet.
-6. Set the page background and base type in `index.css` from the tokens, replacing the hardcoded
-   `#e6e8ee` sitting in there now.
+5. Primitives in `components/ui/`. **Revised:** the original plan hand-wrote `Button`, `Panel` and
+   `Skeleton` against the tokens. `Button` now comes from the shadcn CLI on Base UI and is styled by
+   the shared variables rather than restyled — the request was to assemble from real component
+   libraries rather than hand-roll. `Panel` and `Skeleton` stay hand-written; they are a `div` with
+   classes and there is nothing to import.
+6. Set the page background and base type in `index.css` from the tokens.
+7. `lib/theme.ts` and `ThemeToggle` — the active mode, persisted, with the class applied before the
+   first paint.
 
 **Done when.** `confidence.test.ts` proves all three tiers map to distinct styles, colours and
-labels, and that the styles agree with `CONFIDENCE_STYLE` in `packages/shared` — so the canvas and
-the schema can never disagree. `grep -rE '#[0-9a-fA-F]{6}' apps/web/src --include=*.tsx` returns
-nothing. The fonts render offline with the network throttled.
+labels *in both themes*, that the styles agree with `CONFIDENCE_STYLE` in `packages/shared` — so the
+canvas and the schema can never disagree — that `unresolved` is not a chromatic red, and that every
+tier clears 3:1 against its own ground. `theme.test.ts` proves the toggle and the pre-paint script
+agree on the storage key. `grep -rE '#[0-9a-fA-F]{6}' apps/web/src --include=*.tsx` returns nothing.
+The fonts render offline with the network throttled.
 
 **Watch for.**
 
@@ -178,7 +195,11 @@ nothing. The fonts render offline with the network throttled.
   Map to complete class strings.
 - React Flow styles edges as SVG, which takes no class name, so the confidence colours are needed as
   raw values *and* as classes. Defining them twice is how they drift — `tailwind.config.ts` imports
-  `src/lib/tokens.ts` so there is one hex per colour.
+  `src/lib/tokens.ts` so there is one hex per colour per theme, and the CSS variables in
+  `index.css` are read back out of the same config with `theme()`.
+- Two themes make "the accent" a function of the active mode. Anything that captures a colour once
+  and holds it — a memo, a module-level constant, a React Flow `edgeTypes` object — is a component
+  that silently keeps the old palette after a toggle.
 
 ---
 
@@ -362,11 +383,12 @@ canvas can show that a function exists and what it calls, but never what it does
 
 **Do.**
 
-1. `lib/highlight.ts` — a lazily created Shiki highlighter, loading only the languages in use and a
-   single theme, behind a dynamic import so it stays out of the initial bundle. An off-the-shelf
-   theme (`github-dark`, `nord`) is cool-grey on near-black and will sit on the marine-ink ground
-   looking pasted in. Pass Shiki a theme derived from the §1.1 tokens instead — it accepts a plain
-   theme object, so this is data, not a fork.
+1. `lib/highlight.ts` — a lazily created Shiki highlighter, loading only the languages in use,
+   behind a dynamic import so it stays out of the initial bundle. An off-the-shelf theme
+   (`github-dark`, `nord`) is cool-grey on near-black and will sit on the warm Ember ground looking
+   pasted in. Pass Shiki two themes derived from the §1.1 tokens instead — it accepts plain theme
+   objects and emits both as CSS variables via its `themes` option, so the code block follows the
+   toggle without re-highlighting. This is data, not a fork.
 2. `CodeBlock` — fetches `GET /api/functions/:id/source`, renders it highlighted, with line numbers
    offset to the function's real `startLine` so they match the file on GitHub.
 3. `source` is nullable in the schema. Render a plain explanation when the parser stored none, never

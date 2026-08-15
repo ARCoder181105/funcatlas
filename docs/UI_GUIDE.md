@@ -6,48 +6,89 @@ not a default CRUD UI. This guide is the single source of truth for look-and-fee
 
 ---
 
-## 1. Design language — the survey chart
+## 1. Design language — certainty as temperature
 
-The direction is **a nautical survey chart, inverted for a screen**.
+Two themes, both carrying one idea: **the three confidence tiers run from cool to warm to neutral**,
+so a reader learns the scale once and reads it everywhere.
 
 This is not a theme picked for looks. The product's entire claim is that it tells you what it does
-not know — `exact` / `name_match` / `unresolved`, drawn solid / dashed / dotted (`PRD.md` §8).
-Chart-makers solved that problem centuries ago and built a formal notation for it: a sounding is
-surveyed, reported, or doubtful, and the chart says which. Our three tiers are the same three
-tiers. Borrowing the notation makes the edge styles *legible* — a legend the user reads once — where
-an arbitrary palette would leave them decorative.
+not know — `exact` / `name_match` / `unresolved`, drawn solid / dashed / dotted (`PRD.md` §8). The
+palette has to make that scale legible before the legend is ever read, and it has to keep the least
+certain tier *quiet without being invisible* — an unresolved call is an admission, not an alarm.
 
-The name was already `atlas`.
+The earlier survey-chart direction (marine ink, warm bone, verdigris) was replaced after review. It
+is recorded in §7 as a direction that was tried, not as a mistake to avoid.
 
 ### 1.1 Tokens
 
-Every value below lives in `apps/web/tailwind.config.ts`. Nothing is hardcoded in a component.
+Every value lives in `apps/web/src/lib/tokens.ts`, once per theme. Nothing is hardcoded in a
+component — `grep -rE '#[0-9a-fA-F]{6}' apps/web/src --include=*.tsx` returns nothing, and that grep
+is the check.
+
+**Dark — "Ember."** A warm graphite ground against a cool accent, which is the pairing the
+alternatives did not make.
 
 | Role | Token | Value | Why |
 |---|---|---|---|
-| Ground | `surface` | `#081014` | Marine ink. A blue-black with real hue, not neutral near-black. |
-| Raised | `surface.raised` | `#0f1a20` | Panels, cards, the sidebar. |
-| Rule | `surface.border` | `#1c2a33` | Hairlines and graticule. |
-| Ink | `ink` | `#e8dcc8` | **Warm bone, not cool grey.** Chart paper inverted — the one deliberate risk. |
-| Ink, quiet | `ink.muted` | `#8b9299` | Secondary labels, counts. |
-| `exact` | `confidence.exact` | `#5fb3a1` | Verdigris — engraved copper, the colour of a surveyed line. |
-| `name_match` | `confidence.name` | `#d9a441` | Brass. Reported, not verified. |
-| `unresolved` | `confidence.unresolved` | `#6b7f8c` | Muted slate, deliberately **not** red. Unresolved is an honest admission, not an error, and colouring it as a failure would misstate the product. |
+| Ground | `surface` | `#141210` | Warm near-black with a coffee undertone, not a neutral grey. |
+| Raised | `surface.raised` | `#1d1a17` | Panels, cards, the sidebar. |
+| Rule | `surface.border` | `#2f2a25` | Hairlines and graticule. |
+| Ink | `ink` | `#f3ede5` | Warm off-white, matched to the ground's temperature. |
+| Ink, quiet | `ink.muted` | `#9d9388` | Secondary labels, counts. |
+| `exact` | `confidence.exact` | `#4cc9f0` | Cool cyan against a warm ground — the strongest separation available. |
+| `name_match` | `confidence.name` | `#f2a154` | Apricot. Reported, not verified. |
+| `unresolved` | `confidence.unresolved` | `#8a7f73` | Warm slate at ~9% saturation. Shares the ground's hue family, so it recedes into the map. |
+
+**Light — "Vellum."** A drawing on cool paper. Deliberately not cream: cream with a serif display is
+the single most common generated look there is (§7).
+
+| Role | Token | Value | Why |
+|---|---|---|---|
+| Ground | `surface` | `#f2f5f7` | Cool paper. |
+| Raised | `surface.raised` | `#ffffff` | Panels, cards, the sidebar. |
+| Rule | `surface.border` | `#d9e1e8` | Hairlines and graticule. |
+| Ink | `ink` | `#0f1a24` | Near-black with a blue cast, matched to the paper. |
+| Ink, quiet | `ink.muted` | `#566573` | Secondary labels, counts. |
+| `exact` | `confidence.exact` | `#0d7c6b` | Deep teal — the cool end of the same scale. |
+| `name_match` | `confidence.name` | `#b26a00` | Burnt amber. |
+| `unresolved` | `confidence.unresolved` | `#75838f` | Cool slate, dark enough to hold as a hairline on paper. |
+
+Two rules bind both palettes, and `confidence.test.ts` enforces them:
+
+1. **`unresolved` is never a chromatic red.** Colouring an honest admission as a failure tells the
+   reader the opposite of what PRD §8 promises. Checked as saturation *and* hue, because a warm
+   neutral legitimately has red as its largest channel while being visibly grey.
+2. **Every tier clears 3:1 against its own ground.** A dotted line nobody can see fails PRD §8 as
+   surely as not drawing it at all.
 
 Focus, links and active state use `confidence.exact`. One accent, doing double duty, because it
 already means "known" everywhere else on the canvas.
 
+**How the two themes reach a component.** `tailwind.config.ts` exposes both palettes under a
+non-colour `palette` key, and `index.css` reads them back with `theme()` into one CSS variable per
+role. Semantic utilities (`bg-surface`, `text-ink`, `text-confidence-exact`) point at those
+variables, so they follow the active theme without a `dark:` prefix anywhere. The palettes are *not*
+under `colors`: that would also generate `bg-palette-dark-surface`, and any component reaching for
+one would be pinned to a single theme.
+
+The canvas is the exception. React Flow styles edges with real SVG attributes, which take neither a
+class name nor an inherited variable, so it calls `confidenceColor(tier, mode)` for a raw value.
+That function reads the same `tokens.ts` entry the variable does.
+
 ### 1.2 Type
 
-Three roles. Loaded self-hosted, subset, never from a CDN at runtime.
+Three roles. Self-hosted via `@fontsource`, never from a CDN at runtime.
 
-- **Display** — *Space Grotesk*. Geometric per the original brief, but with enough oddity in its
-  letterforms to not read as the default UI sans. Used with restraint: headings and the wordmark.
-- **UI / body** — *IBM Plex Sans*. Drawn for technical documentation, which is what this is.
-- **Data / labels** — *IBM Plex Mono*. File paths, qualified names, line numbers, counts.
+- **Display** — *Bricolage Grotesque*. Variable width and optical size, with letterforms odd enough
+  not to read as the default UI sans. Used with restraint: the wordmark and headings.
+- **UI / body** — *Geist*. Quiet and tight, drawn for dense product surfaces. Nothing about it
+  competes with the canvas.
+- **Data / labels** — *JetBrains Mono*. File paths, qualified names, line numbers, counts. Taller
+  x-height than the alternatives at the 11–13px the canvas actually uses, which is the only size
+  that matters here.
 
 Monospace covers **code and code identifiers**, widened from "code only": a path and a
-`qualified_name` *are* identifiers, and on a chart the labels are the point. Setting them apart from
+`qualified_name` *are* identifiers, and on a map the labels are the point. Setting them apart from
 prose is what makes the tree scannable.
 
 ### 1.3 Restraint
@@ -93,9 +134,16 @@ nothing extra.
 A single centred card: wordmark, one line saying what the tool does, one **Sign in with GitHub**
 button. Nothing else. No hero, no feature grid, no footer.
 
-**The marketing landing page is deferred out of Phase 3b** and gets its own PR — an animated
-drifting-graph hero, scroll-in feature cards and a footer are a second full surface, and the 3b
-exit test does not touch any of it. When it is built, it follows §1 like everything else.
+**The marketing landing page gets its own PR, opened after the Phase 3b gate.** It is a second full
+surface and the 3b exit test does not touch any of it, so it does not belong in the same review. It
+was requested during 3b and is no longer "someday" — it is the next branch after the gate, and it
+follows §1 like everything else.
+
+The landing page is the one surface that takes the maximal spatial treatment: section padding at
+`py-24` and above, nested double-bezel cards, and a hero that is a live drawing graph rather than a
+screenshot. The canvas is dense by nature and does not; matching complexity to the surface is the
+point, and applying marketing whitespace to a file tree is how a tool starts feeling like a
+brochure.
 
 ### 3.2 Canvas explorer (authenticated)
 - **Sidebar — the index.** An atlas has an index, and the file tree is it. Collapsible, directories
@@ -110,8 +158,8 @@ exit test does not touch any of it. When it is built, it follows §1 like everyt
 
 **The signature.** Three things, and nothing else in the UI competes with them:
 
-1. **The canvas is a chart surface, not a dot grid.** A fine graticule, with depth layers as faint
-   ruled bands. The background says "survey", so nothing else has to.
+1. **The canvas is a ruled surface, not a dot grid.** A fine graticule at two scales, with depth
+   layers as faint ruled bands. The background says "measured", so nothing else has to.
 2. **A real chart legend**, bottom-left where a chart carries it, drawing the three line styles with
    their names. An unexplained dotted line is noise; an explained one is the whole point.
 3. **Unresolved calls are drawn as uncharted territory** — ghost nodes at the map's edge, labelled
@@ -160,21 +208,37 @@ reachable tab order through tree, palette and canvas, and `prefers-reduced-motio
 
 ## 6. Deferred (post-MVP)
 
-- Marketing landing page — its own PR after Phase 3b (§3.1).
 - Multi-open canvas — several file cards and mind-maps at once (§3.2).
 - Freehand annotation layer (see `../PLAN.md`).
-- Light theme, custom theming UI, saved layouts/perspectives.
+- Custom theming UI, saved layouts/perspectives.
+
+**No longer deferred.** The light theme shipped in Phase 3b alongside the dark one — both palettes
+are in §1.1 and both are enforced by `confidence.test.ts`. The marketing landing page moved from
+"post-MVP" to "the branch after the 3b gate" (§3.1).
 
 ## 7. What this must not look like
 
 Kept explicit, because the failure mode here is converging on a look that reads as generated
 regardless of subject. Three clusters to stay out of:
 
-1. Warm cream ground (near `#F4F1EA`), high-contrast serif display, terracotta accent.
+1. Warm cream ground (near `#F4F1EA`), high-contrast serif display, terracotta accent. **This is why
+   the light theme is cool paper `#f2f5f7` and not cream.**
 2. Near-black ground with one bright acid-green or violet accent. **The tokens this project shipped
-   with — `#0b0d12` plus `#7c5cff` — were exactly this.** §1.1 replaced them.
+   with — `#0b0d12` plus `#7c5cff` — were exactly this.**
 3. Broadsheet layout: hairline rules, zero border-radius, dense newspaper columns.
 
 Each is legitimate for some brief. None was chosen for *this* one. Before adding any visual
 element, ask whether it encodes something true about a call graph, or whether it is simply what a
 dark developer tool tends to look like.
+
+### 7.1 Directions that were tried
+
+Recorded so they are not re-proposed as if new, and not treated as mistakes.
+
+- **The survey chart** (marine ink `#081014`, warm bone `#e8dcc8`, verdigris / brass / slate). The
+  reasoning was sound — chart-makers built a formal notation for surveyed, reported and doubtful
+  soundings, and our three tiers are the same three tiers. It was replaced on review: the palette
+  read as muddy in practice, and the low-chroma bone-on-navy pairing did not carry the tier scale as
+  clearly as temperature does. The *idea* survives in the graticule and the legend (§3.2).
+- **Space Grotesk** as the display face. Dropped because it appears on every "reads as
+  AI-generated" list, this document's §7 included.
