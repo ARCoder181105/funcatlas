@@ -14,6 +14,7 @@ import { PALETTE } from "../lib/tokens";
 import { useTheme } from "../lib/theme";
 import { useUiStore } from "../store/ui";
 import { FileCard, type FileCardData } from "./FileCard";
+import { MindMap } from "./MindMap";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 
 /**
@@ -39,6 +40,23 @@ const GRID_COARSE = 130;
  * absence.
  */
 export function Canvas() {
+  const selectedFunctionId = useUiStore((state) => state.selectedFunctionId);
+
+  // A provider per surface, and the branch above the provider on purpose.
+  // The file card and the mind-map are two different graphs, and React Flow's
+  // store lives on the provider: mounting the second <ReactFlow> into a
+  // provider the first had already populated leaves the new instance with
+  // stale internals, and its edges never render.
+  if (selectedFunctionId !== null) {
+    return (
+      <ReactFlowProvider>
+        <div className="relative h-full w-full">
+          <MindMap />
+        </div>
+      </ReactFlowProvider>
+    );
+  }
+
   return (
     <ReactFlowProvider>
       <CanvasSurface />

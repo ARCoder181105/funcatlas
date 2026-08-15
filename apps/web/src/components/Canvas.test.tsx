@@ -34,9 +34,19 @@ const mocked = vi.mocked(api);
  * component tests live below it.
  */
 
+/**
+ * Dimensions are declared rather than left to be measured.
+ *
+ * React Flow will not draw an edge until both of its nodes have a width and a
+ * height in its store, and it normally fills those in from a ResizeObserver
+ * after layout. Where that never arrives -- jsdom, or any surface that is not
+ * compositing -- the nodes still render and the edges silently do not. Since
+ * `lib/graph.ts` states the size up front for exactly that reason, the fixture
+ * does too.
+ */
 const NODES: Node[] = [
-  { id: "a", position: { x: 0, y: 0 }, data: { label: "getUser" } },
-  { id: "b", position: { x: 200, y: 100 }, data: { label: "fetchProfile" } },
+  { id: "a", position: { x: 0, y: 0 }, width: 208, height: 44, data: { label: "getUser" } },
+  { id: "b", position: { x: 300, y: 100 }, width: 208, height: 44, data: { label: "fetchProfile" } },
 ];
 
 const EDGES: Edge[] = [{ id: "a-b", source: "a", target: "b" }];
@@ -112,6 +122,17 @@ describe("reactflow v11 under React 19", () => {
     // being cleaned up shows up here as two elements.
     expect(screen.getAllByText("getUser")).toHaveLength(1);
   });
+
+  /*
+   * Edge rendering is deliberately not asserted here.
+   *
+   * React Flow draws an edge only once both of its nodes have been measured,
+   * and measurement needs a real layout engine -- jsdom has none, and a
+   * ResizeObserver stub that reports a size drives react-resizable-panels into
+   * a re-layout loop that fails most of this suite. What decides *what* the
+   * edges are lives in `lib/graph.ts` and is covered exhaustively there;
+   * whether they paint is checked in a browser.
+   */
 });
 
 const FILE: FileNode = { id: 42, path: "source/core/Ky.ts", language: "typescript", functionCount: 3 };

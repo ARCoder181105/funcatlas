@@ -1,3 +1,8 @@
+import {
+  TRAVERSAL_DEFAULT_DEPTH,
+  TRAVERSAL_MAX_DEPTH,
+  type TraversalDirection,
+} from "@funcatlas/shared";
 import { create } from "zustand";
 
 /**
@@ -26,6 +31,13 @@ interface UiState {
    *  breaks the moment the shortcut changes. */
   paletteOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
+
+  /** How far the mind-map walks, and which way. Kept across selections on
+   *  purpose: a reader who set depth 3 meant it for the next function too. */
+  traversalDepth: number;
+  traversalDirection: TraversalDirection;
+  setTraversalDepth: (depth: number) => void;
+  setTraversalDirection: (direction: TraversalDirection) => void;
 }
 
 const EMPTY = {
@@ -38,6 +50,17 @@ export const useUiStore = create<UiState>((set) => ({
   ...EMPTY,
   paletteOpen: false,
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+
+  traversalDepth: TRAVERSAL_DEFAULT_DEPTH,
+  traversalDirection: "out",
+
+  // Clamped here as well as server-side: the control offers only valid depths,
+  // but a depth of 0 or 40 arriving from anywhere else would either draw an
+  // empty graph or ask for one the API rejects.
+  setTraversalDepth: (depth) =>
+    set({ traversalDepth: Math.min(Math.max(Math.round(depth), 1), TRAVERSAL_MAX_DEPTH) }),
+
+  setTraversalDirection: (traversalDirection) => set({ traversalDirection }),
 
   selectRepo: (selectedRepoId) => set({ ...EMPTY, selectedRepoId }),
 

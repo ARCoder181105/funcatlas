@@ -24,9 +24,14 @@ if (typeof Element !== "undefined" && Element.prototype.getAnimations === undefi
   Element.prototype.getAnimations = () => [];
 }
 
-// Also absent from jsdom, and react-resizable-panels constructs one on mount.
-// Without it the whole explorer fails to render, and the symptom is a missing
-// button rather than anything pointing at layout measurement.
+// Also absent from jsdom, and both react-resizable-panels and React Flow
+// construct one on mount. Without it the explorer fails to render at all.
+//
+// A no-op on purpose. Making it report a size drives react-resizable-panels
+// into a re-layout loop that fails most of the suite, and React Flow still
+// will not draw edges without a real layout engine behind it -- so edge
+// rendering is verified in a browser and `lib/graph.test.ts` covers the part
+// that decides what the edges are.
 if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = class {
     observe() {}
