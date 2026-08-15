@@ -130,25 +130,6 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@layer components {
-  /* The chart graticule (UI_GUIDE §3.2 signature 1), for DOM surfaces. Two
-     scales, as a real chart has: a fine grid with a heavier rule every fifth
-     line. The canvas itself uses React Flow's own Background, which draws into
-     SVG rather than CSS -- same look, different substrate. */
-  .graticule {
-    background-image:
-      linear-gradient(var(--surface-border) 1px, transparent 1px),
-      linear-gradient(90deg, var(--surface-border) 1px, transparent 1px),
-      linear-gradient(var(--surface-border) 1px, transparent 1px),
-      linear-gradient(90deg, var(--surface-border) 1px, transparent 1px);
-    background-size:
-      140px 140px,
-      140px 140px,
-      28px 28px,
-      28px 28px;
-  }
-}
-
 html,
 body,
 #root {

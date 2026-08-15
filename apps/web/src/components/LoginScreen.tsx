@@ -12,17 +12,18 @@ import { Separator } from "./ui/separator";
  * Signed out. One card, and nothing else.
  *
  * The marketing landing page is a separate surface and a separate PR
- * (UI_GUIDE §3.1). What this screen does carry is the graticule and the
- * confidence legend -- the one thing a reader has to understand before the
- * canvas means anything.
+ * (UI_GUIDE §3.1). What this screen carries is the confidence legend -- the
+ * one thing a reader has to understand before the canvas means anything.
+ *
+ * It used to carry the graticule too. That ruled surface encodes a measured
+ * plane on the canvas; here it encoded nothing, and UI_GUIDE §1.3 says to cut
+ * a decoration that does not. The legend beside it was already doing the work.
  */
 export function LoginScreen() {
   const devLogin = useDevLogin();
 
   return (
     <div className="relative flex h-full w-full items-center justify-center overflow-hidden p-6">
-      <div className="graticule pointer-events-none absolute inset-0 opacity-40" aria-hidden />
-
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>

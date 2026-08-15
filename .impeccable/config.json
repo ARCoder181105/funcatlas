@@ -2,16 +2,6 @@
   "detector": {
     "ignoreRules": [],
     "ignoreFiles": [],
-    "ignoreValues": [
-      {
-        "rule": "codex-grid-background",
-        "value": "*",
-        "files": [
-          "apps/web/src/index.css"
-        ],
-        "createdAt": "2026-08-15T21:12:35.348Z",
-        "reason": "docs/UI_GUIDE.md 3.2 signature 1 specifies a two-scale graticule as the canvas surface treatment; funcatlas renders a code map on React Flow, which is the map/measurement surface this rule exempts"
-      }
-    ]
+    "ignoreValues": []
   }
 }

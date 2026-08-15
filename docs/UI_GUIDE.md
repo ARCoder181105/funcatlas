@@ -140,8 +140,12 @@ Two things to know about generated files:
 
 ### 3.1 Sign-in (logged out) · Phase 3b
 
-A single centred card: wordmark, one line saying what the tool does, one **Sign in with GitHub**
-button. Nothing else. No hero, no feature grid, no footer.
+A single centred card: wordmark, one line saying what the tool does, the confidence legend, and one
+**Sign in with GitHub** button. Nothing else. No hero, no feature grid, no footer, and no graticule
+— see §3.2 signature 1 for why the ruled surface stays on the canvas.
+
+The legend earns its place here where a background texture did not: it is the notation the canvas is
+about to use, and reading it once beats decoding it later.
 
 **The marketing landing page gets its own PR, opened after the Phase 3b gate.** It is a second full
 surface and the 3b exit test does not touch any of it, so it does not belong in the same review. It
@@ -169,6 +173,11 @@ brochure.
 
 1. **The canvas is a ruled surface, not a dot grid.** A fine graticule at two scales, with depth
    layers as faint ruled bands. The background says "measured", so nothing else has to.
+
+   **On the canvas and nowhere else.** A ruled grid behind a call graph encodes a measured plane; the
+   same grid behind a sign-in card encodes nothing, and §1.3 says to cut a decoration that does not.
+   It was on the sign-in screen for one commit and came off. It is drawn by React Flow's own
+   `Background` in SVG, so there is no CSS grid utility to reach for by accident.
 2. **A real chart legend**, bottom-left where a chart carries it, drawing the three line styles with
    their names. An unexplained dotted line is noise; an explained one is the whole point.
 3. **Unresolved calls are drawn as uncharted territory** — ghost nodes at the map's edge, labelled
