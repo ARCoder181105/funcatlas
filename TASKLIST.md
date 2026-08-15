@@ -296,7 +296,7 @@ rolling up correctly (`source` 63 + `test` 273 = 336). Four things the plan did 
 
 ---
 
-## B4 — Canvas and the file card  `[ ]`
+## B4 — Canvas and the file card  `[x]`
 
 **Why.** The first surface where React Flow does real work, and the first honest test of a risk
 carried since Phase 0: `reactflow@11.11.4` is the retired package name (v12 is `@xyflow/react`) and
@@ -333,6 +333,21 @@ functions, and the StrictMode smoke test passes.
   node. Hoist them to module scope.
 - The function list is intentionally source-free (`queries.ts` says why). Do not reach for `source`
   here; that is B6's request.
+
+**What it actually took.** The Phase 0 risk is closed: **`reactflow@11.11.4` renders under
+StrictMode on React 19** — both nodes, no duplication on the second mount. `Canvas.test.tsx` pins it
+as a library test rather than a component test, so it keeps answering that question after the canvas
+around it changes. Verified against `sindresorhus/ky`: clicking `test/main.ts` draws a card with 31
+functions at their real start lines, both graticule scales, minimap and controls.
+
+- **jsdom lacks a third DOM API.** Base UI's `ScrollArea` calls `Element.getAnimations` on a timer,
+  where no test can catch the throw — it surfaces as an unhandled error blamed on whichever test was
+  running. Stubbed in `test-setup.ts` alongside `matchMedia` and `ResizeObserver`.
+- **`Item` takes Base UI's `render` prop, not `asChild`.** Worth knowing before reaching for the
+  shadcn pattern from the Radix-based docs.
+- **The card is `Card` + `Item` + `Badge` + `ScrollArea`**, not hand-written markup, per the standing
+  rule in `CLAUDE.md`. The function list plots itself in row by row on a container-driven stagger, so
+  the rows cannot drift out of step; `useMotionEnabled` skips it under reduced motion.
 
 ---
 

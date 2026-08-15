@@ -15,6 +15,15 @@ afterEach(cleanup);
 //
 // Answering `false` means: a desktop viewport, and no reduced-motion
 // preference. A test that needs either can override this per case.
+// Base UI's ScrollArea calls this on a timer to wait out a running animation.
+// jsdom implements no Web Animations API, so the call throws from inside a
+// setTimeout, where no test can catch it -- it surfaces as an unhandled error
+// attributed to whichever test happened to be running. Nothing is animating
+// here, so an empty list is the honest answer.
+if (typeof Element !== "undefined" && Element.prototype.getAnimations === undefined) {
+  Element.prototype.getAnimations = () => [];
+}
+
 // Also absent from jsdom, and react-resizable-panels constructs one on mount.
 // Without it the whole explorer fails to render, and the symptom is a missing
 // button rather than anything pointing at layout measurement.
