@@ -1,9 +1,28 @@
+import { useRef, useState } from "react";
+import type { SessionUser } from "@funcatlas/shared";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 import { AppHeader } from "./components/AppHeader";
 import { Canvas } from "./components/Canvas";
 import { LoginScreen } from "./components/LoginScreen";
 import { Sidebar } from "./components/Sidebar";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./components/ui/resizable";
+import { SidebarProvider } from "./components/ui/sidebar";
 import { Skeleton } from "./components/ui/skeleton";
+import { TooltipProvider } from "./components/ui/tooltip";
 import { useSession } from "./lib/session";
+
+/**
+ * Percentages of the group. Strings with an explicit unit, because this library
+ * reads a bare number as pixels and the difference is invisible until it is
+ * wrong.
+ *
+ * Both panels declare a size: given only one, the library ignores it and falls
+ * back to an even split.
+ */
+const SIDEBAR_DEFAULT = "22%";
+const SIDEBAR_MIN = "14%";
+const SIDEBAR_MAX = "45%";
+const CANVAS_DEFAULT = "78%";
 
 /**
  * Three states, and the server decides which: resolving, signed out, signed in.
@@ -27,14 +46,74 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col">
-      <AppHeader user={session.data} />
-      <div className="flex min-h-0 flex-1">
-        <Sidebar />
-        <main className="min-w-0 flex-1 overflow-hidden">
-          <Canvas />
-        </main>
-      </div>
+    <TooltipProvider>
+      {/* The provider exists because the sidebar's menu components read it;
+          width and collapse are owned by the resizable panel below, which is
+          the thing the reader actually drags.
+
+          Its wrapper ships as `min-h-svh`, which grows past the viewport
+          instead of clipping -- the document then scrolls, and the tree and
+          the canvas move together as one page. Pinned to the viewport here so
+          each pane owns its own overflow. */}
+      <SidebarProvider open className="h-svh min-h-0 overflow-hidden">
+        <Explorer user={session.data} />
+      </SidebarProvider>
+    </TooltipProvider>
+  );
+}
+
+function Explorer({ user }: { user: SessionUser }) {
+  const panel = useRef<PanelImperativeHandle | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+
+  /**
+   * One rule, everywhere: collapsed is whatever the panel says it is.
+   *
+   * Dragging the separator past `minSize` collapses the panel too, so the
+   * button cannot own this state -- it would keep offering to hide a tree that
+   * is already hidden. Called from both the group's layout callback and the
+   * toggle, because neither fires for the other's path.
+   */
+  const sync = () => setCollapsed(panel.current?.isCollapsed() ?? false);
+
+  const toggle = () => {
+    const handle = panel.current;
+    if (handle === null) return;
+
+    if (handle.isCollapsed()) {
+      handle.expand();
+    } else {
+      handle.collapse();
+    }
+    sync();
+  };
+
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+      <AppHeader user={user} sidebarCollapsed={collapsed} onToggleSidebar={toggle} />
+
+      <ResizablePanelGroup className="min-h-0 flex-1" onLayoutChange={sync}>
+        <ResizablePanel
+          id="file-tree"
+          panelRef={panel}
+          defaultSize={SIDEBAR_DEFAULT}
+          minSize={SIDEBAR_MIN}
+          maxSize={SIDEBAR_MAX}
+          collapsible
+          collapsedSize={0}
+          className="min-w-0 overflow-hidden"
+        >
+          <Sidebar />
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
+
+        <ResizablePanel id="canvas" defaultSize={CANVAS_DEFAULT} className="min-w-0 overflow-hidden">
+          <main className="h-full min-w-0 overflow-hidden">
+            <Canvas />
+          </main>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }

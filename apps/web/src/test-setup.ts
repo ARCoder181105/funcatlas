@@ -7,3 +7,36 @@ import { afterEach } from "vitest";
 // about what it uses -- so unmounting is wired up here instead. Without it a
 // component leaks into the next test's queries.
 afterEach(cleanup);
+
+// jsdom does not implement matchMedia, and two things in the tree call it on
+// mount: shadcn's use-mobile hook and Framer Motion's useReducedMotion. Without
+// this, mounting anything under SidebarProvider throws from inside an effect,
+// which surfaces as an unrelated "element not found" a second later.
+//
+// Answering `false` means: a desktop viewport, and no reduced-motion
+// preference. A test that needs either can override this per case.
+// Also absent from jsdom, and react-resizable-panels constructs one on mount.
+// Without it the whole explorer fails to render, and the symptom is a missing
+// button rather than anything pointing at layout measurement.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
+
+if (typeof window !== "undefined" && window.matchMedia === undefined) {
+  window.matchMedia = (query: string): MediaQueryList =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      // Deprecated, but Framer Motion still reaches for these.
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList;
+}

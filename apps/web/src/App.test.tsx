@@ -113,3 +113,36 @@ describe("signing in and out", () => {
     expect(mocked.logout).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("the file tree panel", () => {
+  it("labels the toggle by what it does, and survives being used", async () => {
+    mocked.me.mockResolvedValue({ userId: 7, login: "octocat" });
+
+    renderApp();
+
+    // The label names the action, not the current state (UI_GUIDE §3.4).
+    const hide = await screen.findByRole("button", { name: /hide the file tree/i });
+    await userEvent.click(hide);
+
+    // The label flip is deliberately not asserted here. Collapsed state is
+    // derived from the size the panel reports, and jsdom has no layout, so
+    // onResize never fires -- asserting the flip would only prove the stub.
+    // Verified in a real browser instead.
+    expect(hide).toBeInTheDocument();
+  });
+
+  it("gives the panel a keyboard-reachable resize handle", async () => {
+    mocked.me.mockResolvedValue({ userId: 7, login: "octocat" });
+
+    renderApp();
+    await screen.findByText("octocat");
+
+    // Scoped by slot: the header carries a decorative separator too, and
+    // getByRole("separator") would match both.
+    const handle = document.querySelector('[data-slot="resizable-handle"]');
+    expect(handle).not.toBeNull();
+    // Draggable is not enough on its own -- a pointer-only resize fails the
+    // quality floor in UI_GUIDE §5.1.
+    expect(handle).toHaveAttribute("tabindex", "0");
+  });
+});
