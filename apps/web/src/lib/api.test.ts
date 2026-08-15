@@ -52,6 +52,17 @@ describe("request", () => {
 
     await expect(api.logout()).resolves.toBeUndefined();
   });
+
+  it("does not announce json on a request that has no body", async () => {
+    respond(204);
+
+    await api.logout();
+
+    // Fastify rejects a POST that sets content-type: application/json and
+    // then sends nothing, with FST_ERR_CTP_EMPTY_JSON_BODY -- a 400. Logout
+    // and dev-login are both bodyless.
+    expect(lastCall()[1].headers).not.toHaveProperty("content-type");
+  });
 });
 
 describe("errors", () => {

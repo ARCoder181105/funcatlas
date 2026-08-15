@@ -15,7 +15,9 @@ config({ path: path.join(repoRoot, ".env") });
 const schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
-  APP_PUBLIC_URL: z.string().url(),
+  // Where the OAuth callback sends the browser once a session exists. The web
+  // app, not this one -- see .env.example.
+  WEB_APP_URL: z.string().url(),
   CORS_ORIGIN: z.string(),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 

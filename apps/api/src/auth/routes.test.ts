@@ -99,7 +99,7 @@ describe("GET /auth/callback", () => {
     });
 
     expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe(env.APP_PUBLIC_URL);
+    expect(res.headers.location).toBe(env.WEB_APP_URL);
 
     // Reaching here proves the state in the redirect and the state in the
     // cookie are the same value -- nothing else compares them.

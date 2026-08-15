@@ -60,6 +60,7 @@ Nothing outstanding -- R19 through R22 and R26 through R29 all closed; see Decid
 
 | | Risk | Notes |
 |---|---|---|
+| **R31** | **A request that touches Redis hangs indefinitely when Redis is down.** ioredis retries forever, so `createSession` never settles: logging in leaves the button on "Signing in…" with no error, ever. Found in Phase 3b by stopping the container mid-session. | The API is the right place to fix it — a connect/command timeout so the request fails rather than hangs, and a 503 the UI can render. A client-side timeout would only paper over it. Belongs with Phase 4 hardening. |
 | **R5** | GitHub cannot reach `localhost`, so webhooks can't be tested locally without a tunnel. | `ngrok` or `smee.io`. Tooling, not code. |
 | **R12** | A webhook and a manual re-parse can fire on the same repo at once and corrupt the graph mid-transaction. | Needs a lock keyed by repo, held for the duration of the parse. |
 | **R13** | A push storm enqueues one job per commit. | Debounce per repo — collapse pushes arriving inside a short window into one job. |

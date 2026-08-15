@@ -61,8 +61,11 @@ async function request<T>(path: string, init?: RequestOptions): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     credentials: "include",
     ...init,
-    // After the spread, so the type above is not the only thing keeping this.
-    headers: { "content-type": "application/json" },
+    // Only when there is a body to describe. Fastify rejects a request that
+    // announces JSON and then sends nothing -- FST_ERR_CTP_EMPTY_JSON_BODY,
+    // a 400 -- which is what a bodyless POST like logout or dev-login is.
+    // After the spread, so the type above is not the only thing keeping it.
+    headers: init?.body === undefined ? {} : { "content-type": "application/json" },
   });
 
   if (!res.ok) {
@@ -96,6 +99,11 @@ export const api = {
   me: () => request<SessionUser>("/auth/me"),
 
   logout: () => request<void>("/auth/logout", { method: "POST" }),
+
+  /** Signs in as a fixed local user without GitHub. The route 404s in
+   *  production and Phase 4 deletes it -- call it only under
+   *  `import.meta.env.DEV`. */
+  devLogin: () => request<void>("/auth/dev-login", { method: "POST" }),
 
   listRepos: () => request<RepoListResponse>("/api/repos"),
 

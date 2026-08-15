@@ -78,6 +78,21 @@ cd services/parser && go run ./cmd/parser --repo ./testdata/sample   # terminal 
 `docker compose up` with no arguments runs the whole stack in prod mode, no hot reload. Use it to
 check that the thing actually works in a container, not to develop in.
 
+Open <http://localhost:5173>, not the API's port. Signed out you get the sign-in card; **Continue as
+a local dev user** skips GitHub entirely, so the whole UI is usable without an OAuth app.
+
+### `WEB_APP_URL`
+
+Where the OAuth callback sends the browser once a session exists — the **web** app, `:5173`. It was
+called `APP_PUBLIC_URL` and pointed at `:3000` until Phase 3b, which meant a successful GitHub login
+dropped the user on a JSON endpoint. If you have an older `.env`, rename the key:
+
+```bash
+sed -i 's|^APP_PUBLIC_URL=.*|WEB_APP_URL=http://localhost:5173|' .env
+```
+
+The API fails fast on start if it is missing, so you will know immediately.
+
 ## Driving the API by hand
 
 Everything under `/api` needs a session, so start by getting one into a cookie jar. `/auth/dev-login`

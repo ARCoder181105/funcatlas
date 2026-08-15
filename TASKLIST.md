@@ -182,7 +182,7 @@ nothing. The fonts render offline with the network throttled.
 
 ---
 
-## B2 — Auth shell: login screen, session state, logout  `[ ]`
+## B2 — Auth shell: login screen, session state, logout  `[x]`
 
 **Why.** Everything else in the phase is behind a session, and the web app currently has no concept
 of one. It also closes a bug found while planning: `APP_PUBLIC_URL` is `http://localhost:3000`, and
