@@ -1,5 +1,6 @@
 import type { SessionUser } from "@funcatlas/shared";
 import { useLogout } from "../lib/session";
+import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "./ui/button";
 
 /** Who is signed in, and the way out. */
@@ -10,8 +11,9 @@ export function AppHeader({ user }: { user: SessionUser }) {
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-surface-border px-4">
       <span className="font-display text-sm tracking-tight text-ink">funcatlas</span>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <span className="font-mono text-xs text-ink-muted">{user.login}</span>
+        <ThemeToggle />
         <Button
           variant="ghost"
           size="sm"

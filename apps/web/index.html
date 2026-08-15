@@ -1,9 +1,33 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>funcatlas</title>
+    <!--
+      Runs before the stylesheet paints, so the first frame is already the right
+      theme. Resolved here rather than in a React effect: an effect runs after
+      the first paint, which on a full-bleed dark app is a white flash.
+
+      The key is duplicated from src/lib/theme.ts because HTML cannot import a
+      module; src/lib/theme.test.ts asserts the two strings stay equal.
+    -->
+    <script>
+      (function () {
+        var stored = null;
+        try {
+          stored = window.localStorage.getItem("funcatlas-theme");
+        } catch (e) {
+          /* storage blocked; fall through to the system preference */
+        }
+        // Dark unless the reader has asked for light, either explicitly here or
+        // through the OS. Matches DEFAULT_MODE in src/lib/tokens.ts.
+        var dark = stored
+          ? stored === "dark"
+          : !window.matchMedia("(prefers-color-scheme: light)").matches;
+        document.documentElement.classList.toggle("dark", dark);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
