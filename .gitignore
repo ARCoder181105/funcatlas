@@ -57,3 +57,4 @@ extract_actual.json
 /.github/hooks/
 /.github/skills/
 /skills-lock.json
+/.impeccable/
