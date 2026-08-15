@@ -105,27 +105,36 @@ graph, cut it.
 | Animation | Framer Motion |
 | Canvas | React Flow |
 | Code highlight | Shiki |
-| Command palette | cmdk (⌘K) |
-| Icons | lucide-react |
+| Command palette | shadcn `command` (cmdk underneath) |
+| Icons | lucide-react, `strokeWidth={1.5}` |
+| Components | shadcn/ui on Base UI, `base-nova` style |
 | State | Zustand (UI) + TanStack Query (server) |
 
-**On shadcn/ui — split the two things it gives you.**
+**On shadcn/ui — install it, do not reimplement it.**
 
-shadcn is a styling layer over Radix primitives. Those halves have very different value here.
+The rule is: **`npx shadcn@latest add <name>` first, hand-written only when the registry has
+nothing.** A component that already exists is less code to review, less to maintain, and better on
+accessibility than the version we would write this afternoon. Check before concluding it is not
+there — `curl -s -o /dev/null -w "%{http_code}" https://ui.shadcn.com/r/styles/base-nova/<name>.json`
+answers in a second.
 
-*Its styling is not used.* `components.json`, `tailwindcss-animate` and a CSS-variable theme would
-duplicate the token table in §1.1, and a component styled for a generic dark theme has to be
-restyled against these tokens anyway. Running the CLI buys generated code to maintain.
+*This reverses the earlier position*, which was "behaviour from Radix, styling from §1.1, nothing
+generated" — the CLI was to be avoided because its theme layer would duplicate the token table. That
+concern turned out to be solvable rather than fundamental: §1.1's variables are wired to shadcn's
+own variable names, so a generated component lands on this palette without being restyled at all.
+The theme layer is not a competing system; it is the delivery mechanism.
 
-*Its behaviour is used, taken from Radix directly.* Anything whose hard part is accessibility —
-focus trapping, escape handling, `aria` wiring, collision-aware positioning — is not worth
-hand-rolling and is easy to get subtly wrong. Depend on the Radix primitive and style it with our
-tokens; read shadcn's source as the reference for how, because it is a good reference.
+In the tree today: `button`, `card`, `input`, `badge`, `separator`, `skeleton`, `scroll-area`,
+`tooltip`, `collapsible`, `sidebar`, `sheet`, `item`, `field`, `label`, `empty`, `spinner`,
+`command`, `dialog`, `dropdown-menu`, `select`, `textarea`, `input-group`, `sonner`.
 
-The rule: **behaviour from Radix, styling from §1.1, nothing generated.** A component that is a
-`div` with classes — button, panel, skeleton, legend, card — is hand-written; a component with
-keyboard and focus semantics is not. cmdk already brings its own dialog, so the palette needs
-nothing extra.
+Two things to know about generated files:
+
+- **They are ours once generated.** Editing them is normal and expected; that is the model. Where an
+  edit matters — `skeleton.tsx` carries `motion-safe:` so its shimmer honours reduced motion — the
+  file says so in a comment, because `add --overwrite` silently reverts it.
+- **`add` collides on case.** The CLI writes `skeleton.tsx` next to a hand-written `Skeleton.tsx`,
+  and TypeScript refuses two paths differing only in case (TS1261). Delete the hand-written one.
 
 ## 3. Surfaces
 

@@ -43,6 +43,12 @@ You implement, phase by phase, with tests. The user reviews at each phase gate.
 
 ### Code style the user has asked for
 
+- **Install the component, do not write it.** Reach for an existing component from a real provider —
+  shadcn first (`npx shadcn@latest add <name>`), then the libraries in the locked stack — before
+  writing markup by hand. Hand-rolling a dialog, a command palette, a tree row or a button is the
+  wrong default: it is more code to review, more to maintain, and worse on accessibility than the
+  thing already published. Check whether it exists before deciding it does not. Write a component
+  only when nothing in the registry does the job, and say which one you looked for.
 - **Comments are brief and to the point.** One line where one line does. Long comments invite
   confusion and go stale. Explain *why*, never restate *what* the code plainly says.
 - **Never duplicate code.** The second occurrence of anything gets extracted into a shared helper in

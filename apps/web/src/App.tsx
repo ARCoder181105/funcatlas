@@ -2,7 +2,7 @@ import { AppHeader } from "./components/AppHeader";
 import { Canvas } from "./components/Canvas";
 import { LoginScreen } from "./components/LoginScreen";
 import { Sidebar } from "./components/Sidebar";
-import { Skeleton } from "./components/ui/Skeleton";
+import { Skeleton } from "./components/ui/skeleton";
 import { useSession } from "./lib/session";
 
 /**
