@@ -244,7 +244,7 @@ states against a mocked `/auth/me`.
 
 ---
 
-## B3 — Repo picker and the sidebar file tree  `[ ]`
+## B3 — Repo picker and the sidebar file tree  `[x]`
 
 **Why.** The canvas needs a `repoId` and a `fileId` to show anything, and there is currently no way
 to obtain either. This is also where `GET /api/repos` and `POST /api/repos` stop being curl-only.
@@ -279,6 +279,20 @@ ordering and the empty repo. Registering a real repository through the UI produc
 - A repo with zero files is a valid answer, not an error — 3a made that distinction deliberately.
 - Selecting a repo must clear `selectedFileId`. A stale file id from another repo 404s, and the
   canvas would show the previous repo's card.
+
+**What it actually took.** Verified against `sindresorhus/ky` — 53 files, 336 functions, counts
+rolling up correctly (`source` 63 + `test` 273 = 336). Four things the plan did not anticipate:
+
+- **The sidebar is resizable and collapsible**, which was asked for mid-phase. Both panels have to
+  declare a size; given only one, `react-resizable-panels` ignores it and splits evenly. Its
+  `onResize` never fires — collapsed state is read back from the panel handle on every layout
+  change, so a drag past the minimum and the header button cannot disagree.
+- **`SidebarProvider` ships `min-h-svh`**, which grows past the viewport rather than clipping. The
+  document scrolled, so the tree and the canvas moved together as one page.
+- **`DropdownMenuLabel` must sit inside a `DropdownMenuGroup`.** Base UI's `GroupLabel` reads the
+  group context and throws without one, taking the whole app down rather than just the menu.
+- **jsdom has neither `matchMedia` nor `ResizeObserver`**, and `use-mobile` and
+  `react-resizable-panels` construct both on mount. Stubbed in `test-setup.ts`.
 
 ---
 
