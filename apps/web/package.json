@@ -32,6 +32,7 @@
   "devDependencies": {
     "@funcatlas/eslint-config": "workspace:*",
     "@funcatlas/typescript-config": "workspace:*",
+    "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.4",
@@ -39,11 +40,9 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.20",
     "eslint": "^9.39.1",
     "jsdom": "^30.0.1",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.17",
+    "tailwindcss": "^4.3.3",
     "typescript": "5.9.2",
     "vite": "^6.0.7",
     "vitest": "^4.1.10"

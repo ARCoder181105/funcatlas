@@ -75,7 +75,10 @@ You implement, phase by phase, with tests. The user reviews at each phase gate.
 ## Locked stack — do not re-decide without an explicit reason
 
 - **Monorepo:** pnpm + Turborepo. Shared TypeScript types only in `packages/shared` (Drizzle + Zod).
-- **Frontend:** Vite + React + TS, Tailwind + shadcn/ui, Framer Motion, React Flow, Shiki, cmdk,
+- **Frontend:** Vite + React + TS, Tailwind **v4** (via `@tailwindcss/vite`, no `postcss.config.js`;
+  the theme stays in `tailwind.config.ts`, loaded by `@config` in `index.css`, because
+  `src/lib/tokens.ts` is the single source and the canvas needs the same values as raw SVG strokes),
+  Framer Motion, React Flow, Shiki, cmdk,
   lucide-react, Zustand + TanStack Query.
 - **API:** Fastify + Drizzle + postgres.js + Zod, arctic/oslo for GitHub OAuth, Redis sessions,
   `@fastify/rate-limit`.

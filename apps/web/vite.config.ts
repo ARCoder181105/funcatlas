@@ -1,10 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from '@tailwindcss/vite'
 
 // Dev server proxies API calls to the Fastify backend (apps/api).
 // VITE_API_URL is read in the browser; this proxy is a convenience for /api paths.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(),  tailwindcss(),],
   server: {
     port: 5173,
     proxy: {
