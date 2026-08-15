@@ -2,7 +2,7 @@ import { Github } from "lucide-react";
 import { api } from "../lib/api";
 import { cn } from "../lib/cn";
 import { useDevLogin } from "../lib/session";
-import { Button, buttonVariants } from "./ui/Button";
+import { Button, buttonVariants } from "./ui/button";
 import { Panel } from "./ui/Panel";
 
 /**
@@ -32,7 +32,7 @@ export function LoginScreen() {
             cannot be followed by fetch. */}
         <a
           href={api.loginUrl()}
-          className={cn(buttonVariants({ variant: "primary" }), "mt-8 w-full")}
+          className={cn(buttonVariants({ variant: "default", size: "lg" }), "mt-8 w-full")}
         >
           <Github className="size-4" aria-hidden />
           Sign in with GitHub

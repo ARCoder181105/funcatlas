@@ -1,5 +1,5 @@
 import type { Config } from "tailwindcss";
-import { ACCENT, COLOR } from "./src/lib/tokens";
+import { COLOR } from "./src/lib/tokens";
 
 // Dark-mode-first, survey-chart direction. The colours come from
 // src/lib/tokens.ts rather than being written here, so the canvas -- which
@@ -10,7 +10,10 @@ export default {
   darkMode: "class",
   theme: {
     extend: {
-      colors: { ...COLOR, accent: ACCENT },
+      // No `accent` here: shadcn owns that name and means the wash behind a
+      // hovered menu row by it. The brand accent is `--primary` in index.css,
+      // aliased from confidence.exact so there is still one hex.
+      colors: COLOR,
       fontFamily: {
         // Space Grotesk is geometric, per the original brief, but odd enough
         // in its letterforms not to read as the default UI sans.

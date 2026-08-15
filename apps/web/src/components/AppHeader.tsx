@@ -1,6 +1,6 @@
 import type { SessionUser } from "@funcatlas/shared";
 import { useLogout } from "../lib/session";
-import { Button } from "./ui/Button";
+import { Button } from "./ui/button";
 
 /** Who is signed in, and the way out. */
 export function AppHeader({ user }: { user: SessionUser }) {

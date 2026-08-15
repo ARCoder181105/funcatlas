@@ -1,10 +1,105 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 /* v4 does not pick up tailwind.config.ts on its own. Loaded explicitly so the
    theme keeps its single source in TypeScript: src/lib/tokens.ts holds every
    colour once, and the config imports it -- which is what lets the canvas
    stroke an SVG edge with the same value a utility class uses. */
 @config "../tailwind.config.ts";
+
+/* shadcn's components are styled against these variable names, so the palette
+   has to reach them. Every value is read back out of the Tailwind theme rather
+   than restated as a hex, which keeps src/lib/tokens.ts the only place a colour
+   is written -- a shadcn Button and a React Flow SVG stroke cannot drift apart.
+   Dark only; UI_GUIDE §6 defers a light theme. `.dark` is included because
+   shadcn's own source uses `dark:` variants. */
+:root,
+.dark {
+  color-scheme: dark;
+
+  --background: theme("colors.surface.DEFAULT");
+  --foreground: theme("colors.ink.DEFAULT");
+  --card: theme("colors.surface.raised");
+  --card-foreground: theme("colors.ink.DEFAULT");
+  --popover: theme("colors.surface.raised");
+  --popover-foreground: theme("colors.ink.DEFAULT");
+
+  /* Verdigris does double duty. It already means "known" on the canvas, so the
+     interface has one accent rather than two competing ones (UI_GUIDE §1.1). */
+  --primary: theme("colors.confidence.exact");
+  --primary-foreground: theme("colors.surface.DEFAULT");
+  --ring: theme("colors.confidence.exact");
+
+  /* shadcn's --accent is the wash behind a hovered menu row, not the brand
+     colour. Putting verdigris here would light up every dropdown. */
+  --accent: theme("colors.surface.border");
+  --accent-foreground: theme("colors.ink.DEFAULT");
+  --secondary: theme("colors.surface.raised");
+  --secondary-foreground: theme("colors.ink.DEFAULT");
+  --muted: theme("colors.surface.raised");
+  --muted-foreground: theme("colors.ink.muted");
+
+  /* A genuinely destructive action is red. Deliberately not the unresolved
+     tier, which is slate because an unresolved call is an honest admission
+     rather than an error -- PRD §8. */
+  --destructive: oklch(0.62 0.19 25);
+
+  --border: theme("colors.surface.border");
+  --input: theme("colors.surface.border");
+
+  /* Same value as rounded-token in tailwind.config.ts, so a shadcn component
+     and a hand-written panel round identically. */
+  --radius: 0.75rem;
+
+  --sidebar: theme("colors.surface.raised");
+  --sidebar-foreground: theme("colors.ink.DEFAULT");
+  --sidebar-primary: theme("colors.confidence.exact");
+  --sidebar-primary-foreground: theme("colors.surface.DEFAULT");
+  --sidebar-accent: theme("colors.surface.border");
+  --sidebar-accent-foreground: theme("colors.ink.DEFAULT");
+  --sidebar-border: theme("colors.surface.border");
+  --sidebar-ring: theme("colors.confidence.exact");
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
 
 @layer components {
   /* The chart graticule (UI_GUIDE §3.2 signature 1), for DOM surfaces. Two
@@ -25,23 +120,22 @@
   }
 }
 
-:root {
-  color-scheme: dark;
-}
-
 html,
 body,
 #root {
   height: 100%;
 }
 
-body {
-  margin: 0;
-  /* From the tokens, never a literal -- src/lib/tokens.ts is the source. */
-  background: theme("colors.surface.DEFAULT");
-  color: theme("colors.ink.DEFAULT");
-  font-family: theme("fontFamily.sans");
-  /* Bone ink on marine ink is a warm-on-cold pairing; without this it renders
-     heavier than intended on a dark ground. */
-  -webkit-font-smoothing: antialiased;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    margin: 0;
+    /* Bone ink on marine ink is a warm-on-cold pairing; without this it renders
+       heavier than intended on a dark ground. */
+    -webkit-font-smoothing: antialiased;
+  }
 }
