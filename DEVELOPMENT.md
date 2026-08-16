@@ -127,16 +127,43 @@ A 401 anywhere means the cookie jar is empty or the session expired — log in a
 `POST /api/repos` is the parser failing; the response carries the tail of its stderr, and the API log
 has the whole thing.
 
+## Running the whole thing
+
+```bash
+make start
+```
+
+Docker (Postgres + Redis) → wait for both → migrations → build the parser binary the API spawns →
+API and web. It prints the URLs. `make stop` stops the containers; Ctrl-C only stops API and web.
+
+Three things that used to bite and now do not, kept here because the symptoms are misleading:
+
+- **`make test` truncates whatever `TEST_DATABASE_URL` points at**, falling back to `DATABASE_URL`
+  when unset. With no `TEST_DATABASE_URL` the suite silently deletes the repositories you charted.
+  `.env.example` documents it; create the database once with `make migrate-test`.
+- **Redis has to be up before the API**, or sign-in returns 500 from `ioredis` and nothing in the
+  error mentions Redis. `make start` waits for both services.
+- **The parser binary is spawned by path**, so a stale one runs happily against a newer schema.
+  `make start` rebuilds it; `make go-build-bin` alone if you only need that.
+
 ## Checks
 
 Run these before every commit. `make help` lists every target.
 
 ```bash
-pnpm -r lint
-pnpm -r typecheck
-pnpm -r test
-cd services/parser && go vet ./... && go test -race ./...
+make lint
+make typecheck
+make test
 ```
+
+`make test` covers TypeScript **and** Go. A bare `pnpm -r test` skips the parser entirely.
+
+**CI can fail while all of the above pass.** `apps/api/src/env.ts` validates the environment at
+module scope, and locally `dotenv` finds your `.env` while CI has none — so a required key missing
+from `.github/workflows/node-ci.yml` takes down every API test file at import with a ZodError that
+names `env.ts` and never mentions the workflow. `apps/api/src/env.test.ts` guards it: add a key
+without a default to the schema and it fails locally until `.env.example` and the workflow both
+have it.
 
 Useful parser commands while working:
 
@@ -167,6 +194,27 @@ Some are manual setup that will block you an hour in if you skip them.
 - Squash-merge, then delete the branch. Tag phase completions: `git tag -a phase-2 -m "Storage and resolution"`.
 - Commit messages are imperative and cover one concern — `add parser symlink hard-fail`, not
   `updates and fixes`.
+
+## Verifying UI changes
+
+The canvas cannot be fully checked from tests, and some of what a headless browser reports is not
+true. Both are worth knowing before chasing a phantom.
+
+- **React Flow draws an edge only once both of its nodes are measured**, via a `ResizeObserver`.
+  jsdom has no layout engine, and a stub that reports a size drives `react-resizable-panels` into a
+  re-layout loop that fails most of the suite. So **edges cannot be asserted in a test** — what
+  decides *what* the edges are lives in `apps/web/src/lib/graph.ts` and is covered there; whether
+  they paint is a browser check. A headless pane that never fires `ResizeObserver` shows nodes with
+  no edges, which looks exactly like a bug and is not one.
+- **Clicking a node has to land on the button, not the node.** React Flow reads a press on a node as
+  the start of a drag; the `nodrag` class on the button is what lets the click through. A row that
+  stops responding is usually a missing `nodrag`.
+- **A function with no calls is not a broken expansion.** Roughly half the functions in a real
+  repository are leaves. Nodes show a chevron when they open and a dot when they call nothing —
+  check the affordance before assuming the canvas is stuck.
+
+`sindresorhus/ky` is a good verification repository: small, TypeScript, and it has functions with
+genuine unresolved calls, so all three confidence tiers and several ghosts appear.
 
 ## Conventions worth knowing before you trip on them
 

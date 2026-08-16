@@ -212,11 +212,29 @@ surfaces ever come back. There is only one canvas now, so the workaround is gone
 
 ---
 
-## 6. Still on the list
+## 6. Open questions
 
-Raised but not yet specified. Recorded so they are not lost.
+Raised and not settled. Each has enough context here to decide without re-deriving it.
 
-- Other canvas utilities the reader mentioned wanting, to be defined.
-- Collapsing an expanded branch (see decision 1).
-- `reactflow@11` → `@xyflow/react@12`. v11 is the retired package name and works; the migration is
-  worth doing when there is a reason beyond tidiness, not mid-phase.
+**The confidence key's content.** Position is settled — top-right (§3 lists the alternatives and why
+bottom-left lost). What is still open is what it shows: today three strokes with one-word labels and
+meanings in tooltips. Constraint: `PRD.md` §8 turns on the reader understanding a dotted line, so
+whatever replaces it must stay readable without interaction. Hiding the key behind a click is the
+one option to avoid.
+
+**`reactflow@11` → `@xyflow/react@12`.** v11 is the retired package name; v12 is the same team under
+the current name. v11 renders correctly under React 19 including StrictMode — `Canvas.test.tsx` pins
+that, and it was the Phase 0 risk. The reader has twice offered to migrate. Deferred both times
+because nothing is broken and a migration mid-phase buys tidiness at the cost of re-verifying every
+canvas behaviour by hand, none of which has an automated edge test to catch a regression. Worth
+doing when there is a second reason.
+
+**A router.** The Back button leaves the app entirely, because there are no routes — `TASKLIST.md`
+cut them from 3b. The reader noticed and it is a fair complaint: URL-addressable repo, file and
+function would make Back walk the selection and make a function linkable. It belongs with the
+landing-page PR, which introduces a second route anyway.
+
+**Collapsing individual nodes inside a branch** works (§1b). What does not exist is any way to close
+*everything* at once, or to remove a branch entirely rather than collapse it. Nobody has asked yet.
+
+**Other canvas utilities** the reader has mentioned wanting but not yet specified.

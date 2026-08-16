@@ -19,7 +19,7 @@ The old working name "CodeCanvas" is retired; do not reintroduce it.
 - [x] Phase 1 — Parser and isolation
 - [x] Phase 2 — Storage and resolution
 - [x] Phase 3a — API and auth
-- [ ] Phase 3b — Canvas and search ← next
+- [~] Phase 3b — Canvas and search ← in progress (B0–B5 done, B6–B8 left)
 - [ ] Phase 4 — Webhooks, queue, hardening
 - [ ] Phase 5 — Go, Rust, Python (extraction only; per-language resolution stays cut)
 
@@ -130,12 +130,18 @@ files over 1 MB skipped.
   declaration still matches, and every call inside is dropped. Any new language needs a fixture that
   pins the **calls** inside its hardest construct, not just the function names.
 
-## Known gaps carried into Phase 3b
+## Known gaps
 
-Phase 3a closed the auth stub, the five 501 endpoints and the missing session gate. What is left:
+Updated as Phase 3b progresses. `TASKLIST.md` is the chunk-level truth; this is what outlives it.
 
-- **The web app is a 114-line shell.** Canvas, FunctionCard and CodeBlock are placeholders, and
-  `apps/web/src/lib/api.ts` still types every response as `unknown`. That is 3b's job.
+- **`CodeBlock` is still a placeholder.** B6 builds it. `apps/web/src/lib/highlight.ts` already
+  exists — a lazily imported Shiki singleton emitting both themes as CSS variables — and nothing
+  imports it yet.
+- **No ⌘K palette.** B7. `store/ui.ts` already carries `paletteOpen` and the sidebar's footer button
+  sets it, so the opener is wired and the palette itself is missing.
+- **Edge rendering has no automated test.** React Flow only draws an edge once both nodes are
+  measured, and jsdom has no layout engine. `lib/graph.test.ts` covers exhaustively *what* the edges
+  are; whether they paint is a browser check. See `docs/CANVAS_DECISIONS.md` §4.
 - **`POST /api/repos` parses synchronously**, so a large repository holds the request open until
   `PARSE_TIMEOUT_MS`. Phase 4's queue replaces the spawn; marked with a `ponytail:` comment.
 - **`/auth/dev-login` exists outside production.** Phase 4 hardening deletes it.
@@ -153,13 +159,20 @@ Run these instead of reading source to find out where things stand. Commands can
 prose can — if one contradicts this document, the command is right and this document needs fixing.
 
 ```bash
-make up && make migrate                               # infra + schema
-cd services/parser && go test ./... && go vet ./...   # is the parser green?
-go run ./cmd/parser --repo ./testdata/resolve --format summary  # what does it emit, and how confident?
-go run ./cmd/parser --repo ./testdata/resolve --write --repo-url x --commit y  # full pipeline
-pnpm -r build && pnpm -r test                         # TypeScript side
-git log --oneline -5                                  # what happened last
-grep -c '\[x\]' TASKLIST.md                           # how far into the current phase
+make start                     # infra, migrations, parser binary, API, web -- then open :5173
+make test                      # TypeScript AND Go. `pnpm -r test` silently skips the parser
+make lint && make typecheck
+make go-vet                    # not part of `make test`
+git log --oneline -5           # what happened last
+grep -c '\[x\]' TASKLIST.md    # how far into the current phase
+gh run list --branch $(git branch --show-current) --limit 2   # is CI green?
+```
+
+Parser on its own, when the question is about extraction rather than the app:
+
+```bash
+make go-run REPO=./services/parser/testdata/resolve
+cd services/parser && go run ./cmd/parser --repo ./testdata/resolve --format summary
 ```
 
 Read whole documents only when you need the *reasoning* behind a decision. For current state, the

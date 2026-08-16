@@ -53,9 +53,10 @@ Asked and answered at planning time, so they are not re-litigated mid-phase.
 - **Login screen, not a landing page.** UI_GUIDE §3.1's animated marketing hero is its own surface
   and its own PR. Logged out shows a centred sign-in card. Nothing in the 3b exit test touches a
   landing page.
-- **One file card and one mind-map at a time.** UI_GUIDE §3.2's multi-open canvas multiplies canvas
-  state — namespaced node ids, per-card layout, focus scoped across cards. Additive later, not a
-  rewrite.
+- ~~**One file card and one mind-map at a time.**~~ **Reversed mid-phase.** One file card still, but
+  the reader opens as many function branches off it as they like, on the same canvas, and collapsing
+  a branch remembers what was under it. See `docs/CANVAS_DECISIONS.md` §1 and §1b — that file is the
+  model, not this line.
 - **shadcn split in half: behaviour yes, styling no.** Its theme layer would duplicate the token
   table in UI_GUIDE §1.1, so the CLI is not run. But anything whose hard part is accessibility —
   focus trap, escape, `aria`, collision-aware positioning — comes from the Radix primitive
@@ -377,7 +378,8 @@ a guess differently from a fact. PRD §8 calls it the reason to trust the tool.
 5. **Ghost nodes as uncharted territory** — signature 3. Placed past the last resolved layer,
    dotted, faded, labelled with the `calleeName` the parser saw. They are the map showing its own
    boundary, so they must read as deliberate, not as broken nodes.
-6. Direction and depth controls, bounded by `TRAVERSAL_MAX_DEPTH`.
+6. ~~Direction and depth controls.~~ **Cut.** Depth is how many times the reader clicked; direction
+   was removed from the canvas entirely rather than left as an unreachable prop. CANVAS_DECISIONS §2.
 7. Node ceiling of 2000: truncate and say so rather than freezing the tab.
 8. Focus mode — the selected function's neighbourhood stays lit, the rest dims.
 9. The edge-draw animation is this phase's one orchestrated moment (UI_GUIDE §4): edges draw in

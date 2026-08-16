@@ -166,8 +166,10 @@ brochure.
 - **Edges by confidence:** solid (`exact`) / dashed (`name_match`) / dotted (`unresolved`), coloured
   per §1.1. This is the product; see `PRD.md` §8.
 - **Minimap + focus mode:** overview always available; selecting a function dims the rest.
-- **Multi-open** is deferred past 3b — one file card and one mind-map at a time. Namespaced node
-  ids and focus scoped across cards are additive later, not a rewrite.
+- **Several branches at once, and collapsing remembers.** The file card and the graph share one
+  canvas; opening a function from the card starts a branch, several can be open, and closing one
+  hides its subtree without forgetting it. `docs/CANVAS_DECISIONS.md` §1 and §1b carry the model —
+  read those before changing how the canvas grows.
 
 **The signature.** Three things, and nothing else in the UI competes with them:
 
@@ -226,7 +228,8 @@ reachable tab order through tree, palette and canvas, and `prefers-reduced-motio
 
 ## 6. Deferred (post-MVP)
 
-- Multi-open canvas — several file cards and mind-maps at once (§3.2).
+- Several *file* cards at once. One file card at a time, with as many function branches off it as
+  the reader opens (§3.2).
 - Freehand annotation layer (see `../PLAN.md`).
 - Custom theming UI, saved layouts/perspectives.
 
