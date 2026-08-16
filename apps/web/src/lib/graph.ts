@@ -117,13 +117,21 @@ const ghostId = (name: string) => `ghost-${name}`;
  * With a single fixed-depth traversal, unresolved calls past depth 1 were
  * invisible.
  */
-export function buildGraph(responses: TraversalResponse[]): BuiltGraph {
-  const first = responses[0];
-  if (first === undefined) {
+export function buildGraph(
+  responses: TraversalResponse[],
+  rootIds: number[] = [],
+  collapsedIds: number[] = [],
+): BuiltGraph {
+  // Roots are passed in rather than read off `responses[0]`. Expansions arrive
+  // as their queries resolve and the pending ones are filtered out, so the
+  // first element is whichever came back first, not what the reader opened --
+  // measuring from the wrong one prunes the map to a subtree, silently.
+  const roots = rootIds.length > 0 ? rootIds : responses.slice(0, 1).map((r) => r.functionId);
+  if (roots.length === 0) {
     return { nodes: [], edges: [], truncated: 0 };
   }
 
-  const rootId = first.functionId;
+  const collapsed = new Set(collapsedIds);
   // What the reader has already opened, and which of those turned out to call
   // nothing. Both ride on the node so it can say whether clicking does
   // anything at all.
@@ -162,21 +170,27 @@ export function buildGraph(responses: TraversalResponse[]): BuiltGraph {
     }
   }
 
-  const depths = depthsFrom(rootId, linked.values());
+  const depths = depthsFrom(roots, linked.values(), collapsed);
 
-  const unique = [...byId.values()].sort(
-    (a, b) => (depths.get(a.id) ?? 0) - (depths.get(b.id) ?? 0) || a.id - b.id,
-  );
+  // Only what still hangs off the anchor. Closing a function in the middle of
+  // the map leaves the ones it had opened with nothing above them, and every
+  // expansion contributes its own function at depth 0 -- without this they
+  // would float, disconnected, as if they were roots of their own.
+  const unique = [...byId.values()]
+    .filter((fn) => depths.has(fn.id))
+    .sort((a, b) => (depths.get(a.id) ?? 0) - (depths.get(b.id) ?? 0) || a.id - b.id);
   const kept = unique.slice(0, NODE_CEILING);
   const truncated = unique.length - kept.length;
   const keptIds = new Set(kept.map((fn) => fn.id));
 
   // One ghost group per expanded function, so an unresolved call hangs off the
   // function that actually made it.
-  const ghostGroups = responses.map((response) => ({
-    callerId: response.functionId,
-    ghosts: collectGhosts(response.edges),
-  }));
+  const ghostGroups = responses
+    .filter((response) => depths.has(response.functionId) && !collapsed.has(response.functionId))
+    .map((response) => ({
+      callerId: response.functionId,
+      ghosts: collectGhosts(response.edges),
+    }));
 
   // One layout pass over functions and ghosts together. Two passes centred
   // each set on the same axis independently, so a ghost and a function in the
@@ -218,18 +232,32 @@ interface LinkedEdge {
  * column -- otherwise the layout would jump every time the reader expanded a
  * longer route to something already on screen.
  */
-function depthsFrom(rootId: number, edges: Iterable<LinkedEdge>): Map<number, number> {
+function depthsFrom(
+  rootIds: number[],
+  edges: Iterable<LinkedEdge>,
+  collapsed: Set<number>,
+): Map<number, number> {
   const next = new Map<number, number[]>();
   for (const edge of edges) {
     next.set(edge.from, [...(next.get(edge.from) ?? []), edge.to]);
   }
 
-  const depths = new Map<number, number>([[rootId, 0]]);
-  const queue = [rootId];
+  // Several roots: the reader can open two functions out of one file and
+  // explore both. Each starts its own branch at depth 0.
+  const depths = new Map<number, number>(rootIds.map((id) => [id, 0]));
+  const queue = [...rootIds];
 
   while (queue.length > 0) {
     const current = queue.shift() as number;
     const depth = depths.get(current) ?? 0;
+
+    // A collapsed function is still drawn -- there has to be something to
+    // click to reopen it -- but the walk stops there, so nothing below it
+    // appears. Its subtree stays in the response list, which is what makes
+    // reopening restore the whole thing rather than one generation.
+    if (collapsed.has(current)) {
+      continue;
+    }
 
     for (const child of next.get(current) ?? []) {
       if (!depths.has(child)) {

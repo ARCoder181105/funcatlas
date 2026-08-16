@@ -1,5 +1,5 @@
 import { motion, type Variants } from "framer-motion";
-import { FileCode2 } from "lucide-react";
+import { Check, FileCode2 } from "lucide-react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { cn } from "../lib/cn";
 import { useFileFunctions } from "../lib/files";
@@ -47,7 +47,9 @@ const ROW: Variants = {
 export function FileCard({ data }: NodeProps<FileCardData>) {
   const functions = useFileFunctions(data.fileId);
   const selectedFunctionId = useUiStore((state) => state.selectedFunctionId);
-  const selectFunction = useUiStore((state) => state.selectFunction);
+  const rootFunctionIds = useUiStore((state) => state.rootFunctionIds);
+  const collapsedFunctionIds = useUiStore((state) => state.collapsedFunctionIds);
+  const toggleRoot = useUiStore((state) => state.toggleRoot);
   const transition = useMotionTransition("spring");
   const animated = useMotionEnabled();
 
@@ -81,7 +83,8 @@ export function FileCard({ data }: NodeProps<FileCardData>) {
           <FunctionList
             query={functions}
             selectedFunctionId={selectedFunctionId}
-            onSelect={selectFunction}
+            openIds={rootFunctionIds.filter((id) => !collapsedFunctionIds.includes(id))}
+            onSelect={toggleRoot}
             animated={animated}
           />
         </CardContent>
@@ -93,11 +96,14 @@ export function FileCard({ data }: NodeProps<FileCardData>) {
 function FunctionList({
   query,
   selectedFunctionId,
+  openIds,
   onSelect,
   animated,
 }: {
   query: ReturnType<typeof useFileFunctions>;
   selectedFunctionId: number | null;
+  /** Which of these already have a branch on the canvas. */
+  openIds: number[];
   onSelect: (id: number) => void;
   animated: boolean;
 }) {
@@ -143,6 +149,7 @@ function FunctionList({
         <ItemGroup>
           {functions.map((fn) => {
             const active = fn.id === selectedFunctionId;
+            const open = openIds.includes(fn.id);
 
             return (
               <Item
@@ -162,6 +169,15 @@ function FunctionList({
                   <ItemTitle className="truncate font-mono text-xs">{fn.name}</ItemTitle>
                 </ItemContent>
                 <ItemActions>
+                  {/* Which functions of this file are already on the canvas.
+                      Several can be open at once, each its own branch. */}
+                  {open ? (
+                    <Check
+                      strokeWidth={2}
+                      className="size-3.5 shrink-0 text-primary"
+                      aria-hidden
+                    />
+                  ) : null}
                   <Badge variant="outline" className="font-mono text-[10px] tabular-nums">
                     {fn.startLine}
                   </Badge>

@@ -20,6 +20,8 @@ import {
   FILE_CARD_NODE,
   FUNCTION_NODE,
   GHOST_NODE,
+  NODE_HEIGHT,
+  NODE_WIDTH,
   type GraphNodeData,
 } from "../lib/graph";
 import { useTheme } from "../lib/theme";
@@ -62,6 +64,8 @@ export function MindMap() {
   const mode = useTheme((state) => state.mode);
   const selectedFunctionId = useUiStore((state) => state.selectedFunctionId);
   const expandedFunctionIds = useUiStore((state) => state.expandedFunctionIds);
+  const rootFunctionIds = useUiStore((state) => state.rootFunctionIds);
+  const collapsedFunctionIds = useUiStore((state) => state.collapsedFunctionIds);
 
   const selectedFileId = useUiStore((state) => state.selectedFileId);
   const selectedRepoId = useUiStore((state) => state.selectedRepoId);
@@ -71,7 +75,10 @@ export function MindMap() {
   const palette = PALETTE[mode];
   const flow = useReactFlow();
 
-  const graph = useMemo(() => buildGraph(expansions.data), [expansions.data]);
+  const graph = useMemo(
+    () => buildGraph(expansions.data, rootFunctionIds, collapsedFunctionIds),
+    [expansions.data, rootFunctionIds, collapsedFunctionIds],
+  );
 
   /**
    * The file card is part of the same canvas, not a surface the mind-map
@@ -90,7 +97,9 @@ export function MindMap() {
     }
 
     const fileNodeId = `file-${file.id}`;
-    const rootNode = graph.nodes.find((node) => node.data.depth === 0);
+    // Every branch root, not one: the reader can open several functions out of
+    // one file and explore each independently.
+    const rootNodes = graph.nodes.filter((node) => node.data.depth === 0);
 
     return {
       ...graph,
@@ -106,42 +115,49 @@ export function MindMap() {
         } as unknown as Node<GraphNodeData>,
         ...graph.nodes,
       ],
-      edges:
-        rootNode === undefined
-          ? graph.edges
-          : [
-              {
-                id: `e-${fileNodeId}-${rootNode.id}`,
-                source: fileNodeId,
-                target: rootNode.id,
-                // Not a call and so not a confidence tier: this edge says
-                // "declared in", which is a fact rather than an inference.
-                type: "smoothstep",
-                style: { stroke: palette.surface.border, strokeWidth: 1.5 },
-              },
-              ...graph.edges,
-            ],
+      edges: [
+        ...rootNodes.map((rootNode) => ({
+          id: `e-${fileNodeId}-${rootNode.id}`,
+          source: fileNodeId,
+          target: rootNode.id,
+          // Not a call and so not a confidence tier: this edge says "declared
+          // in", which is a fact rather than an inference.
+          type: "smoothstep",
+          style: { stroke: palette.surface.border, strokeWidth: 1.5 },
+        })),
+        ...graph.edges,
+      ],
     };
   }, [graph, tree.data, selectedFileId, palette.surface.border]);
 
   /**
-   * Follow the graph as it grows.
+   * Travel to whatever was just opened.
    *
    * `fitView` as a prop only runs on mount, so every expansion added a column
-   * outside the viewport: the map grew and the screen did not move, which
-   * reads exactly like nothing happened. Animated rather than snapped, so it
-   * is visible that the view travelled to new material instead of the graph
-   * having been replaced.
+   * outside the viewport and the screen never moved -- which reads exactly
+   * like nothing happened. Centring on the new card rather than refitting the
+   * whole graph, because a map that has been explored for a while zooms out
+   * far enough on a refit that the new branch is unreadable.
+   *
+   * Keyed on the selection, not the node count: closing a branch changes the
+   * count too, and yanking the view somewhere on a collapse is disorienting.
    */
   useEffect(() => {
-    if (graph.nodes.length === 0) return;
+    if (selectedFunctionId === null) return;
+    const target = withFile.nodes.find((node) => node.data?.functionId === selectedFunctionId);
+    if (target === undefined) return;
+
     // A frame late on purpose: React Flow measures the new nodes first, and
-    // fitting before that computes bounds without them.
+    // centring before that uses stale positions.
     const id = requestAnimationFrame(() => {
-      flow.fitView({ padding: 0.2, maxZoom: 1, duration: 400 });
+      flow.setCenter(
+        target.position.x + NODE_WIDTH / 2,
+        target.position.y + NODE_HEIGHT / 2,
+        { zoom: 1, duration: 450 },
+      );
     });
     return () => cancelAnimationFrame(id);
-  }, [withFile.nodes.length, flow]);
+  }, [selectedFunctionId, withFile.nodes, flow]);
 
   // Focus mode: the selected function's immediate neighbourhood stays lit and
   // everything else dims. Computed here rather than in the nodes so each one
@@ -212,7 +228,7 @@ export function MindMap() {
         </Panel>
       ) : null}
 
-      <Panel position="bottom-left">
+      <Panel position="top-right">
         <ConfidenceKey />
       </Panel>
 

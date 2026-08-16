@@ -201,6 +201,71 @@ describe("buildGraph", () => {
     }
   });
 
+  it("measures from the anchor it is given, not from whichever response arrived first", () => {
+    // Expansions resolve out of order and the pending ones are filtered out,
+    // so responses[0] is not the function the reader started from. Taking the
+    // anchor from there prunes the map to one subtree without saying so.
+    const outOfOrder = [
+      ...response([fn(2, 0, null, null), fn(3, 1, 2, "exact")], [], 2),
+      ...response([ROOT, fn(2, 1, 1, "exact")], [], 1),
+    ];
+
+    const built = buildGraph(outOfOrder, [1]);
+    expect(built.nodes.map((node) => node.id).sort()).toEqual(["fn-1", "fn-2", "fn-3"]);
+
+    // Without the explicit anchor it would keep only fn-2's subtree.
+    expect(buildGraph(outOfOrder).nodes.map((node) => node.id).sort()).toEqual(["fn-2", "fn-3"]);
+  });
+
+  it("hides a collapsed branch's descendants but keeps the branch itself", () => {
+    // Collapsing has to leave something to click to reopen, and everything
+    // below it has to disappear -- including its ghosts.
+    const responses = [
+      ...response([ROOT, fn(2, 1, 1, "exact")]),
+      ...response([fn(2, 0, null, null), fn(3, 1, 2, "exact")], [call(9, "logger.debug", 4)], 2),
+    ];
+
+    const open = buildGraph(responses, [1], []);
+    expect(open.nodes.map((n) => n.id).sort()).toEqual(["fn-1", "fn-2", "fn-3", "ghost-logger.debug"]);
+
+    const shut = buildGraph(responses, [1], [2]);
+    expect(shut.nodes.map((n) => n.id).sort()).toEqual(["fn-1", "fn-2"]);
+    // And the same responses reopen to exactly what was there before.
+    expect(buildGraph(responses, [1], []).nodes.map((n) => n.id).sort()).toEqual(
+      open.nodes.map((n) => n.id).sort(),
+    );
+  });
+
+  it("draws several branches from one file, each from its own root", () => {
+    const built = buildGraph(
+      [
+        ...response([ROOT, fn(2, 1, 1, "exact")]),
+        ...response([fn(50, 0, null, null), fn(51, 1, 50, "exact")], [], 50),
+      ],
+      [1, 50],
+    );
+
+    expect(built.nodes.map((n) => n.id).sort()).toEqual(["fn-1", "fn-2", "fn-50", "fn-51"]);
+    // Both roots sit in the first column.
+    const depth = (id: string) => built.nodes.find((n) => n.id === id)?.data.depth;
+    expect(depth("fn-1")).toBe(0);
+    expect(depth("fn-50")).toBe(0);
+  });
+
+  it("drops an expansion that no longer hangs off the anchor", () => {
+    // Closing a function in the middle leaves the ones it had opened with
+    // nothing above them. Every response also carries its own function at
+    // depth 0, so without pruning those would float as if they were roots.
+    const built = buildGraph([
+      ...response([ROOT, fn(2, 1, 1, "exact")]),
+      // fn 4 was opened through fn 3, and fn 3 is no longer expanded.
+      ...response([fn(3, 0, null, null), fn(4, 1, 3, "exact")], [], 3),
+    ]);
+
+    expect(built.nodes.map((node) => node.id).sort()).toEqual(["fn-1", "fn-2"]);
+    expect(built.edges.every((edge) => !edge.id.includes("3"))).toBe(true);
+  });
+
   it("returns an empty map when nothing has been expanded", () => {
     expect(buildGraph([])).toEqual({ nodes: [], edges: [], truncated: 0 });
   });

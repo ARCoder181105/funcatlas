@@ -30,6 +30,58 @@ describe("selection", () => {
     expect(state().selectedFunctionId).toBeNull();
   });
 
+  it("opens two functions out of one file as separate branches", () => {
+    state().selectFile(10);
+    state().toggleRoot(1);
+    state().toggleRoot(2);
+
+    expect(state().rootFunctionIds).toEqual([1, 2]);
+    expect(state().expandedFunctionIds).toEqual([1, 2]);
+  });
+
+  it("collapsing remembers everything underneath, so reopening restores it", () => {
+    // The scenario: two branches off a file card, one explored three
+    // generations deep and one two. Closing the second must bring back the
+    // same structure when reopened, not one generation at a time.
+    state().selectFile(10);
+    state().toggleRoot(1);
+    state().toggleRoot(2);
+    state().toggleFunction(11);
+    state().toggleFunction(12); // branch 1, three generations
+    state().toggleFunction(21); // branch 2, two generations
+
+    const openedBefore = [...state().expandedFunctionIds];
+
+    state().toggleRoot(2);
+    expect(state().collapsedFunctionIds).toContain(2);
+    // Nothing is forgotten -- only hidden.
+    expect(state().expandedFunctionIds).toEqual(openedBefore);
+
+    state().toggleRoot(2);
+    expect(state().collapsedFunctionIds).not.toContain(2);
+    expect(state().expandedFunctionIds).toEqual(openedBefore);
+  });
+
+  it("toggles a function deeper in the map without touching the branches", () => {
+    state().selectFile(10);
+    state().toggleRoot(1);
+    state().toggleFunction(11);
+
+    state().toggleFunction(11);
+    expect(state().collapsedFunctionIds).toEqual([11]);
+    expect(state().rootFunctionIds).toEqual([1]);
+
+    state().toggleFunction(11);
+    expect(state().collapsedFunctionIds).toEqual([]);
+  });
+
+  it("selects whatever was just toggled, so the view can travel to it", () => {
+    state().selectFile(10);
+    state().toggleRoot(1);
+    state().toggleFunction(7);
+    expect(state().selectedFunctionId).toBe(7);
+  });
+
   it("clears the function when the file changes", () => {
     state().selectRepo(1);
     state().selectFile(10);

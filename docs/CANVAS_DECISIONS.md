@@ -42,12 +42,50 @@ return unresolved edges at all. Now that every expansion carries its own `edges`
 is drawn wherever it was actually made. The honesty promise in `PRD.md` §8 got materially better as
 a side effect of a UX change.
 
-**Not built:** collapsing a branch. Nothing removes nodes yet. Add it when a map gets big enough to
-need pruning — the state is a list of expanded ids, so removing one is a filter.
+**Collapsing** was added after the fact, and it is a *view* flag rather than a deletion. See 1b.
 
 ---
 
-## 2. Depth and direction controls are gone
+## 1b. Several branches, and collapsing remembers
+
+**Decided:** after the reader described the interaction they wanted.
+**Status:** built.
+
+The model, in their words: a file card with three functions, two of them opened; one branch explored
+three generations deep and the other two; closing the second branch collapses everything under it;
+reopening it brings the whole structure back exactly as it was.
+
+That needs three things the first version did not have.
+
+**Several roots.** Opening a function from the file card starts a *branch*, and there can be many.
+`rootFunctionIds` holds them, the file card marks which of its rows are open, and the depth walk
+starts from all of them at once. Each root sits in the first column with its own edge from the file
+card.
+
+**Collapse as a flag, not a deletion.** Three lists, and the distinction between them is the whole
+feature:
+
+| State | Meaning |
+|---|---|
+| `rootFunctionIds` | branches opened from the file card |
+| `expandedFunctionIds` | every function ever opened — **memory**, never pruned |
+| `collapsedFunctionIds` | explicitly closed — **visibility** |
+
+Closing a function adds it to `collapsedFunctionIds` and removes nothing. The breadth-first walk
+draws a collapsed node (there has to be something to click to reopen) but does not walk *through*
+it, so its descendants simply do not get a depth and are filtered out.
+
+**Reopening is free and exact.** Because nothing was forgotten and every expansion is cached under
+its own TanStack Query key, removing the collapse flag restores the entire subtree in one render —
+not one generation per click, and with no refetch.
+
+Verified against `sindresorhus/ky`: one branch three deep is 14 nodes, a second branch takes it to
+30, collapsing the second drops to 15, and reopening returns to 30 with an identical node set.
+
+**One bug this surfaced.** `useExpansions` filters out queries that have not resolved, which
+reorders the list — so `responses[0]` was whichever expansion loaded first, not the function the
+reader started from. Every depth is measured from that anchor, so the map silently pruned itself to
+one subtree. Roots are now passed in from the store, and `graph.test.ts` pins it.
 
 **Decided:** during B5.
 **Status:** built.

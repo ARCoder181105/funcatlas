@@ -30,7 +30,7 @@ function Anchors() {
 /** A function the resolver placed. */
 export function FunctionNode({ data }: NodeProps<GraphNodeData>) {
   const selectedFunctionId = useUiStore((state) => state.selectedFunctionId);
-  const expandFunction = useUiStore((state) => state.expandFunction);
+  const toggleFunction = useUiStore((state) => state.toggleFunction);
   const transition = useMotionTransition("spring");
   const animated = useMotionEnabled();
 
@@ -42,14 +42,15 @@ export function FunctionNode({ data }: NodeProps<GraphNodeData>) {
       initial={animated ? { opacity: 0, scale: 0.9 } : false}
       animate={{ opacity: 1, scale: 1 }}
       transition={transition}
-      // Grows the map rather than replacing it: clicking a callee opens its
-      // own calls beside it and every ancestor stays on the canvas.
-      onClick={() => data.functionId !== null && expandFunction(data.functionId)}
+      // Grows the map rather than replacing it, and closes again on a second
+      // click. Several functions stay open at once; the map is their union.
+      onClick={() => data.functionId !== null && toggleFunction(data.functionId)}
+      aria-expanded={data.isLeaf ? undefined : data.expanded}
       aria-label={
         data.isLeaf
           ? `${data.label} — calls nothing`
           : data.expanded
-            ? `${data.label} — already open`
+            ? `${data.label} — close its calls`
             : `${data.label} — open its calls`
       }
       className={cn(
@@ -86,10 +87,15 @@ export function FunctionNode({ data }: NodeProps<GraphNodeData>) {
           rather than as a function that calls nothing. */}
       {data.isLeaf ? (
         <Dot strokeWidth={1.5} className="size-4 shrink-0 text-muted-foreground/50" aria-hidden />
-      ) : data.expanded ? null : (
+      ) : (
+        // Rotates rather than swapping glyphs, so the control reads as one
+        // thing in two states instead of two different buttons.
         <ChevronRight
           strokeWidth={1.5}
-          className="size-3.5 shrink-0 text-muted-foreground"
+          className={cn(
+            "size-3.5 shrink-0 text-muted-foreground transition-transform duration-micro",
+            data.expanded ? "rotate-90" : "rotate-0",
+          )}
           aria-hidden
         />
       )}

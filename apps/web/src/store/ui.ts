@@ -16,19 +16,37 @@ interface UiState {
   selectedFunctionId: number | null;
 
   /**
-   * Every function whose calls are currently drawn, in the order they were
-   * opened. The map grows by clicking and nothing is taken away, so this is a
-   * list rather than a single id: the reader is building up a path through the
-   * graph, and losing the ancestors would lose the path.
+   * Functions opened straight from the file card. Each is a branch root, and
+   * there can be several: the reader opens two functions out of a file and
+   * explores both.
+   */
+  rootFunctionIds: number[];
+
+  /**
+   * Every function whose calls have ever been fetched, in the order opened.
+   * This is memory, not visibility -- closing a branch does not remove
+   * anything from here, which is what lets reopening it come back exactly as
+   * it was rather than one generation at a time.
    */
   expandedFunctionIds: number[];
 
+  /**
+   * Functions the reader has closed. A collapsed function stays on the canvas
+   * -- it has to, or there would be nothing to click to reopen -- but nothing
+   * below it is drawn.
+   */
+  collapsedFunctionIds: number[];
+
   selectRepo: (id: number | null) => void;
   selectFile: (id: number | null) => void;
-  /** Starts a fresh map from one function, replacing whatever was drawn. */
+  /** Opens a function from the file card as a new branch, or closes that
+   *  branch if it is already open. */
+  toggleRoot: (id: number) => void;
+  /** Opens a function's calls, or closes them again. Closing keeps everything
+   *  underneath in memory so reopening restores it whole. */
+  toggleFunction: (id: number) => void;
+  /** Clears the map. Used when the file or repository changes. */
   selectFunction: (id: number | null) => void;
-  /** Grows the current map by one function, keeping everything already on it. */
-  expandFunction: (id: number) => void;
   /** Signing out, where nothing selected should survive the next session. */
   clearSelection: () => void;
 
@@ -47,7 +65,9 @@ const empty = () => ({
   selectedRepoId: null,
   selectedFileId: null,
   selectedFunctionId: null,
+  rootFunctionIds: [] as number[],
   expandedFunctionIds: [] as number[],
+  collapsedFunctionIds: [] as number[],
 });
 
 export const useUiStore = create<UiState>((set) => ({
@@ -58,23 +78,64 @@ export const useUiStore = create<UiState>((set) => ({
   selectRepo: (selectedRepoId) => set({ ...empty(), selectedRepoId }),
 
   selectFile: (selectedFileId) =>
-    set({ selectedFileId, selectedFunctionId: null, expandedFunctionIds: [] }),
-
-  selectFunction: (selectedFunctionId) =>
     set({
-      selectedFunctionId,
-      expandedFunctionIds: selectedFunctionId === null ? [] : [selectedFunctionId],
+      selectedFileId,
+      selectedFunctionId: null,
+      rootFunctionIds: [],
+      expandedFunctionIds: [],
+      collapsedFunctionIds: [],
     }),
 
-  expandFunction: (id) =>
-    set((state) => ({
-      selectedFunctionId: id,
-      // Clicking an already-open function re-selects it without redrawing --
-      // its calls are on screen, and appending would fetch them again.
-      expandedFunctionIds: state.expandedFunctionIds.includes(id)
-        ? state.expandedFunctionIds
-        : [...state.expandedFunctionIds, id],
-    })),
+  selectFunction: (selectedFunctionId) =>
+    set(
+      selectedFunctionId === null
+        ? { selectedFunctionId, rootFunctionIds: [], expandedFunctionIds: [], collapsedFunctionIds: [] }
+        : { selectedFunctionId },
+    ),
+
+  toggleRoot: (id) =>
+    set((state) => {
+      const isOpen = state.rootFunctionIds.includes(id) && !state.collapsedFunctionIds.includes(id);
+
+      if (isOpen) {
+        // Closing a branch collapses it rather than forgetting it, so
+        // reopening restores every generation the reader had explored.
+        return {
+          selectedFunctionId: id,
+          collapsedFunctionIds: [...state.collapsedFunctionIds, id],
+        };
+      }
+
+      return {
+        selectedFunctionId: id,
+        rootFunctionIds: state.rootFunctionIds.includes(id)
+          ? state.rootFunctionIds
+          : [...state.rootFunctionIds, id],
+        expandedFunctionIds: state.expandedFunctionIds.includes(id)
+          ? state.expandedFunctionIds
+          : [...state.expandedFunctionIds, id],
+        collapsedFunctionIds: state.collapsedFunctionIds.filter((candidate) => candidate !== id),
+      };
+    }),
+
+  toggleFunction: (id) =>
+    set((state) => {
+      const collapsed = state.collapsedFunctionIds.includes(id);
+      const opened = state.expandedFunctionIds.includes(id);
+
+      if (opened && !collapsed) {
+        // Collapse. Everything underneath stays in expandedFunctionIds and in
+        // the query cache, so reopening brings the whole subtree back in the
+        // state it was left in rather than one generation at a time.
+        return { selectedFunctionId: id, collapsedFunctionIds: [...state.collapsedFunctionIds, id] };
+      }
+
+      return {
+        selectedFunctionId: id,
+        expandedFunctionIds: opened ? state.expandedFunctionIds : [...state.expandedFunctionIds, id],
+        collapsedFunctionIds: state.collapsedFunctionIds.filter((candidate) => candidate !== id),
+      };
+    }),
 
   clearSelection: () => set({ ...empty() }),
 }));
