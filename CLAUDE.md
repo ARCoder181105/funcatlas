@@ -177,3 +177,4 @@ commands are cheaper and more honest.
 | How does extraction and resolution work? | `docs/PARSING_STRATEGY.md` |
 | What's still undecided? | `docs/RISKS.md` |
 | Why this stack? | `docs/TECH_STACK.md` |
+| Why does the canvas behave like that? | `docs/CANVAS_DECISIONS.md` |

@@ -1,27 +1,34 @@
-import {
-  TRAVERSAL_DEFAULT_DEPTH,
-  TRAVERSAL_MAX_DEPTH,
-  type TraversalDirection,
-} from "@funcatlas/shared";
 import { create } from "zustand";
 
 /**
  * What the reader has selected. Server state lives in TanStack Query; this is
  * only the selection that drives it.
  *
- * The three ids are a chain -- a file belongs to a repository, a function to a
- * file -- so selecting higher up clears everything below. Ids are per-repo and
- * mean nothing outside it, and a stale `selectedFileId` carried across a repo
- * change 404s or, worse, silently loads the previous repo's card.
+ * The ids are a chain -- a file belongs to a repository, a function to a file
+ * -- so selecting higher up clears everything below. Ids are per-repo and mean
+ * nothing outside it, and a stale `selectedFileId` carried across a repo change
+ * 404s or, worse, silently loads the previous repo's card.
  */
 interface UiState {
   selectedRepoId: number | null;
   selectedFileId: number | null;
+  /** Which function's source the code block shows. Always the last one opened. */
   selectedFunctionId: number | null;
+
+  /**
+   * Every function whose calls are currently drawn, in the order they were
+   * opened. The map grows by clicking and nothing is taken away, so this is a
+   * list rather than a single id: the reader is building up a path through the
+   * graph, and losing the ancestors would lose the path.
+   */
+  expandedFunctionIds: number[];
 
   selectRepo: (id: number | null) => void;
   selectFile: (id: number | null) => void;
+  /** Starts a fresh map from one function, replacing whatever was drawn. */
   selectFunction: (id: number | null) => void;
+  /** Grows the current map by one function, keeping everything already on it. */
+  expandFunction: (id: number) => void;
   /** Signing out, where nothing selected should survive the next session. */
   clearSelection: () => void;
 
@@ -32,41 +39,42 @@ interface UiState {
   paletteOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
 
-  /** How far the mind-map walks, and which way. Kept across selections on
-   *  purpose: a reader who set depth 3 meant it for the next function too. */
-  traversalDepth: number;
-  traversalDirection: TraversalDirection;
-  setTraversalDepth: (depth: number) => void;
-  setTraversalDirection: (direction: TraversalDirection) => void;
 }
 
-const EMPTY = {
+/** `expandedFunctionIds` is rebuilt rather than shared, so no two resets can
+ *  end up pointing at one array. */
+const empty = () => ({
   selectedRepoId: null,
   selectedFileId: null,
   selectedFunctionId: null,
-} as const;
+  expandedFunctionIds: [] as number[],
+});
 
 export const useUiStore = create<UiState>((set) => ({
-  ...EMPTY,
+  ...empty(),
   paletteOpen: false,
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
 
-  traversalDepth: TRAVERSAL_DEFAULT_DEPTH,
-  traversalDirection: "out",
+  selectRepo: (selectedRepoId) => set({ ...empty(), selectedRepoId }),
 
-  // Clamped here as well as server-side: the control offers only valid depths,
-  // but a depth of 0 or 40 arriving from anywhere else would either draw an
-  // empty graph or ask for one the API rejects.
-  setTraversalDepth: (depth) =>
-    set({ traversalDepth: Math.min(Math.max(Math.round(depth), 1), TRAVERSAL_MAX_DEPTH) }),
+  selectFile: (selectedFileId) =>
+    set({ selectedFileId, selectedFunctionId: null, expandedFunctionIds: [] }),
 
-  setTraversalDirection: (traversalDirection) => set({ traversalDirection }),
+  selectFunction: (selectedFunctionId) =>
+    set({
+      selectedFunctionId,
+      expandedFunctionIds: selectedFunctionId === null ? [] : [selectedFunctionId],
+    }),
 
-  selectRepo: (selectedRepoId) => set({ ...EMPTY, selectedRepoId }),
+  expandFunction: (id) =>
+    set((state) => ({
+      selectedFunctionId: id,
+      // Clicking an already-open function re-selects it without redrawing --
+      // its calls are on screen, and appending would fetch them again.
+      expandedFunctionIds: state.expandedFunctionIds.includes(id)
+        ? state.expandedFunctionIds
+        : [...state.expandedFunctionIds, id],
+    })),
 
-  selectFile: (selectedFileId) => set({ selectedFileId, selectedFunctionId: null }),
-
-  selectFunction: (selectedFunctionId) => set({ selectedFunctionId }),
-
-  clearSelection: () => set({ ...EMPTY }),
+  clearSelection: () => set({ ...empty() }),
 }));

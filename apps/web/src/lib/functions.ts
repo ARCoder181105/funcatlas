@@ -1,35 +1,43 @@
-import { useQuery } from "@tanstack/react-query";
-import {
-  TRAVERSAL_DEFAULT_DEPTH,
-  type TraversalDirection,
-  type TraversalResponse,
-} from "@funcatlas/shared";
+import { useQueries } from "@tanstack/react-query";
+import type { TraversalResponse } from "@funcatlas/shared";
 import { api } from "./api";
 
 /** Function-scoped queries. The traversal today; B6 adds the source. */
 
-export const traversalKey = (
-  fnId: number,
-  depth: number,
-  direction: TraversalDirection,
-) => ["function", fnId, "edges", depth, direction] as const;
+/**
+ * Depth 1, always.
+ *
+ * The map grows a column at a time by clicking, so asking for more would fetch
+ * branches the reader has not opened and draw a graph they did not ask for.
+ */
+const EXPANSION_DEPTH = 1;
+
+export const expansionKey = (fnId: number) => ["function", fnId, "edges", EXPANSION_DEPTH] as const;
 
 /**
- * What a function calls, or what calls it.
+ * One query per opened function, merged into a single result.
  *
- * Depth and direction are in the key, not just the request: with them left out
- * a change to either shows the previous graph until the new one lands, which
- * on a confidence-tagged map means showing edges that were never asked for.
+ * `useQueries` rather than a loop of `useQuery` because the list length
+ * changes as the reader expands, and hooks cannot be called conditionally.
+ * Each expansion caches under its own key, so re-opening a function already on
+ * the map costs nothing and collapsing-then-reopening is instant.
  */
-export function useTraversal(
-  fnId: number | null,
-  depth: number = TRAVERSAL_DEFAULT_DEPTH,
-  direction: TraversalDirection = "out",
-) {
-  return useQuery<TraversalResponse>({
-    queryKey: traversalKey(fnId ?? 0, depth, direction),
-    queryFn: () => api.edgesForFunction(fnId as number, { depth, direction }),
-    enabled: fnId !== null,
-    staleTime: Infinity,
+export function useExpansions(functionIds: number[]) {
+  return useQueries({
+    queries: functionIds.map((fnId) => ({
+      queryKey: expansionKey(fnId),
+      queryFn: () => api.edgesForFunction(fnId, { depth: EXPANSION_DEPTH, direction: "out" as const }),
+      staleTime: Infinity,
+    })),
+    combine: (results) => ({
+      // Only the expansions that have arrived. A half-drawn map is correct as
+      // far as it goes; waiting for all of them would blank the canvas every
+      // time the reader opened one more function.
+      data: results
+        .map((result) => result.data)
+        .filter((data): data is TraversalResponse => data !== undefined),
+      isPending: results.some((result) => result.isPending),
+      error: results.find((result) => result.error !== null)?.error ?? null,
+    }),
   });
 }

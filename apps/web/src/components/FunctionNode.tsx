@@ -30,7 +30,7 @@ function Anchors() {
 /** A function the resolver placed. */
 export function FunctionNode({ data }: NodeProps<GraphNodeData>) {
   const selectedFunctionId = useUiStore((state) => state.selectedFunctionId);
-  const selectFunction = useUiStore((state) => state.selectFunction);
+  const expandFunction = useUiStore((state) => state.expandFunction);
   const transition = useMotionTransition("spring");
   const animated = useMotionEnabled();
 
@@ -42,7 +42,9 @@ export function FunctionNode({ data }: NodeProps<GraphNodeData>) {
       initial={animated ? { opacity: 0, scale: 0.9 } : false}
       animate={{ opacity: 1, scale: 1 }}
       transition={transition}
-      onClick={() => data.functionId !== null && selectFunction(data.functionId)}
+      // Grows the map rather than replacing it: clicking a callee opens its
+      // own calls beside it and every ancestor stays on the canvas.
+      onClick={() => data.functionId !== null && expandFunction(data.functionId)}
       className={cn(
         "nodrag flex h-11 w-52 items-center gap-2 rounded-token border px-3",
         "bg-card text-left transition-colors duration-micro",

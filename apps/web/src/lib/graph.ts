@@ -1,32 +1,32 @@
 import type {
   ReachableFunction,
   ResolutionConfidence,
-  TraversalDirection,
   TraversalResponse,
 } from "@funcatlas/shared";
 import type { Edge, Node } from "reactflow";
 
 /**
- * Turns one traversal response into React Flow nodes and edges.
+ * Turns the reader's expansions into React Flow nodes and edges.
  *
  * Pure on purpose: this is where `resolution_confidence` stops being a column
  * and becomes the product's central claim (PRD §8), and the failure mode is
  * silent -- a mapper that drops unresolved calls draws a function calling
  * nothing, confidently. That is worth testing without a DOM in the way.
  *
- * Three things about the API's shape drive the design here, and none of them
- * is obvious from the response type:
+ * Two things about the API's shape drive the design, neither obvious from the
+ * response type:
  *
  * 1. `reachable` walks resolved edges only. An unresolved edge points at no
  *    function row, so the recursive CTE cannot return it -- `edges` exists
  *    precisely to surface those.
- * 2. `edges` is the *start function's* direct calls, nothing deeper. So a
- *    ghost can only ever appear at depth 1. Unresolved calls further out are
- *    invisible, and `GHOST_HORIZON` below says so in the interface rather
- *    than letting the map imply the boundary is complete.
- * 3. `edges` is always outgoing (`caller_function_id = fnId`) regardless of
- *    `direction`. On an inbound traversal those calls belong to a different
- *    graph entirely, so ghosts are rendered for `out` only.
+ * 2. `edges` covers one function's direct calls. That used to cap ghosts at
+ *    depth 1; now that the map grows one expansion at a time, each expansion
+ *    brings its own, so a ghost appears wherever the call was actually made.
+ *
+ * Outbound only. "What calls this" was cut from the canvas, and keeping the
+ * inbound branch would leave a whole arrow-direction path that nothing can
+ * reach and no test can honestly cover. The API still supports `direction`, so
+ * bringing it back is a prop and a branch, not a redesign.
  */
 
 /** Layout grid, in flow units. A card is 288px wide; a column narrower than
@@ -70,7 +70,7 @@ export interface GraphNodeData {
   qualifiedName: string | null;
   fileId: number | null;
   depth: number;
-  /** The start of the traversal. Reached by no edge, so it has no confidence. */
+  /** The function the map was started from -- depth 0, reached by no edge. */
   isRoot: boolean;
   /** Lines the unresolved call was made on. Ghosts only. */
   callLines: number[];
@@ -81,8 +81,6 @@ export interface BuiltGraph {
   edges: Edge[];
   /** How many functions the ceiling dropped. Zero when nothing was cut. */
   truncated: number;
-  /** True when ghosts are meaningful for this direction -- see note 3 above. */
-  showsGhosts: boolean;
 }
 
 export const FUNCTION_NODE = "functionNode";
@@ -93,48 +91,130 @@ export const GHOST_NODE = "ghostNode";
 const functionId = (id: number) => `fn-${id}`;
 const ghostId = (name: string) => `ghost-${name}`;
 
-export function buildGraph(response: TraversalResponse): BuiltGraph {
-  const { reachable, edges, direction } = response;
+/**
+ * Merges every expansion the reader has opened into one map.
+ *
+ * The map grows by clicking rather than by asking for a depth up front, so
+ * this takes a list: one response per expanded function, each covering that
+ * function's direct calls. Nothing is ever removed, which is the whole point
+ * -- the reader is building a path and the ancestors are the path.
+ *
+ * A useful consequence: because every expansion brings its own `edges`, a
+ * ghost can appear anywhere the reader has opened, not only beside the root.
+ * With a single fixed-depth traversal, unresolved calls past depth 1 were
+ * invisible.
+ */
+export function buildGraph(responses: TraversalResponse[]): BuiltGraph {
+  const first = responses[0];
+  if (first === undefined) {
+    return { nodes: [], edges: [], truncated: 0 };
+  }
 
-  // The CTE returns each function once even through a cycle -- mutual
-  // recursion is normal in real code -- but keying by id here means a future
-  // change to that query cannot quietly produce a duplicate node.
+  const rootId = first.functionId;
+
+  // Keyed by id across every response: expansions overlap constantly -- the
+  // function you just opened was already on screen as somebody's callee -- and
+  // a cycle can return the same function from two directions.
   const byId = new Map<number, ReachableFunction>();
-  for (const fn of reachable) {
-    if (!byId.has(fn.id)) {
-      byId.set(fn.id, fn);
+  for (const response of responses) {
+    for (const fn of response.reachable) {
+      if (!byId.has(fn.id)) {
+        byId.set(fn.id, fn);
+      }
     }
   }
 
-  const unique = [...byId.values()].sort(compareReachable);
+  // Edges first: depth is measured along them, so it cannot be read off the
+  // per-response `depth`, which is only ever 0 or 1 and is relative to
+  // whichever function that response expanded.
+  const linked = new Map<string, LinkedEdge>();
+  for (const response of responses) {
+    for (const fn of response.reachable) {
+      if (fn.viaFunctionId === null || fn.confidence === null) {
+        continue;
+      }
+      const key = `${fn.viaFunctionId}->${fn.id}`;
+      if (!linked.has(key)) {
+        linked.set(key, { from: fn.viaFunctionId, to: fn.id, confidence: fn.confidence });
+      }
+    }
+  }
+
+  const depths = depthsFrom(rootId, linked.values());
+
+  const unique = [...byId.values()].sort(
+    (a, b) => (depths.get(a.id) ?? 0) - (depths.get(b.id) ?? 0) || a.id - b.id,
+  );
   const kept = unique.slice(0, NODE_CEILING);
   const truncated = unique.length - kept.length;
   const keptIds = new Set(kept.map((fn) => fn.id));
 
-  const ghosts = direction === "out" ? collectGhosts(edges) : [];
-  const deepestKept = kept.reduce((max, fn) => Math.max(max, fn.depth), 0);
+  // One ghost group per expanded function, so an unresolved call hangs off the
+  // function that actually made it.
+  const ghostGroups = responses.map((response) => ({
+    callerId: response.functionId,
+    ghosts: collectGhosts(response.edges),
+  }));
 
   const nodes: Node<GraphNodeData>[] = [
-    ...layOut(kept.map(toFunctionNode)),
-    // Ghosts sit one column past the last resolved layer: the map's own
-    // boundary, drawn where a chart puts uncharted water.
-    ...layOut(ghosts.map((ghost) => toGhostNode(ghost, deepestKept + 1))),
+    ...layOut(kept.map((fn) => toFunctionNode(fn, depths.get(fn.id) ?? 0))),
+    ...layOut(
+      ghostGroups.flatMap(({ callerId, ghosts }) =>
+        ghosts.map((ghost) => toGhostNode(ghost, (depths.get(callerId) ?? 0) + 1)),
+      ),
+    ),
   ];
 
   return {
     nodes,
     edges: [
-      ...functionEdges(kept, keptIds, direction),
-      ...ghostEdges(response.functionId, ghosts, deepestKept + 1),
+      ...functionEdges([...linked.values()], keptIds, depths),
+      ...ghostGroups.flatMap(({ callerId, ghosts }) =>
+        keptIds.has(callerId)
+          ? ghostEdges(callerId, ghosts, (depths.get(callerId) ?? 0) + 1)
+          : [],
+      ),
     ],
     truncated,
-    showsGhosts: direction === "out",
   };
 }
 
-/** Shallowest first, then by id, so layout is stable across refetches. */
-function compareReachable(a: ReachableFunction, b: ReachableFunction): number {
-  return a.depth === b.depth ? a.id - b.id : a.depth - b.depth;
+interface LinkedEdge {
+  from: number;
+  to: number;
+  confidence: ResolutionConfidence;
+}
+
+/**
+ * How far each function sits from the root, measured along the edges actually
+ * drawn.
+ *
+ * Breadth-first, so a function reached by two paths lands in the shallower
+ * column -- otherwise the layout would jump every time the reader expanded a
+ * longer route to something already on screen.
+ */
+function depthsFrom(rootId: number, edges: Iterable<LinkedEdge>): Map<number, number> {
+  const next = new Map<number, number[]>();
+  for (const edge of edges) {
+    next.set(edge.from, [...(next.get(edge.from) ?? []), edge.to]);
+  }
+
+  const depths = new Map<number, number>([[rootId, 0]]);
+  const queue = [rootId];
+
+  while (queue.length > 0) {
+    const current = queue.shift() as number;
+    const depth = depths.get(current) ?? 0;
+
+    for (const child of next.get(current) ?? []) {
+      if (!depths.has(child)) {
+        depths.set(child, depth + 1);
+        queue.push(child);
+      }
+    }
+  }
+
+  return depths;
 }
 
 interface Ghost {
@@ -180,7 +260,7 @@ function collectGhosts(edges: TraversalResponse["edges"]): Ghost[] {
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function toFunctionNode(fn: ReachableFunction): Node<GraphNodeData> {
+function toFunctionNode(fn: ReachableFunction, depth: number): Node<GraphNodeData> {
   return {
     id: functionId(fn.id),
     type: FUNCTION_NODE,
@@ -193,11 +273,11 @@ function toFunctionNode(fn: ReachableFunction): Node<GraphNodeData> {
       functionId: fn.id,
       qualifiedName: fn.qualifiedName,
       fileId: fn.fileId,
-      depth: fn.depth,
-      // The start is reached by no edge at all: `confidence` and
-      // `viaFunctionId` are both null on it. That makes it a node without an
-      // inbound edge, not an unresolved one.
-      isRoot: fn.viaFunctionId === null,
+      depth,
+      // Depth measured from the root of the whole map, not the per-response
+      // flag: a function is the start of its own expansion while being a
+      // callee three columns in.
+      isRoot: depth === 0,
       callLines: [],
     },
   };
@@ -258,32 +338,28 @@ function layOut(nodes: Node<GraphNodeData>[]): Node<GraphNodeData>[] {
  * unresolved ones. Building from both would draw every depth-1 call twice.
  */
 function functionEdges(
-  reachable: ReachableFunction[],
+  linked: LinkedEdge[],
   keptIds: Set<number>,
-  direction: TraversalDirection,
+  depths: Map<number, number>,
 ): Edge[] {
   const edges: Edge[] = [];
 
-  for (const fn of reachable) {
-    if (fn.viaFunctionId === null || fn.confidence === null) {
-      continue;
-    }
-    // The ceiling may have cut the function this one was reached through,
-    // which would leave an edge pointing at a node that is not on the canvas.
-    if (!keptIds.has(fn.viaFunctionId)) {
+  for (const edge of linked) {
+    // The ceiling may have cut either end, which would leave an edge pointing
+    // at a node that is not on the canvas.
+    if (!keptIds.has(edge.from) || !keptIds.has(edge.to)) {
       continue;
     }
 
-    // An inbound traversal walks callers, so the function that was *reached*
-    // is the caller and the one it was reached through is the callee. Drawing
-    // the arrow the same way in both directions would point every inbound
-    // edge backwards.
-    const [source, target] =
-      direction === "out"
-        ? [functionId(fn.viaFunctionId), functionId(fn.id)]
-        : [functionId(fn.id), functionId(fn.viaFunctionId)];
-
-    edges.push(confidenceEdge(`e-${fn.viaFunctionId}-${fn.id}`, source, target, fn.confidence, fn.depth));
+    edges.push(
+      confidenceEdge(
+        `e-${edge.from}-${edge.to}`,
+        functionId(edge.from),
+        functionId(edge.to),
+        edge.confidence,
+        depths.get(edge.to) ?? 0,
+      ),
+    );
   }
 
   return edges;

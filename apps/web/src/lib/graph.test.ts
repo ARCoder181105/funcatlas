@@ -2,7 +2,6 @@ import type {
   CallEdge,
   ReachableFunction,
   ResolutionConfidence,
-  TraversalDirection,
   TraversalResponse,
 } from "@funcatlas/shared";
 import { describe, expect, it } from "vitest";
@@ -26,12 +25,14 @@ function resolved(id: number, calleeFunctionId: number, calleeName: string): Cal
   return { id, calleeFunctionId, calleeName, callLine: 1, confidence: "exact" };
 }
 
+/** One expansion. `buildGraph` takes a list of them, so every call site wraps
+ *  this in an array -- `expansions()` below builds a multi-step map. */
 function response(
   reachable: ReachableFunction[],
   edges: CallEdge[] = [],
-  direction: TraversalDirection = "out",
-): TraversalResponse {
-  return { functionId: 1, depth: 5, direction, reachable, edges };
+  functionId = 1,
+): TraversalResponse[] {
+  return [{ functionId, depth: 1, direction: "out", reachable, edges }];
 }
 
 /** The root of every fixture below. */
@@ -121,28 +122,62 @@ describe("buildGraph", () => {
     expect(nodes.filter((node) => node.type === GHOST_NODE)).toHaveLength(2);
   });
 
-  it("does not draw ghosts on an inbound traversal", () => {
-    // `edges` is always the start's *outgoing* calls, whatever the direction.
-    // On an inbound graph they describe something else entirely.
-    const built = buildGraph(response([ROOT], [call(10, "logger.debug", 1)], "in"));
-
-    expect(built.nodes.filter((node) => node.type === GHOST_NODE)).toHaveLength(0);
-    expect(built.showsGhosts).toBe(false);
-  });
-
-  it("puts ghosts past the last resolved layer", () => {
+  it("puts a ghost one column past the function that made the call", () => {
     const { nodes } = buildGraph(
       response([ROOT, fn(2, 1, 1, "exact"), fn(3, 2, 2, "exact")], [call(10, "logger.debug", 1)]),
     );
 
-    const deepest = Math.max(
-      ...nodes.filter((node) => node.type === FUNCTION_NODE).map((node) => node.data.depth),
-    );
     const ghost = nodes.find((node) => node.type === GHOST_NODE);
 
-    // The map showing its own boundary, drawn where a chart puts uncharted
-    // water -- not tangled among the functions it does know.
-    expect(ghost?.data.depth).toBe(deepest + 1);
+    // Beside its caller, not past the whole map. The unresolved call belongs
+    // to the root here, so parking it past the deepest resolved node would
+    // draw a long edge back to a function three columns away.
+    expect(ghost?.data.depth).toBe(1);
+  });
+
+  it("merges several expansions into one map, keeping the earlier ones", () => {
+    // The reader grows the map by clicking, and losing an ancestor would lose
+    // the path they took to get there.
+    const built = buildGraph([
+      ...response([ROOT, fn(2, 1, 1, "exact")]),
+      ...response([fn(2, 0, null, null), fn(3, 1, 2, "exact")], [], 2),
+    ]);
+
+    expect(built.nodes.map((node) => node.id).sort()).toEqual(["fn-1", "fn-2", "fn-3"]);
+    expect(built.edges.map((edge) => edge.id).sort()).toEqual(["e-1-2", "e-2-3"]);
+  });
+
+  it("measures depth from the root across expansions, not per response", () => {
+    // Each response reports depth 0 or 1 relative to whatever it expanded, so
+    // a column has to be counted along the edges instead.
+    const built = buildGraph([
+      ...response([ROOT, fn(2, 1, 1, "exact")]),
+      ...response([fn(2, 0, null, null), fn(3, 1, 2, "exact")], [], 2),
+    ]);
+
+    const depth = (id: string) => built.nodes.find((n) => n.id === id)?.data.depth;
+    expect(depth("fn-1")).toBe(0);
+    expect(depth("fn-2")).toBe(1);
+    expect(depth("fn-3")).toBe(2);
+  });
+
+  it("hangs a ghost off whichever expansion actually made the call", () => {
+    // The old fixed-depth traversal only ever knew the root's unresolved
+    // calls. Growing one expansion at a time means each brings its own.
+    const built = buildGraph([
+      ...response([ROOT, fn(2, 1, 1, "exact")]),
+      ...response([fn(2, 0, null, null)], [call(10, "logger.debug", 7)], 2),
+    ]);
+
+    const ghost = built.nodes.find((node) => node.type === GHOST_NODE);
+    expect(ghost?.data.depth).toBe(2);
+    expect(built.edges.some((edge) => edge.source === "fn-2" && edge.target === ghost?.id)).toBe(
+      true,
+    );
+  });
+
+  it("returns an empty map when nothing has been expanded", () => {
+    expect(buildGraph([])).toEqual({ nodes: [], edges: [], truncated: 0 });
   });
 
   it("turns depth into columns and spreads a layer across rows", () => {
@@ -230,20 +265,6 @@ describe("buildGraph", () => {
     );
 
     expect(built.edges).toHaveLength(1);
-  });
-
-  it("points an inbound edge from caller to callee, not the way it was walked", () => {
-    // An inbound traversal walks callers, so the function reached is the
-    // caller. Drawing it the same way as an outbound edge would reverse every
-    // arrow on the graph.
-    const outward = buildGraph(response([ROOT, fn(2, 1, 1, "exact")], [], "out"));
-    const inward = buildGraph(response([ROOT, fn(2, 1, 1, "exact")], [], "in"));
-
-    expect(outward.edges[0]?.source).toBe("fn-1");
-    expect(outward.edges[0]?.target).toBe("fn-2");
-
-    expect(inward.edges[0]?.source).toBe("fn-2");
-    expect(inward.edges[0]?.target).toBe("fn-1");
   });
 
   it("carries depth on the edge so the draw-in can be staggered by layer", () => {

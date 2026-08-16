@@ -1,9 +1,4 @@
 import { useMemo } from "react";
-import {
-  TRAVERSAL_DIRECTIONS,
-  TRAVERSAL_MAX_DEPTH,
-  type TraversalDirection,
-} from "@funcatlas/shared";
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -16,18 +11,16 @@ import ReactFlow, {
 import { AlertTriangle } from "lucide-react";
 import { ApiError } from "../lib/api";
 import { cn } from "../lib/cn";
-import { useTraversal } from "../lib/functions";
+import { useExpansions } from "../lib/functions";
 import { buildGraph, FUNCTION_NODE, GHOST_NODE, type GraphNodeData } from "../lib/graph";
 import { useTheme } from "../lib/theme";
 import { PALETTE } from "../lib/tokens";
 import { useUiStore } from "../store/ui";
-import { ConfidenceLegend } from "./ConfidenceLegend";
 import { ConfidenceEdge } from "./ConfidenceEdge";
+import { ConfidenceKey } from "./ConfidenceKey";
 import { FunctionNode, GhostNode } from "./FunctionNode";
 import { Badge } from "./ui/badge";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
-import { Label } from "./ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Skeleton } from "./ui/skeleton";
 
 /**
@@ -40,59 +33,50 @@ const EDGE_TYPES = { confidence: ConfidenceEdge };
 const GRID_FINE = 26;
 const GRID_COARSE = 130;
 
-const DIRECTION_LABEL: Record<TraversalDirection, string> = {
-  out: "What it calls",
-  in: "What calls it",
-};
-
-/** Offered depths. Bounded by the server's own cap, so the control cannot ask
- *  for a traversal the API will reject. */
-const DEPTHS = Array.from({ length: TRAVERSAL_MAX_DEPTH }, (_, index) => index + 1);
-
 /**
  * The mind-map: one function, and what it reaches.
  *
- * This is the product. Every edge is drawn at the confidence the resolver
- * actually had, and a call it could not place is drawn anyway, as a ghost at
- * the boundary — see `lib/graph.ts` for why dropping it would be the one
- * dishonesty PRD §8 forbids.
+ * It grows by clicking. Opening a function draws its direct calls beside it,
+ * and clicking any of those draws theirs -- nothing already on the canvas is
+ * taken away, so the map is the path the reader took through the graph.
+ *
+ * Every edge is drawn at the confidence the resolver actually had, and a call
+ * it could not place is drawn anyway, as a ghost at the boundary. See
+ * `lib/graph.ts` for why dropping one would be the dishonesty PRD §8 forbids.
  */
 export function MindMap() {
   const mode = useTheme((state) => state.mode);
   const selectedFunctionId = useUiStore((state) => state.selectedFunctionId);
-  const depth = useUiStore((state) => state.traversalDepth);
-  const direction = useUiStore((state) => state.traversalDirection);
-  const setDepth = useUiStore((state) => state.setTraversalDepth);
-  const setDirection = useUiStore((state) => state.setTraversalDirection);
+  const expandedFunctionIds = useUiStore((state) => state.expandedFunctionIds);
 
-  const traversal = useTraversal(selectedFunctionId, depth, direction);
+  const expansions = useExpansions(expandedFunctionIds);
   const palette = PALETTE[mode];
 
-  const graph = useMemo(
-    () => (traversal.data === undefined ? null : buildGraph(traversal.data)),
-    [traversal.data],
-  );
+  const graph = useMemo(() => buildGraph(expansions.data), [expansions.data]);
 
   // Focus mode: the selected function's immediate neighbourhood stays lit and
   // everything else dims. Computed here rather than in the nodes so each one
   // does not have to know the whole graph to decide how to draw itself.
   const { nodes, edges } = useMemo(
-    () => focus(graph?.nodes ?? [], graph?.edges ?? [], selectedFunctionId),
+    () => focus(graph.nodes, graph.edges, selectedFunctionId),
     [graph, selectedFunctionId],
   );
 
-  if (traversal.isPending) {
+  // Only the very first load is a blank canvas. Expanding keeps what is
+  // already drawn on screen while the new branch arrives, because taking the
+  // map away to fetch one more column is worse than a moment of nothing.
+  if (expansions.isPending && graph.nodes.length === 0) {
     return <MindMapSkeleton />;
   }
 
-  if (traversal.isError) {
+  if (expansions.error !== null && graph.nodes.length === 0) {
     return (
       <Empty className="h-full">
         <EmptyHeader>
           <EmptyTitle>The call graph did not load</EmptyTitle>
           <EmptyDescription>
-            {traversal.error instanceof ApiError
-              ? (traversal.error.detail ?? traversal.error.message)
+            {expansions.error instanceof ApiError
+              ? (expansions.error.detail ?? expansions.error.message)
               : "The API could not be reached."}
           </EmptyDescription>
         </EmptyHeader>
@@ -128,70 +112,19 @@ export function MindMap() {
         lineWidth={1}
       />
 
-      <Panel position="top-left" className="flex items-end gap-2">
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="direction" className="text-[10px] text-muted-foreground uppercase">
-            Direction
-          </Label>
-          <Select
-            value={direction}
-            onValueChange={(next) => setDirection(next as TraversalDirection)}
-          >
-            <SelectTrigger id="direction" size="sm" className="w-40 bg-card">
-              {/* Without the render prop the trigger shows the raw value --
-                  "out" rather than "What it calls". */}
-              <SelectValue>{(value: TraversalDirection) => DIRECTION_LABEL[value]}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {TRAVERSAL_DIRECTIONS.map((value) => (
-                <SelectItem key={value} value={value}>
-                  {DIRECTION_LABEL[value]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="depth" className="text-[10px] text-muted-foreground uppercase">
-            Depth
-          </Label>
-          <Select value={String(depth)} onValueChange={(next) => setDepth(Number(next))}>
-            <SelectTrigger id="depth" size="sm" className="w-20 bg-card">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {DEPTHS.map((value) => (
-                <SelectItem key={value} value={String(value)}>
-                  {value}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {graph !== null && graph.truncated > 0 ? (
-          // Stopping early without saying so is the same lie as hiding an
-          // unresolved call.
-          <Badge variant="outline" className="mb-1 gap-1.5 border-confidence-name">
+      {graph.truncated > 0 ? (
+        <Panel position="top-left">
+          {/* Stopping early without saying so is the same lie as hiding an
+              unresolved call. */}
+          <Badge variant="outline" className="gap-1.5 border-confidence-name bg-card">
             <AlertTriangle strokeWidth={1.5} className="size-3 text-confidence-name" aria-hidden />
             {graph.truncated} more not drawn
           </Badge>
-        ) : null}
-      </Panel>
+        </Panel>
+      ) : null}
 
-      {/* Bottom-left, where a chart carries its legend. An unexplained dotted
-          line is noise; an explained one is the entire point. */}
-      <Panel position="bottom-left" className="max-w-xs">
-        <div className="rounded-token border bg-card/90 px-3 py-2 backdrop-blur-sm">
-          <ConfidenceLegend />
-          {graph !== null && !graph.showsGhosts ? (
-            <p className="mt-2 border-t pt-2 text-[10px] leading-snug text-muted-foreground">
-              Unresolved calls are only known for the function you started from, so they are not
-              drawn while looking at callers.
-            </p>
-          ) : null}
-        </div>
+      <Panel position="bottom-left">
+        <ConfidenceKey />
       </Panel>
 
       <Controls
@@ -260,11 +193,11 @@ export function focus(
 function MindMapSkeleton() {
   return (
     <div className="flex h-full items-center gap-16 px-16" aria-busy>
-      <Skeleton className="h-12 w-40" />
+      <Skeleton className="h-11 w-52" />
       <div className="flex flex-col gap-4">
-        <Skeleton className="h-12 w-40" />
-        <Skeleton className="h-12 w-40" />
-        <Skeleton className="h-12 w-40" />
+        <Skeleton className="h-11 w-52" />
+        <Skeleton className="h-11 w-52" />
+        <Skeleton className="h-11 w-52" />
       </div>
     </div>
   );

@@ -351,7 +351,7 @@ functions at their real start lines, both graticule scales, minimap and controls
 
 ---
 
-## B5 — Mind-map: traversal to nodes and edges, styled by confidence  `[ ]`
+## B5 — Mind-map: traversal to nodes and edges, styled by confidence  `[x]`
 
 **Why.** This is the product. `resolution_confidence` has been carried faithfully through the
 parser, the resolver, the schema and the API for two phases specifically so that this chunk can draw
