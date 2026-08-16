@@ -31,7 +31,7 @@ import type { Edge, Node } from "reactflow";
 
 /** Layout grid, in flow units. A card is 288px wide; a column narrower than
  *  that overlaps its neighbour at zoom 1. */
-const COLUMN = 300;
+export const COLUMN = 300;
 const ROW = 92;
 
 /**
@@ -74,6 +74,18 @@ export interface GraphNodeData {
   isRoot: boolean;
   /** Lines the unresolved call was made on. Ghosts only. */
   callLines: number[];
+
+  /**
+   * Whether this function's own calls are already drawn.
+   *
+   * Without it every node looks equally clickable, and the ones that turn out
+   * to be leaves do nothing when clicked -- indistinguishable from the canvas
+   * being broken. Half the functions in a real repository are leaves.
+   */
+  expanded: boolean;
+  /** Known only once expanded: `true` when opening it drew nothing, because
+   *  the function calls nothing the parser could see. */
+  isLeaf: boolean;
 }
 
 export interface BuiltGraph {
@@ -83,6 +95,7 @@ export interface BuiltGraph {
   truncated: number;
 }
 
+export const FILE_CARD_NODE = "fileCard";
 export const FUNCTION_NODE = "functionNode";
 export const GHOST_NODE = "ghostNode";
 
@@ -111,6 +124,15 @@ export function buildGraph(responses: TraversalResponse[]): BuiltGraph {
   }
 
   const rootId = first.functionId;
+  // What the reader has already opened, and which of those turned out to call
+  // nothing. Both ride on the node so it can say whether clicking does
+  // anything at all.
+  const expandedIds = new Set(responses.map((response) => response.functionId));
+  const leafIds = new Set(
+    responses
+      .filter((response) => response.reachable.length <= 1 && response.edges.length === 0)
+      .map((response) => response.functionId),
+  );
 
   // Keyed by id across every response: expansions overlap constantly -- the
   // function you just opened was already on screen as somebody's callee -- and
@@ -156,14 +178,17 @@ export function buildGraph(responses: TraversalResponse[]): BuiltGraph {
     ghosts: collectGhosts(response.edges),
   }));
 
-  const nodes: Node<GraphNodeData>[] = [
-    ...layOut(kept.map((fn) => toFunctionNode(fn, depths.get(fn.id) ?? 0))),
-    ...layOut(
-      ghostGroups.flatMap(({ callerId, ghosts }) =>
-        ghosts.map((ghost) => toGhostNode(ghost, (depths.get(callerId) ?? 0) + 1)),
-      ),
+  // One layout pass over functions and ghosts together. Two passes centred
+  // each set on the same axis independently, so a ghost and a function in the
+  // same column were placed on top of each other.
+  const nodes = layOut([
+    ...kept.map((fn) =>
+      toFunctionNode(fn, depths.get(fn.id) ?? 0, expandedIds.has(fn.id), leafIds.has(fn.id)),
     ),
-  ];
+    ...ghostGroups.flatMap(({ callerId, ghosts }) =>
+      ghosts.map((ghost) => toGhostNode(ghost, (depths.get(callerId) ?? 0) + 1)),
+    ),
+  ]);
 
   return {
     nodes,
@@ -260,7 +285,12 @@ function collectGhosts(edges: TraversalResponse["edges"]): Ghost[] {
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function toFunctionNode(fn: ReachableFunction, depth: number): Node<GraphNodeData> {
+function toFunctionNode(
+  fn: ReachableFunction,
+  depth: number,
+  expanded: boolean,
+  isLeaf: boolean,
+): Node<GraphNodeData> {
   return {
     id: functionId(fn.id),
     type: FUNCTION_NODE,
@@ -279,6 +309,8 @@ function toFunctionNode(fn: ReachableFunction, depth: number): Node<GraphNodeDat
       // callee three columns in.
       isRoot: depth === 0,
       callLines: [],
+      expanded,
+      isLeaf,
     },
   };
 }
@@ -299,6 +331,9 @@ function toGhostNode(ghost: Ghost, depth: number): Node<GraphNodeData> {
       depth,
       isRoot: false,
       callLines: [...ghost.callLines].sort((a, b) => a - b),
+      // A ghost is a name, not a function: there is nothing to open.
+      expanded: false,
+      isLeaf: true,
     },
   };
 }

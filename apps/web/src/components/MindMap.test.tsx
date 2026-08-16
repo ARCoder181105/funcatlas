@@ -16,6 +16,8 @@ function node(id: string, functionId: number | null): Node<GraphNodeData> {
       depth: 0,
       isRoot: false,
       callLines: [],
+      expanded: false,
+      isLeaf: false,
     },
   };
 }

@@ -118,14 +118,59 @@ fails most of the suite. What decides *what* the edges are is covered exhaustive
 
 ---
 
-## 5. A provider per surface
+## 4b. The file card lives on the canvas, not on a canvas of its own
 
-**Decided:** during B5.
+**Decided:** after seeing it in use.
 **Status:** built.
 
-The file card and the mind-map are two different `<ReactFlow>` instances. Mounting the second into a
-`<ReactFlowProvider>` the first had already populated left it with stale internals and its edges
-never rendered. `Canvas` now branches *above* the provider so each surface gets its own.
+There used to be two `<ReactFlow>` surfaces: one drawing the file card, and one drawing the function
+graph that *replaced* it. Opening a function made the file you were reading disappear.
+
+Now there is one canvas. The file card is a node on it, one column to the left of the function it
+opened and joined to it by a plain "declared in" edge — deliberately not a confidence tier, because
+a function being declared in a file is a fact rather than an inference, and drawing it in the same
+notation as a call would say something untrue.
+
+The chain reads: **file card → function → its callees → theirs**, with nothing removed at any step.
+
+This also retires decision 5 below: with a single `<ReactFlow>` there is no second instance to
+inherit a populated provider store.
+
+---
+
+## 4c. The view follows the graph, and a node says whether it opens
+
+**Decided:** after "it is not growing".
+**Status:** built.
+
+Two things made a working feature look broken:
+
+- **`fitView` only runs on mount.** Every expansion added a column outside the viewport, so the map
+  grew and the screen did not move. It now re-fits after the node count changes, animated over
+  400ms and a frame late — React Flow has to measure the new nodes before their bounds can be
+  fitted.
+- **A leaf looked exactly like an unopened function.** Clicking one did nothing, which is
+  indistinguishable from a broken canvas, and roughly half the functions in a real repository are
+  leaves. Nodes now carry `expanded` and `isLeaf`: a chevron means "opens", a dot means "calls
+  nothing", nothing means "already open". The `aria-label` says the same thing in words.
+
+**And one real bug they exposed:** functions and ghosts were laid out in two separate passes, each
+centring its own depth column on the same axis, so a ghost and a function at the same depth were
+placed on top of each other. One pass over both fixes it, and `graph.test.ts` now asserts no two
+nodes share a position — a test that fails on the old code with `two nodes at 600,0`.
+
+---
+
+## 5. A provider per surface
+
+**Decided:** during B5. **Superseded by 4b.**
+
+The file card and the mind-map were two different `<ReactFlow>` instances, and mounting the second
+into a `<ReactFlowProvider>` the first had already populated left it with stale internals whose
+edges never rendered. `Canvas` branched above the provider so each surface got its own.
+
+Kept here because the symptom — nodes render, edges silently do not — is worth recognising if two
+surfaces ever come back. There is only one canvas now, so the workaround is gone.
 
 ---
 

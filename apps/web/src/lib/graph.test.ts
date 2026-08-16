@@ -5,7 +5,7 @@ import type {
   TraversalResponse,
 } from "@funcatlas/shared";
 import { describe, expect, it } from "vitest";
-import { buildGraph, GHOST_NODE, FUNCTION_NODE, NODE_CEILING } from "./graph";
+import { buildGraph, GHOST_NODE, FUNCTION_NODE, NODE_CEILING, NODE_HEIGHT } from "./graph";
 
 function fn(
   id: number,
@@ -174,6 +174,31 @@ describe("buildGraph", () => {
     expect(built.edges.some((edge) => edge.source === "fn-2" && edge.target === ghost?.id)).toBe(
       true,
     );
+  });
+
+  it("never places two nodes on top of each other", () => {
+    // Functions and ghosts used to be laid out in separate passes, each
+    // centring its own column on the same axis -- so a ghost and a function
+    // at the same depth landed in exactly the same place.
+    const built = buildGraph([
+      ...response([ROOT, fn(2, 1, 1, "exact"), fn(3, 1, 1, "exact")], [call(10, "logger.debug", 1)]),
+      ...response([fn(2, 0, null, null), fn(4, 1, 2, "exact")], [call(11, "fetch", 2)], 2),
+    ]);
+
+    const seen = new Set<string>();
+    for (const node of built.nodes) {
+      const at = `${node.position.x},${node.position.y}`;
+      expect(seen.has(at), `two nodes at ${at}`).toBe(false);
+      seen.add(at);
+    }
+
+    // And they are far enough apart to not visually collide.
+    for (const a of built.nodes) {
+      for (const b of built.nodes) {
+        if (a.id === b.id || a.position.x !== b.position.x) continue;
+        expect(Math.abs(a.position.y - b.position.y)).toBeGreaterThanOrEqual(NODE_HEIGHT);
+      }
+    }
   });
 
   it("returns an empty map when nothing has been expanded", () => {

@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { CircleDashed } from "lucide-react";
+import { ChevronRight, CircleDashed, Dot } from "lucide-react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { cn } from "../lib/cn";
 import type { GraphNodeData } from "../lib/graph";
@@ -45,6 +45,13 @@ export function FunctionNode({ data }: NodeProps<GraphNodeData>) {
       // Grows the map rather than replacing it: clicking a callee opens its
       // own calls beside it and every ancestor stays on the canvas.
       onClick={() => data.functionId !== null && expandFunction(data.functionId)}
+      aria-label={
+        data.isLeaf
+          ? `${data.label} — calls nothing`
+          : data.expanded
+            ? `${data.label} — already open`
+            : `${data.label} — open its calls`
+      }
       className={cn(
         "nodrag flex h-11 w-52 items-center gap-2 rounded-token border px-3",
         "bg-card text-left transition-colors duration-micro",
@@ -73,6 +80,19 @@ export function FunctionNode({ data }: NodeProps<GraphNodeData>) {
           start
         </Badge>
       ) : null}
+
+      {/* Whether clicking does anything. Without this a leaf looks exactly
+          like an unopened function, and clicking it reads as a broken canvas
+          rather than as a function that calls nothing. */}
+      {data.isLeaf ? (
+        <Dot strokeWidth={1.5} className="size-4 shrink-0 text-muted-foreground/50" aria-hidden />
+      ) : data.expanded ? null : (
+        <ChevronRight
+          strokeWidth={1.5}
+          className="size-3.5 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
+      )}
     </motion.button>
   );
 }

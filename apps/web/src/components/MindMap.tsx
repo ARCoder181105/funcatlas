@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import ReactFlow, {
   Background,
   BackgroundVariant,
   Controls,
   MiniMap,
   Panel,
+  useReactFlow,
   type Edge,
   type Node,
 } from "reactflow";
@@ -12,12 +13,21 @@ import { AlertTriangle } from "lucide-react";
 import { ApiError } from "../lib/api";
 import { cn } from "../lib/cn";
 import { useExpansions } from "../lib/functions";
-import { buildGraph, FUNCTION_NODE, GHOST_NODE, type GraphNodeData } from "../lib/graph";
+import { useRepoTree } from "../lib/repos";
+import {
+  buildGraph,
+  COLUMN,
+  FILE_CARD_NODE,
+  FUNCTION_NODE,
+  GHOST_NODE,
+  type GraphNodeData,
+} from "../lib/graph";
 import { useTheme } from "../lib/theme";
 import { PALETTE } from "../lib/tokens";
 import { useUiStore } from "../store/ui";
 import { ConfidenceEdge } from "./ConfidenceEdge";
 import { ConfidenceKey } from "./ConfidenceKey";
+import { FileCard } from "./FileCard";
 import { FunctionNode, GhostNode } from "./FunctionNode";
 import { Badge } from "./ui/badge";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
@@ -27,7 +37,11 @@ import { Skeleton } from "./ui/skeleton";
  * Hoisted: React Flow compares these by identity, and a new object each render
  * remounts every node and replays every edge animation.
  */
-const NODE_TYPES = { [FUNCTION_NODE]: FunctionNode, [GHOST_NODE]: GhostNode };
+const NODE_TYPES = {
+  [FILE_CARD_NODE]: FileCard,
+  [FUNCTION_NODE]: FunctionNode,
+  [GHOST_NODE]: GhostNode,
+};
 const EDGE_TYPES = { confidence: ConfidenceEdge };
 
 const GRID_FINE = 26;
@@ -49,27 +63,102 @@ export function MindMap() {
   const selectedFunctionId = useUiStore((state) => state.selectedFunctionId);
   const expandedFunctionIds = useUiStore((state) => state.expandedFunctionIds);
 
+  const selectedFileId = useUiStore((state) => state.selectedFileId);
+  const selectedRepoId = useUiStore((state) => state.selectedRepoId);
+  const tree = useRepoTree(selectedRepoId);
+
   const expansions = useExpansions(expandedFunctionIds);
   const palette = PALETTE[mode];
+  const flow = useReactFlow();
 
   const graph = useMemo(() => buildGraph(expansions.data), [expansions.data]);
+
+  /**
+   * The file card is part of the same canvas, not a surface the mind-map
+   * replaces.
+   *
+   * Clicking a function used to swap one whole React Flow for another, so the
+   * file you were reading vanished the moment you opened something in it. It
+   * now sits one column to the left of the function it opened, joined to it,
+   * so the chain reads file to function to callees without anything
+   * disappearing.
+   */
+  const withFile = useMemo(() => {
+    const file = tree.data?.files.find((candidate) => candidate.id === selectedFileId);
+    if (file === undefined) {
+      return graph;
+    }
+
+    const fileNodeId = `file-${file.id}`;
+    const rootNode = graph.nodes.find((node) => node.data.depth === 0);
+
+    return {
+      ...graph,
+      nodes: [
+        {
+          id: fileNodeId,
+          type: FILE_CARD_NODE,
+          // One column left of the root, so the function it opened sits beside
+          // it rather than on top of it.
+          position: { x: -COLUMN - 60, y: -40 },
+          data: { fileId: file.id, path: file.path, language: file.language },
+          // A file is not a call, so it carries none of the graph node's data.
+        } as unknown as Node<GraphNodeData>,
+        ...graph.nodes,
+      ],
+      edges:
+        rootNode === undefined
+          ? graph.edges
+          : [
+              {
+                id: `e-${fileNodeId}-${rootNode.id}`,
+                source: fileNodeId,
+                target: rootNode.id,
+                // Not a call and so not a confidence tier: this edge says
+                // "declared in", which is a fact rather than an inference.
+                type: "smoothstep",
+                style: { stroke: palette.surface.border, strokeWidth: 1.5 },
+              },
+              ...graph.edges,
+            ],
+    };
+  }, [graph, tree.data, selectedFileId, palette.surface.border]);
+
+  /**
+   * Follow the graph as it grows.
+   *
+   * `fitView` as a prop only runs on mount, so every expansion added a column
+   * outside the viewport: the map grew and the screen did not move, which
+   * reads exactly like nothing happened. Animated rather than snapped, so it
+   * is visible that the view travelled to new material instead of the graph
+   * having been replaced.
+   */
+  useEffect(() => {
+    if (graph.nodes.length === 0) return;
+    // A frame late on purpose: React Flow measures the new nodes first, and
+    // fitting before that computes bounds without them.
+    const id = requestAnimationFrame(() => {
+      flow.fitView({ padding: 0.2, maxZoom: 1, duration: 400 });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [withFile.nodes.length, flow]);
 
   // Focus mode: the selected function's immediate neighbourhood stays lit and
   // everything else dims. Computed here rather than in the nodes so each one
   // does not have to know the whole graph to decide how to draw itself.
   const { nodes, edges } = useMemo(
-    () => focus(graph.nodes, graph.edges, selectedFunctionId),
-    [graph, selectedFunctionId],
+    () => focus(withFile.nodes, withFile.edges, selectedFunctionId),
+    [withFile, selectedFunctionId],
   );
 
   // Only the very first load is a blank canvas. Expanding keeps what is
   // already drawn on screen while the new branch arrives, because taking the
   // map away to fetch one more column is worse than a moment of nothing.
-  if (expansions.isPending && graph.nodes.length === 0) {
+  if (expansions.isPending && withFile.nodes.length === 0) {
     return <MindMapSkeleton />;
   }
 
-  if (expansions.error !== null && graph.nodes.length === 0) {
+  if (expansions.error !== null && withFile.nodes.length === 0) {
     return (
       <Empty className="h-full">
         <EmptyHeader>
