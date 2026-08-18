@@ -1,8 +1,9 @@
-import { useQueries } from "@tanstack/react-query";
-import type { TraversalResponse } from "@funcatlas/shared";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import type { FunctionSource, TraversalResponse } from "@funcatlas/shared";
 import { api } from "./api";
+import { highlight } from "./highlight";
 
-/** Function-scoped queries. The traversal today; B6 adds the source. */
+/** Function-scoped queries: the traversal, and the source behind it. */
 
 /**
  * Depth 1, always.
@@ -13,6 +14,35 @@ import { api } from "./api";
 const EXPANSION_DEPTH = 1;
 
 export const expansionKey = (fnId: number) => ["function", fnId, "edges", EXPANSION_DEPTH] as const;
+
+export const sourceKey = (fnId: number) => ["function", fnId, "source"] as const;
+
+/** The source plus its highlighted markup. `html` is null exactly when the
+ *  parser stored no source. */
+export interface HighlightedSource extends FunctionSource {
+  html: string | null;
+}
+
+/**
+ * Fetch and highlight in one query.
+ *
+ * Both are async and neither is useful alone, so keeping them in one queryFn
+ * gives the code block a single pending state -- one skeleton covering the
+ * request and the highlighter's first load, rather than a skeleton followed by
+ * a flash of unhighlighted text. Cached forever: source at a commit does not
+ * change, and re-highlighting on every click is the slow part.
+ */
+export function useFunctionSource(fnId: number | null) {
+  return useQuery({
+    queryKey: sourceKey(fnId ?? 0),
+    enabled: fnId !== null,
+    staleTime: Infinity,
+    queryFn: async (): Promise<HighlightedSource> => {
+      const fn = await api.functionSource(fnId as number);
+      return { ...fn, html: fn.source === null ? null : await highlight(fn.source, fn.language) };
+    },
+  });
+}
 
 /**
  * One query per opened function, merged into a single result.

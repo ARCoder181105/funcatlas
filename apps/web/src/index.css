@@ -136,6 +136,36 @@ body,
   height: 100%;
 }
 
+/* Shiki writes both themes onto every token as CSS variables (lib/highlight.ts),
+   so the toggle switches the code block without re-highlighting it. Only the
+   colour is taken -- the panel keeps its own surface, or the block would sit on
+   Vitesse's near-white ground in the middle of Ember. */
+.code-block .shiki,
+.code-block .shiki span {
+  color: var(--shiki-light);
+}
+
+.dark .code-block .shiki,
+.dark .code-block .shiki span {
+  color: var(--shiki-dark);
+}
+
+/* The counter starts at the function's real startLine, set inline by
+   CodeBlock. A block numbered from 1 for a function at line 400 is worse than
+   no numbers at all. */
+.code-block .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  /* Four digits, so a function crossing 999 to 1000 does not shift the code
+     under it by a character. */
+  width: 4ch;
+  margin-right: 1.25rem;
+  text-align: right;
+  color: var(--ink-muted);
+  user-select: none;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

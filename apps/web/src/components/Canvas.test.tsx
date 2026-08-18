@@ -13,7 +13,7 @@ vi.mock("../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/api")>();
   return {
     ...actual,
-    api: { ...actual.api, tree: vi.fn(), functionsForFile: vi.fn() },
+    api: { ...actual.api, tree: vi.fn(), functionsForFile: vi.fn(), functionSource: vi.fn() },
   };
 });
 
@@ -153,6 +153,16 @@ describe("Canvas", () => {
     vi.clearAllMocks();
     useUiStore.getState().clearSelection();
     mocked.tree.mockResolvedValue({ repoId: 7, files: [FILE] });
+    // Selecting a function opens the code panel, which fetches. Mocked here so
+    // clicking a row does not put a real fetch through jsdom.
+    mocked.functionSource.mockResolvedValue({
+      id: 1,
+      source: "function createInstance() {}",
+      startLine: 118,
+      endLine: 140,
+      path: FILE.path,
+      language: "typescript",
+    });
     mocked.functionsForFile.mockResolvedValue({
       fileId: FILE.id,
       functions: [

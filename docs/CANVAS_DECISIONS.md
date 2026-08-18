@@ -199,6 +199,38 @@ nodes share a position — a test that fails on the old code with `two nodes at 
 
 ---
 
+## 4d. The code sits beside the map, and only once a function is open
+
+**Decided:** during B6.
+**Status:** built.
+
+The chain ends in source (`UI_GUIDE.md` §3.2), and there were three places to put it: a node on the
+canvas, a drawer over it, or a panel beside it.
+
+**A node lost.** Source is tens of lines of monospace; as a node it would dwarf every function
+around it and turn panning into scrolling. Nodes are 208×44 for a reason (§4).
+
+**A drawer lost.** A drawer opens on selection, and selection here fires on *every* node click —
+the reader would be dismissing a sheet to carry on exploring, and the map would be behind it exactly
+when they want to compare the two.
+
+**A resizable panel won.** Same `react-resizable-panels` group the sidebar uses, so the reader
+drags it the way they already drag the tree. It mounts only when `selectedFunctionId` is set: an
+empty code panel would take a third of the canvas to say nothing, and the map is what the reader
+came for. Both panels declare a size, because given only one the library ignores it and splits
+evenly — the same trap the sidebar hit.
+
+**Line numbers are the file's.** Shiki emits one `<span class="line">` per line, so the numbers are
+a CSS counter: `CodeBlock` sets `counter-reset: line <startLine - 1>` inline and `index.css`
+increments it. No transformer, no per-line DOM building, and a function at line 400 reads 400 rather
+than 1 — which is what makes the block match GitHub.
+
+**Fetch and highlight are one query.** Both are async and neither is useful alone, so one queryFn
+covers both and the panel has a single pending state: one skeleton over the request *and* Shiki's
+first grammar load, rather than a skeleton followed by a flash of unhighlighted text.
+
+---
+
 ## 5. A provider per surface
 
 **Decided:** during B5. **Superseded by 4b.**

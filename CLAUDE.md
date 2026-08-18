@@ -19,7 +19,7 @@ The old working name "CodeCanvas" is retired; do not reintroduce it.
 - [x] Phase 1 — Parser and isolation
 - [x] Phase 2 — Storage and resolution
 - [x] Phase 3a — API and auth
-- [~] Phase 3b — Canvas and search ← in progress (B0–B5 done, B6–B8 left)
+- [~] Phase 3b — Canvas and search ← in progress (B0–B6 done, B7–B8 left)
 - [ ] Phase 4 — Webhooks, queue, hardening
 - [ ] Phase 5 — Go, Rust, Python (extraction only; per-language resolution stays cut)
 
@@ -134,9 +134,8 @@ files over 1 MB skipped.
 
 Updated as Phase 3b progresses. `TASKLIST.md` is the chunk-level truth; this is what outlives it.
 
-- **`CodeBlock` is still a placeholder.** B6 builds it. `apps/web/src/lib/highlight.ts` already
-  exists — a lazily imported Shiki singleton emitting both themes as CSS variables — and nothing
-  imports it yet.
+- **`FunctionCard.tsx` is a placeholder that nothing imports.** The file card ended up as a React
+  Flow node (`FileCard.tsx`), so this one has no job left. Delete it in B8 unless a use appears.
 - **No ⌘K palette.** B7. `store/ui.ts` already carries `paletteOpen` and the sidebar's footer button
   sets it, so the opener is wired and the palette itself is missing.
 - **Edge rendering has no automated test.** React Flow only draws an edge once both nodes are

@@ -404,7 +404,7 @@ ceiling truncates. On a real repo, all three edge styles are visibly present.
 
 ---
 
-## B6 — The code block  `[ ]`
+## B6 — The code block  `[x]`
 
 **Why.** The last step of the UI_GUIDE §3.2 chain — file, card, mind-map, code. Without it the
 canvas can show that a function exists and what it calls, but never what it does.
