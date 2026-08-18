@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
-import { ChevronRight, CircleDashed, Dot } from "lucide-react";
+import { Code2, CircleDashed } from "lucide-react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { cn } from "../lib/cn";
-import type { GraphNodeData } from "../lib/graph";
+import { CODE_HEIGHT, CODE_WIDTH, NODE_HEIGHT, NODE_WIDTH, type GraphNodeData } from "../lib/graph";
 import { useMotionEnabled, useMotionTransition } from "../lib/motion";
 import { useUiStore } from "../store/ui";
+import { CodeBlock } from "./CodeBlock";
+import { ExpandIndicator, expandLabel } from "./ExpandIndicator";
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
@@ -27,79 +29,120 @@ function Anchors() {
   );
 }
 
-/** A function the resolver placed. */
+/**
+ * A function the resolver placed, and -- on request -- what it says.
+ *
+ * Two controls, because they answer two questions: the row opens what this
+ * function *calls*, and the code button opens what it *does*. The source drops
+ * down inside the card rather than into a panel beside the canvas, so the code
+ * stays attached to the function it belongs to and the map keeps the whole
+ * width. `lib/graph.ts` knows both sizes and spaces the graph around whichever
+ * one is showing.
+ */
 export function FunctionNode({ data }: NodeProps<GraphNodeData>) {
   const selectedFunctionId = useUiStore((state) => state.selectedFunctionId);
   const toggleFunction = useUiStore((state) => state.toggleFunction);
+  const toggleCode = useUiStore((state) => state.toggleCode);
   const transition = useMotionTransition("spring");
   const animated = useMotionEnabled();
 
   const active = data.functionId !== null && data.functionId === selectedFunctionId;
 
   return (
-    <motion.button
-      type="button"
+    <motion.div
       initial={animated ? { opacity: 0, scale: 0.9 } : false}
       animate={{ opacity: 1, scale: 1 }}
       transition={transition}
-      // Grows the map rather than replacing it, and closes again on a second
-      // click. Several functions stay open at once; the map is their union.
-      onClick={() => data.functionId !== null && toggleFunction(data.functionId)}
-      aria-expanded={data.isLeaf ? undefined : data.expanded}
-      aria-label={
-        data.isLeaf
-          ? `${data.label} — calls nothing`
-          : data.expanded
-            ? `${data.label} — close its calls`
-            : `${data.label} — open its calls`
-      }
+      // Sized from the same constants the layout spaced the graph with -- both
+      // axes, borders included, so the card occupies exactly the box the graph
+      // reserved for it. A class here that disagreed would overlap a neighbour.
+      style={{
+        width: data.showCode ? CODE_WIDTH : NODE_WIDTH,
+        height: data.showCode ? NODE_HEIGHT + CODE_HEIGHT : NODE_HEIGHT,
+      }}
       className={cn(
-        "nodrag flex h-11 w-52 items-center gap-2 rounded-token border px-3",
-        "bg-card text-left transition-colors duration-micro",
-        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+        "flex flex-col overflow-hidden rounded-token border bg-card transition-colors duration-micro",
         data.isRoot
           ? "border-primary shadow-[0_0_0_3px_color-mix(in_oklch,var(--primary)_18%,transparent)]"
-          : "border-border hover:border-ring",
+          : "border-border",
         active && !data.isRoot ? "border-ring bg-accent" : null,
       )}
     >
       <Anchors />
 
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-mono text-xs text-foreground">{data.label}</span>
-        {/* The qualified name only when it says more than the name does --
-            `Repo.sync` earns a second line, `getUser` does not. */}
-        {data.qualifiedName !== null && data.qualifiedName !== data.label ? (
-          <span className="block truncate font-mono text-[10px] text-muted-foreground">
-            {data.qualifiedName}
-          </span>
-        ) : null}
-      </span>
-
-      {data.isRoot ? (
-        <Badge variant="outline" className="shrink-0 text-[10px]">
-          start
-        </Badge>
-      ) : null}
-
-      {/* Whether clicking does anything. Without this a leaf looks exactly
-          like an unopened function, and clicking it reads as a broken canvas
-          rather than as a function that calls nothing. */}
-      {data.isLeaf ? (
-        <Dot strokeWidth={1.5} className="size-4 shrink-0 text-muted-foreground/50" aria-hidden />
-      ) : (
-        // Rotates rather than swapping glyphs, so the control reads as one
-        // thing in two states instead of two different buttons.
-        <ChevronRight
-          strokeWidth={1.5}
+      <div className="flex shrink-0 items-center gap-1 pr-1.5" style={{ height: NODE_HEIGHT }}>
+        <button
+          type="button"
+          // Grows the map rather than replacing it, and closes again on a
+          // second click. Several functions stay open at once; the map is
+          // their union.
+          onClick={() => data.functionId !== null && toggleFunction(data.functionId)}
+          aria-expanded={data.isLeaf ? undefined : data.expanded}
+          aria-label={expandLabel(data.label, data.expanded, data.isLeaf)}
           className={cn(
-            "size-3.5 shrink-0 text-muted-foreground transition-transform duration-micro",
-            data.expanded ? "rotate-90" : "rotate-0",
+            // nodrag: without it React Flow reads the press as the start of a
+            // node drag and the click never lands.
+            "nodrag flex h-full min-w-0 flex-1 items-center gap-2 rounded-token px-3 text-left",
+            "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
           )}
-          aria-hidden
-        />
-      )}
-    </motion.button>
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-mono text-xs text-foreground">{data.label}</span>
+            {/* The qualified name only when it says more than the name does --
+                `Repo.sync` earns a second line, `getUser` does not. */}
+            {data.qualifiedName !== null && data.qualifiedName !== data.label ? (
+              <span className="block truncate font-mono text-[10px] text-muted-foreground">
+                {data.qualifiedName}
+              </span>
+            ) : null}
+          </span>
+
+          {data.isRoot ? (
+            <Badge variant="outline" className="shrink-0 text-[10px]">
+              start
+            </Badge>
+          ) : null}
+
+          {/* Whether clicking does anything. Without this a leaf looks exactly
+              like an unopened function, and clicking it reads as a broken
+              canvas rather than as a function that calls nothing. */}
+          <ExpandIndicator open={data.expanded} leaf={data.isLeaf} />
+        </button>
+
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                onClick={() => data.functionId !== null && toggleCode(data.functionId)}
+                aria-expanded={data.showCode}
+                aria-label={
+                  data.showCode ? `${data.label} — hide its source` : `${data.label} — show its source`
+                }
+                className={cn(
+                  "nodrag flex size-7 shrink-0 items-center justify-center rounded-md",
+                  "text-muted-foreground transition-colors duration-micro hover:bg-muted",
+                  "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+                  data.showCode ? "bg-muted text-foreground" : null,
+                )}
+              >
+                <Code2 strokeWidth={1.5} className="size-3.5" aria-hidden />
+              </button>
+            }
+          />
+          <TooltipContent side="top">{data.showCode ? "Hide source" : "Show source"}</TooltipContent>
+        </Tooltip>
+      </div>
+
+      {data.showCode && data.functionId !== null ? (
+        // Whatever is left of the card, scrolling inside: source length is
+        // unbounded, and a node that grew with it could not be placed without
+        // measuring it first.
+        <div className="min-h-0 flex-1 border-t border-border">
+          <CodeBlock functionId={data.functionId} />
+        </div>
+      ) : null}
+    </motion.div>
   );
 }
 
@@ -131,8 +174,9 @@ export function GhostNode({ data }: NodeProps<GraphNodeData>) {
             initial={animated ? { opacity: 0, scale: 0.9 } : false}
             animate={{ opacity: 1, scale: 1 }}
             transition={transition}
+            style={{ width: NODE_WIDTH, height: NODE_HEIGHT }}
             className={cn(
-              "flex h-11 w-52 items-center gap-2 rounded-token px-3",
+              "flex items-center gap-2 rounded-token px-3",
               // Dotted border and no fill: the same notation as its edge, so
               // the boundary reads as one idea rather than two.
               "border border-dotted border-confidence-unresolved bg-transparent",

@@ -2,15 +2,8 @@ import { Map } from "lucide-react";
 import { ReactFlowProvider } from "reactflow";
 import "reactflow/dist/base.css";
 import { useUiStore } from "../store/ui";
-import { CodeBlock } from "./CodeBlock";
 import { MindMap } from "./MindMap";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./ui/resizable";
-
-/** Percentages, with a unit -- this library reads a bare number as pixels. Both
- *  panels declare one, or it ignores them and splits evenly. */
-const MAP_DEFAULT = "62%";
-const CODE_DEFAULT = "38%";
 
 /**
  * The chart surface.
@@ -27,44 +20,24 @@ const CODE_DEFAULT = "38%";
 export function Canvas() {
   const selectedRepoId = useUiStore((state) => state.selectedRepoId);
   const selectedFileId = useUiStore((state) => state.selectedFileId);
-  const selectedFunctionId = useUiStore((state) => state.selectedFunctionId);
 
   if (selectedFileId === null) {
     return <EmptyCanvas hasRepo={selectedRepoId !== null} />;
   }
 
   return (
-    <ResizablePanelGroup className="h-full w-full">
-      {/* React Flow measures this parent and renders nothing into a
-          zero-height one, with no error at all. The h-full chain from #root to
-          here is what makes the canvas visible, so it is stated rather than
-          inherited. */}
-      <ResizablePanel id="map" defaultSize={MAP_DEFAULT} className="min-w-0 overflow-hidden">
-        <div className="relative h-full w-full">
-          <ReactFlowProvider>
-            <MindMap />
-          </ReactFlowProvider>
-        </div>
-      </ResizablePanel>
-
-      {/* Only once a function is open. An empty code panel would take a third
-          of the canvas to say nothing, and the map is what the reader came
-          for. */}
-      {selectedFunctionId !== null && (
-        <>
-          <ResizableHandle withHandle />
-          <ResizablePanel
-            id="code"
-            defaultSize={CODE_DEFAULT}
-            minSize="20%"
-            maxSize="65%"
-            className="min-w-0 overflow-hidden"
-          >
-            <CodeBlock functionId={selectedFunctionId} />
-          </ResizablePanel>
-        </>
-      )}
-    </ResizablePanelGroup>
+    // React Flow measures this parent and renders nothing into a zero-height
+    // one, with no error at all. The h-full chain from #root to here is what
+    // makes the canvas visible, so it is stated rather than inherited.
+    //
+    // The whole width, again: source used to open in a panel beside this one,
+    // which took a third of the canvas away from the map. It now drops down
+    // inside the card that owns it.
+    <div className="relative h-full w-full">
+      <ReactFlowProvider>
+        <MindMap />
+      </ReactFlowProvider>
+    </div>
   );
 }
 

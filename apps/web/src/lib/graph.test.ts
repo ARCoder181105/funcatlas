@@ -4,8 +4,19 @@ import type {
   ResolutionConfidence,
   TraversalResponse,
 } from "@funcatlas/shared";
+import type { Node } from "reactflow";
 import { describe, expect, it } from "vitest";
-import { buildGraph, GHOST_NODE, FUNCTION_NODE, NODE_CEILING, NODE_HEIGHT } from "./graph";
+import {
+  buildGraph,
+  CODE_HEIGHT,
+  CODE_WIDTH,
+  FUNCTION_NODE,
+  GHOST_NODE,
+  NODE_CEILING,
+  NODE_HEIGHT,
+  NODE_WIDTH,
+  type GraphNodeData,
+} from "./graph";
 
 function fn(
   id: number,
@@ -37,6 +48,32 @@ function response(
 
 /** The root of every fixture below. */
 const ROOT = fn(1, 0, null, null, "generateText");
+
+/**
+ * No two cards share any pixel.
+ *
+ * Stated as rectangles rather than as positions: cards are no longer all the
+ * same size, so "different position" stopped being the same claim as "does not
+ * overlap". Every fixture that lays anything out ends here.
+ */
+function expectNoOverlap(nodes: Node<GraphNodeData>[]): void {
+  const box = (node: Node<GraphNodeData>) => ({
+    left: node.position.x,
+    right: node.position.x + (node.width ?? NODE_WIDTH),
+    top: node.position.y,
+    bottom: node.position.y + (node.height ?? NODE_HEIGHT),
+  });
+
+  for (const a of nodes) {
+    for (const b of nodes) {
+      if (a.id === b.id) continue;
+      const [one, two] = [box(a), box(b)];
+      const overlaps =
+        one.left < two.right && two.left < one.right && one.top < two.bottom && two.top < one.bottom;
+      expect(overlaps, `${a.id} overlaps ${b.id}`).toBe(false);
+    }
+  }
+}
 
 describe("buildGraph", () => {
   it("treats the starting function as a node with no inbound edge", () => {
@@ -185,20 +222,35 @@ describe("buildGraph", () => {
       ...response([fn(2, 0, null, null), fn(4, 1, 2, "exact")], [call(11, "fetch", 2)], 2),
     ]);
 
-    const seen = new Set<string>();
-    for (const node of built.nodes) {
-      const at = `${node.position.x},${node.position.y}`;
-      expect(seen.has(at), `two nodes at ${at}`).toBe(false);
-      seen.add(at);
-    }
+    expectNoOverlap(built.nodes);
+  });
 
-    // And they are far enough apart to not visually collide.
-    for (const a of built.nodes) {
-      for (const b of built.nodes) {
-        if (a.id === b.id || a.position.x !== b.position.x) continue;
-        expect(Math.abs(a.position.y - b.position.y)).toBeGreaterThanOrEqual(NODE_HEIGHT);
-      }
-    }
+  it("keeps cards apart when one of them opens its source", () => {
+    // The card grows in both directions, so both axes have to give: a 420-wide
+    // card in a 300-wide column lands on the column beside it, and a 324-tall
+    // one lands on its own neighbour below.
+    const responses = [
+      ...response([ROOT, fn(2, 1, 1, "exact"), fn(3, 1, 1, "exact")], [call(10, "logger.debug", 1)]),
+      ...response([fn(2, 0, null, null), fn(4, 1, 2, "exact")], [], 2),
+    ];
+
+    const open = buildGraph(responses, [1], [], [2]);
+    const node = (id: number) => open.nodes.find((candidate) => candidate.id === `fn-${id}`);
+
+    expect(node(2)?.width).toBe(CODE_WIDTH);
+    expect(node(2)?.height).toBe(NODE_HEIGHT + CODE_HEIGHT);
+    expect(node(2)?.data.showCode).toBe(true);
+    // Its neighbours are not: only the card that was asked for.
+    expect(node(3)?.width).toBe(NODE_WIDTH);
+
+    expectNoOverlap(open.nodes);
+
+    // And the column past it moved right to make room, rather than the card
+    // growing over it.
+    const shut = buildGraph(responses, [1], [], []);
+    const xOf = (built: typeof open, id: number) =>
+      built.nodes.find((candidate) => candidate.id === `fn-${id}`)?.position.x ?? 0;
+    expect(xOf(open, 4)).toBeGreaterThan(xOf(shut, 4));
   });
 
   it("measures from the anchor it is given, not from whichever response arrived first", () => {
@@ -233,6 +285,35 @@ describe("buildGraph", () => {
     // And the same responses reopen to exactly what was there before.
     expect(buildGraph(responses, [1], []).nodes.map((n) => n.id).sort()).toEqual(
       open.nodes.map((n) => n.id).sort(),
+    );
+  });
+
+  it("takes a closed branch off the canvas entirely, and brings it back whole", () => {
+    // A root is opened and closed from its row on the file card, so unlike a
+    // card deeper in the map it does not need to stay behind to be clickable.
+    // Leaving it there means pressing "close" and watching the card sit where
+    // it was.
+    const responses = [
+      ...response([ROOT, fn(2, 1, 1, "exact")]),
+      ...response([fn(50, 0, null, null), fn(51, 1, 50, "exact")], [call(9, "fetch", 4)], 50),
+    ];
+
+    const both = buildGraph(responses, [1, 50], []);
+    expect(both.nodes.map((n) => n.id).sort()).toEqual([
+      "fn-1",
+      "fn-2",
+      "fn-50",
+      "fn-51",
+      "ghost-fetch",
+    ]);
+
+    // Nothing of the second branch survives -- not its root, not its
+    // generations, not its ghosts.
+    const shut = buildGraph(responses, [1, 50], [50]);
+    expect(shut.nodes.map((n) => n.id).sort()).toEqual(["fn-1", "fn-2"]);
+
+    expect(buildGraph(responses, [1, 50], []).nodes.map((n) => n.id).sort()).toEqual(
+      both.nodes.map((n) => n.id).sort(),
     );
   });
 
@@ -288,12 +369,14 @@ describe("buildGraph", () => {
   it("centres a layer rather than hanging it below the one above", () => {
     const { nodes } = buildGraph(response([ROOT, fn(2, 1, 1, "exact"), fn(3, 1, 1, "exact")]));
 
-    const ys = nodes
+    // Centres, not top-left corners: cards differ in height now, so the layer
+    // is centred on the middle of its stack rather than on its first row.
+    const centres = nodes
       .filter((node) => node.data.depth === 1)
-      .map((node) => node.position.y)
+      .map((node) => node.position.y + (node.height ?? NODE_HEIGHT) / 2)
       .sort((a, b) => a - b);
 
-    expect((ys[0] ?? 0) + (ys[1] ?? 0)).toBe(0);
+    expect((centres[0] ?? 0) + (centres[1] ?? 0)).toBe(0);
   });
 
   it("produces one node per function when the graph has a cycle", () => {

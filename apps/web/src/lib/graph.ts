@@ -29,11 +29,6 @@ import type { Edge, Node } from "reactflow";
  * bringing it back is a prop and a branch, not a redesign.
  */
 
-/** Layout grid, in flow units. A card is 288px wide; a column narrower than
- *  that overlaps its neighbour at zoom 1. */
-export const COLUMN = 300;
-const ROW = 92;
-
 /**
  * Declared, not measured.
  *
@@ -43,12 +38,27 @@ const ROW = 92;
  * silently do not -- a graph that looks like a set of functions calling
  * nothing, which is the one thing this canvas must never show.
  *
- * These nodes are a fixed size by design, so the size is stated up front and
- * the layout stops depending on the environment measuring anything. The node
- * components below are pinned to the same numbers.
+ * So every node states its size here and the components are pinned to the same
+ * numbers. A card that opens its source is a different size, not an unknown
+ * one: the layout below reads these and spaces the graph accordingly, which is
+ * what keeps an opened card from landing on its neighbours.
  */
 export const NODE_WIDTH = 208;
 export const NODE_HEIGHT = 44;
+
+/** A card showing its source. Wide enough for a line of code, and a fixed
+ *  height with the block scrolling inside it -- source length is unbounded and
+ *  a node that grows with it cannot be placed. */
+export const CODE_WIDTH = 420;
+export const CODE_HEIGHT = 280;
+
+/** Clear space between cards, whatever their size. */
+const GAP_X = 92;
+const GAP_Y = 48;
+
+/** One column of the old fixed grid. The file card is placed against this
+ *  rather than against a measured layer. */
+export const COLUMN = NODE_WIDTH + GAP_X;
 
 /**
  * Above this the tab stops being usable before the graph stops being drawn.
@@ -86,6 +96,10 @@ export interface GraphNodeData {
   /** Known only once expanded: `true` when opening it drew nothing, because
    *  the function calls nothing the parser could see. */
   isLeaf: boolean;
+
+  /** Whether the card is showing the function's source. Drives the node's own
+   *  size, which is what the layout spaces around. */
+  showCode: boolean;
 }
 
 export interface BuiltGraph {
@@ -121,6 +135,7 @@ export function buildGraph(
   responses: TraversalResponse[],
   rootIds: number[] = [],
   collapsedIds: number[] = [],
+  codeIds: number[] = [],
 ): BuiltGraph {
   // Roots are passed in rather than read off `responses[0]`. Expansions arrive
   // as their queries resolve and the pending ones are filtered out, so the
@@ -132,6 +147,7 @@ export function buildGraph(
   }
 
   const collapsed = new Set(collapsedIds);
+  const showingCode = new Set(codeIds);
   // What the reader has already opened, and which of those turned out to call
   // nothing. Both ride on the node so it can say whether clicking does
   // anything at all.
@@ -170,7 +186,18 @@ export function buildGraph(
     }
   }
 
-  const depths = depthsFrom(roots, linked.values(), collapsed);
+  // A closed branch leaves the canvas entirely.
+  //
+  // Deeper in the map a collapsed card has to stay -- its own chevron is the
+  // only way back -- but a branch root is opened and closed from its row on the
+  // file card, so leaving the card behind means clicking "close" and watching
+  // the card stay put. Nothing is forgotten: the row still reopens the whole
+  // structure from `expandedFunctionIds` and the query cache.
+  const depths = depthsFrom(
+    roots.filter((id) => !collapsed.has(id)),
+    linked.values(),
+    collapsed,
+  );
 
   // Only what still hangs off the anchor. Closing a function in the middle of
   // the map leaves the ones it had opened with nothing above them, and every
@@ -197,7 +224,13 @@ export function buildGraph(
   // same column were placed on top of each other.
   const nodes = layOut([
     ...kept.map((fn) =>
-      toFunctionNode(fn, depths.get(fn.id) ?? 0, expandedIds.has(fn.id), leafIds.has(fn.id)),
+      toFunctionNode(
+        fn,
+        depths.get(fn.id) ?? 0,
+        expandedIds.has(fn.id),
+        leafIds.has(fn.id),
+        showingCode.has(fn.id),
+      ),
     ),
     ...ghostGroups.flatMap(({ callerId, ghosts }) =>
       ghosts.map((ghost) => toGhostNode(ghost, (depths.get(callerId) ?? 0) + 1)),
@@ -318,13 +351,14 @@ function toFunctionNode(
   depth: number,
   expanded: boolean,
   isLeaf: boolean,
+  showCode: boolean,
 ): Node<GraphNodeData> {
   return {
     id: functionId(fn.id),
     type: FUNCTION_NODE,
     position: { x: 0, y: 0 },
-    width: NODE_WIDTH,
-    height: NODE_HEIGHT,
+    width: showCode ? CODE_WIDTH : NODE_WIDTH,
+    height: showCode ? NODE_HEIGHT + CODE_HEIGHT : NODE_HEIGHT,
     data: {
       kind: "function",
       label: fn.name,
@@ -339,6 +373,7 @@ function toFunctionNode(
       callLines: [],
       expanded,
       isLeaf,
+      showCode,
     },
   };
 }
@@ -359,19 +394,28 @@ function toGhostNode(ghost: Ghost, depth: number): Node<GraphNodeData> {
       depth,
       isRoot: false,
       callLines: [...ghost.callLines].sort((a, b) => a - b),
-      // A ghost is a name, not a function: there is nothing to open.
+      // A ghost is a name, not a function: there is nothing to open and no
+      // source to read.
       expanded: false,
       isLeaf: true,
+      showCode: false,
     },
   };
 }
 
 /**
- * Layered: depth on one axis, index within depth on the other.
+ * Layered: depth on one axis, order within the layer on the other -- and every
+ * step measured from the cards themselves.
  *
- * No layout library. A layered tree needs a column index and a row index, and
- * pulling in dagre to compute two integers is a dependency that has to be
- * maintained for the life of the project.
+ * A fixed grid was enough while every card was the same size. It stopped being
+ * enough the moment a card could open its source: one 420x324 card in a
+ * 300-wide column lands on both its neighbour and the column beside it. Column
+ * positions are therefore the running total of the widest card in each layer,
+ * and rows the running total of the heights above them, so opening a card
+ * pushes the graph apart instead of overlapping it.
+ *
+ * Still no layout library. This is two running sums; pulling in dagre to
+ * compute them is a dependency to maintain for the life of the project.
  */
 function layOut(nodes: Node<GraphNodeData>[]): Node<GraphNodeData>[] {
   const byDepth = new Map<number, Node<GraphNodeData>[]>();
@@ -381,17 +425,29 @@ function layOut(nodes: Node<GraphNodeData>[]): Node<GraphNodeData>[] {
     byDepth.set(node.data.depth, layer);
   }
 
-  for (const [depth, layer] of byDepth) {
-    // Centred on the axis, so a wide layer does not push the graph off to one
-    // side of everything above it.
-    const offset = ((layer.length - 1) * ROW) / 2;
+  // Ascending, because each column's x depends on every column before it.
+  const depths = [...byDepth.keys()].sort((a, b) => a - b);
+  let x = 0;
+
+  for (const depth of depths) {
+    const layer = byDepth.get(depth) ?? [];
+    const heights = layer.map((node) => node.height ?? NODE_HEIGHT);
+    const stack = sum(heights) + GAP_Y * (layer.length - 1);
+
+    // Centred on the axis, so a tall layer does not hang below the one above.
+    let y = -stack / 2;
     layer.forEach((node, index) => {
-      node.position = { x: depth * COLUMN, y: index * ROW - offset };
+      node.position = { x, y };
+      y += (heights[index] ?? NODE_HEIGHT) + GAP_Y;
     });
+
+    x += Math.max(...layer.map((node) => node.width ?? NODE_WIDTH)) + GAP_X;
   }
 
   return nodes;
 }
+
+const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
 /**
  * One edge per reached function, from the function it was reached through.

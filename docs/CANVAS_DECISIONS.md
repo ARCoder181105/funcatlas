@@ -199,26 +199,33 @@ nodes share a position — a test that fails on the old code with `two nodes at 
 
 ---
 
-## 4d. The code sits beside the map, and only once a function is open
+## 4d. The source drops down inside the card that owns it
 
-**Decided:** during B6.
+**Decided:** during B6, then corrected the same day.
 **Status:** built.
 
-The chain ends in source (`UI_GUIDE.md` §3.2), and there were three places to put it: a node on the
-canvas, a drawer over it, or a panel beside it.
+The chain ends in source (`UI_GUIDE.md` §3.2). It first shipped as a resizable panel beside the
+canvas, on the reasoning that a card is too small to read code in. The reader's verdict was that the
+screen was full and the map had lost a third of its width to a second surface — and they were right:
+the panel showed *the selection*, so it answered "what does this function do" while sitting as far
+from that function as the layout allowed.
 
-**A node lost.** Source is tens of lines of monospace; as a node it would dwarf every function
-around it and turn panning into scrolling. Nodes are 208×44 for a reason (§4).
+It is now a drop-down inside the card. Clicking the code button on a card opens its source in the
+card itself; clicking again closes it. Two controls per card, because they answer two questions —
+the row opens what the function **calls**, the button opens what it **does** — and tying them
+together would grow the map every time the reader wanted to read one body.
 
-**A drawer lost.** A drawer opens on selection, and selection here fires on *every* node click —
-the reader would be dismissing a sheet to carry on exploring, and the map would be behind it exactly
-when they want to compare the two.
+**What that costs, and how it is paid.** A card that changes size breaks a fixed grid: 420×324 in a
+300-wide column lands on the column beside it and on its own neighbour below. So the layout stopped
+being a grid. Column positions are the running total of the widest card in each layer, rows the
+running total of the heights above them (`layOut` in `lib/graph.ts`). Opening a card pushes the
+graph apart rather than covering it, and `graph.test.ts` asserts no two node rectangles intersect —
+rectangles, not positions, because "different position" stopped being the same claim as "does not
+overlap" the moment cards differed in size.
 
-**A resizable panel won.** Same `react-resizable-panels` group the sidebar uses, so the reader
-drags it the way they already drag the tree. It mounts only when `selectedFunctionId` is set: an
-empty code panel would take a third of the canvas to say nothing, and the map is what the reader
-came for. Both panels declare a size, because given only one the library ignores it and splits
-evenly — the same trap the sidebar hit.
+The card's size is still *declared*, never measured (§4): the source scrolls inside a fixed height,
+because source length is unbounded and a node that grew with it could not be placed. `nowheel` on
+that scroller, or the wheel zooms the canvas instead of scrolling the code.
 
 **Line numbers are the file's.** Shiki emits one `<span class="line">` per line, so the numbers are
 a CSS counter: `CodeBlock` sets `counter-reset: line <startLine - 1>` inline and `index.css`
@@ -226,8 +233,33 @@ increments it. No transformer, no per-line DOM building, and a function at line 
 than 1 — which is what makes the block match GitHub.
 
 **Fetch and highlight are one query.** Both are async and neither is useful alone, so one queryFn
-covers both and the panel has a single pending state: one skeleton over the request *and* Shiki's
+covers both and the card has a single pending state: one skeleton over the request *and* Shiki's
 first grammar load, rather than a skeleton followed by a flash of unhighlighted text.
+
+---
+
+## 4e. Closing means closing, everywhere
+
+**Decided:** after the reader found the file card one-way.
+**Status:** built.
+
+Two inconsistencies, both of which made the canvas feel like it only opened things.
+
+**The file card had no visible way to close a branch.** Its rows toggled, but the affordance was a
+tick that appeared *once the branch was open* — which says "this is on", not "press to turn it off".
+Rows and cards now share one control (`ExpandIndicator`): a chevron that rotates, with the matching
+`aria-label` from `expandLabel`. Shared rather than copied, because the second copy is the one that
+goes stale.
+
+**A closed branch used to stay on the canvas.** Collapsing keeps the card and hides its descendants
+(§1b) — correct in the middle of a map, where that card's own chevron is the only way back. It is
+wrong for a branch root: that one is opened and closed from its row on the file card, so leaving it
+behind means pressing "close" and watching the card sit exactly where it was. `buildGraph` therefore
+drops collapsed roots from the walk entirely, and nothing else changes — the structure is still in
+`expandedFunctionIds` and the query cache, so reopening restores every generation at once.
+
+Verified against `sindresorhus/ky`: 32 nodes, closing one branch leaves 21, reopening returns to the
+same 32 with an identical node set.
 
 ---
 

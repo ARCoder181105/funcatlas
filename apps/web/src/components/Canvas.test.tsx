@@ -153,8 +153,8 @@ describe("Canvas", () => {
     vi.clearAllMocks();
     useUiStore.getState().clearSelection();
     mocked.tree.mockResolvedValue({ repoId: 7, files: [FILE] });
-    // Selecting a function opens the code panel, which fetches. Mocked here so
-    // clicking a row does not put a real fetch through jsdom.
+    // A card can open its source inline, which fetches. Mocked here so no test
+    // in this file can put a real request through jsdom.
     mocked.functionSource.mockResolvedValue({
       id: 1,
       source: "function createInstance() {}",
@@ -230,6 +230,23 @@ describe("Canvas", () => {
 
     // This is what B5's mind-map traverses from.
     expect(useUiStore.getState().selectedFunctionId).toBe(1);
+  });
+
+  it("offers to close a function it has already opened", async () => {
+    // The row used to say it was open with a tick, which is a state and not a
+    // control -- so the file card read as one-way even though clicking again
+    // always closed the branch.
+    const user = userEvent.setup();
+    useUiStore.getState().selectRepo(7);
+    useUiStore.getState().selectFile(FILE.id);
+
+    renderCanvas();
+    // By label rather than by role: React Flow marks its node layer
+    // aria-hidden, so nothing inside a node answers a role query here.
+    const row = await screen.findByLabelText(/createInstance — open its calls/);
+    await user.click(row);
+
+    expect(await screen.findByLabelText(/createInstance — close its calls/)).toBeInTheDocument();
   });
 
   it("says so when the parser found no functions in the file", async () => {

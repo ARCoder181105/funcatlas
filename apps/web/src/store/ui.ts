@@ -12,7 +12,7 @@ import { create } from "zustand";
 interface UiState {
   selectedRepoId: number | null;
   selectedFileId: number | null;
-  /** Which function's source the code block shows. Always the last one opened. */
+  /** What the canvas last travelled to, and what focus mode lights up. */
   selectedFunctionId: number | null;
 
   /**
@@ -37,6 +37,15 @@ interface UiState {
    */
   collapsedFunctionIds: number[];
 
+  /**
+   * Functions showing their source inside their own card.
+   *
+   * Separate from expansion: reading what a function does and seeing what it
+   * calls are two questions, and tying them together would force the map to
+   * grow every time the reader wanted to read one body.
+   */
+  codeFunctionIds: number[];
+
   selectRepo: (id: number | null) => void;
   selectFile: (id: number | null) => void;
   /** Opens a function from the file card as a new branch, or closes that
@@ -45,6 +54,8 @@ interface UiState {
   /** Opens a function's calls, or closes them again. Closing keeps everything
    *  underneath in memory so reopening restores it whole. */
   toggleFunction: (id: number) => void;
+  /** Opens a function's source inside its card, or closes it again. */
+  toggleCode: (id: number) => void;
   /** Clears the map. Used when the file or repository changes. */
   selectFunction: (id: number | null) => void;
   /** Signing out, where nothing selected should survive the next session. */
@@ -59,16 +70,22 @@ interface UiState {
 
 }
 
-/** `expandedFunctionIds` is rebuilt rather than shared, so no two resets can
- *  end up pointing at one array. */
-const empty = () => ({
-  selectedRepoId: null,
-  selectedFileId: null,
+/**
+ * Everything the canvas has drawn, cleared. The selection above it -- which
+ * repository, which file -- is not this one's business.
+ *
+ * Each list is rebuilt rather than shared, so no two resets can end up pointing
+ * at one array.
+ */
+const noMap = () => ({
   selectedFunctionId: null,
   rootFunctionIds: [] as number[],
   expandedFunctionIds: [] as number[],
   collapsedFunctionIds: [] as number[],
+  codeFunctionIds: [] as number[],
 });
+
+const empty = () => ({ selectedRepoId: null, selectedFileId: null, ...noMap() });
 
 export const useUiStore = create<UiState>((set) => ({
   ...empty(),
@@ -77,21 +94,10 @@ export const useUiStore = create<UiState>((set) => ({
 
   selectRepo: (selectedRepoId) => set({ ...empty(), selectedRepoId }),
 
-  selectFile: (selectedFileId) =>
-    set({
-      selectedFileId,
-      selectedFunctionId: null,
-      rootFunctionIds: [],
-      expandedFunctionIds: [],
-      collapsedFunctionIds: [],
-    }),
+  selectFile: (selectedFileId) => set({ ...noMap(), selectedFileId }),
 
   selectFunction: (selectedFunctionId) =>
-    set(
-      selectedFunctionId === null
-        ? { selectedFunctionId, rootFunctionIds: [], expandedFunctionIds: [], collapsedFunctionIds: [] }
-        : { selectedFunctionId },
-    ),
+    set(selectedFunctionId === null ? noMap() : { selectedFunctionId }),
 
   toggleRoot: (id) =>
     set((state) => {
@@ -136,6 +142,14 @@ export const useUiStore = create<UiState>((set) => ({
         collapsedFunctionIds: state.collapsedFunctionIds.filter((candidate) => candidate !== id),
       };
     }),
+
+  toggleCode: (id) =>
+    set((state) => ({
+      selectedFunctionId: id,
+      codeFunctionIds: state.codeFunctionIds.includes(id)
+        ? state.codeFunctionIds.filter((candidate) => candidate !== id)
+        : [...state.codeFunctionIds, id],
+    })),
 
   clearSelection: () => set({ ...empty() }),
 }));

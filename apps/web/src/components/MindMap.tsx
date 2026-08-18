@@ -66,6 +66,7 @@ export function MindMap() {
   const expandedFunctionIds = useUiStore((state) => state.expandedFunctionIds);
   const rootFunctionIds = useUiStore((state) => state.rootFunctionIds);
   const collapsedFunctionIds = useUiStore((state) => state.collapsedFunctionIds);
+  const codeFunctionIds = useUiStore((state) => state.codeFunctionIds);
 
   const selectedFileId = useUiStore((state) => state.selectedFileId);
   const selectedRepoId = useUiStore((state) => state.selectedRepoId);
@@ -76,8 +77,8 @@ export function MindMap() {
   const flow = useReactFlow();
 
   const graph = useMemo(
-    () => buildGraph(expansions.data, rootFunctionIds, collapsedFunctionIds),
-    [expansions.data, rootFunctionIds, collapsedFunctionIds],
+    () => buildGraph(expansions.data, rootFunctionIds, collapsedFunctionIds, codeFunctionIds),
+    [expansions.data, rootFunctionIds, collapsedFunctionIds, codeFunctionIds],
   );
 
   /**
@@ -150,9 +151,12 @@ export function MindMap() {
     // A frame late on purpose: React Flow measures the new nodes first, and
     // centring before that uses stale positions.
     const id = requestAnimationFrame(() => {
+      // The card's own size, not the default one: a card showing its source is
+      // three hundred pixels taller, and centring on the collapsed size puts
+      // its header off the top of the screen.
       flow.setCenter(
-        target.position.x + NODE_WIDTH / 2,
-        target.position.y + NODE_HEIGHT / 2,
+        target.position.x + (target.width ?? NODE_WIDTH) / 2,
+        target.position.y + (target.height ?? NODE_HEIGHT) / 2,
         { zoom: 1, duration: 450 },
       );
     });
@@ -249,7 +253,10 @@ export function MindMap() {
             : palette.surface.border
         }
         nodeStrokeColor={palette.confidence.exact}
-        className="!border-border !bg-card"
+        // Smaller than the library's default. It is an overview, not a second
+        // canvas, and its default size takes a corner of a surface that is
+        // already carrying the graph, a key and the controls.
+        className="!m-2 !h-24 !w-36 !border-border !bg-card"
       />
     </ReactFlow>
   );

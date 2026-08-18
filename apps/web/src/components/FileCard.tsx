@@ -1,10 +1,11 @@
 import { motion, type Variants } from "framer-motion";
-import { Check, FileCode2 } from "lucide-react";
+import { FileCode2 } from "lucide-react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { cn } from "../lib/cn";
 import { useFileFunctions } from "../lib/files";
 import { DURATION, useMotionEnabled, useMotionTransition } from "../lib/motion";
 import { useUiStore } from "../store/ui";
+import { ExpandIndicator, expandLabel } from "./ExpandIndicator";
 import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Empty, EmptyDescription, EmptyTitle } from "./ui/empty";
@@ -162,25 +163,26 @@ function FunctionList({
                   active ? "bg-accent text-accent-foreground" : "hover:bg-muted",
                 )}
                 render={
-                  <motion.button variants={ROW} type="button" onClick={() => onSelect(fn.id)} />
+                  <motion.button
+                    variants={ROW}
+                    type="button"
+                    onClick={() => onSelect(fn.id)}
+                    aria-expanded={open}
+                    aria-label={expandLabel(fn.name, open)}
+                  />
                 }
               >
                 <ItemContent>
                   <ItemTitle className="truncate font-mono text-xs">{fn.name}</ItemTitle>
                 </ItemContent>
                 <ItemActions>
-                  {/* Which functions of this file are already on the canvas.
-                      Several can be open at once, each its own branch. */}
-                  {open ? (
-                    <Check
-                      strokeWidth={2}
-                      className="size-3.5 shrink-0 text-primary"
-                      aria-hidden
-                    />
-                  ) : null}
                   <Badge variant="outline" className="font-mono text-[10px] tabular-nums">
                     {fn.startLine}
                   </Badge>
+                  {/* The same control the cards on the canvas use. A tick that
+                      appeared only once a branch was open said nothing about
+                      closing it, so the row looked one-way. */}
+                  <ExpandIndicator open={open} className={open ? "text-primary" : undefined} />
                 </ItemActions>
               </Item>
             );
