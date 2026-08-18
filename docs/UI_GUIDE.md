@@ -165,7 +165,10 @@ brochure.
   branches out (edge-draw animation) → click function → Shiki-highlighted code block.
 - **Edges by confidence:** solid (`exact`) / dashed (`name_match`) / dotted (`unresolved`), coloured
   per §1.1. This is the product; see `PRD.md` §8.
-- **Minimap + focus mode:** overview always available; selecting a function dims the rest.
+- **Minimap:** overview always available. There is no focus mode — dimming everything outside the
+  selection greyed out most of the map the reader had just built, and it fired on every click,
+  including opening a card's source. The selected card marks itself with a ring instead
+  (`docs/CANVAS_DECISIONS.md` §4f).
 - **Several branches at once, and collapsing remembers.** The file card and the graph share one
   canvas; opening a function from the card starts a branch, several can be open, and closing one
   hides its subtree without forgetting it. `docs/CANVAS_DECISIONS.md` §1 and §1b carry the model —

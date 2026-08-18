@@ -1,5 +1,7 @@
+import { motion } from "framer-motion";
 import { FileCode2 } from "lucide-react";
 import { useFunctionSource } from "../lib/functions";
+import { DURATION } from "../lib/motion";
 import { ScrollArea } from "./ui/scroll-area";
 import { Skeleton } from "./ui/skeleton";
 
@@ -50,7 +52,12 @@ export function CodeBlock({ functionId }: { functionId: number }) {
           {/* Line numbers are the file's, not the block's: the counter starts
               one below startLine and index.css increments it per line, so they
               match the file on GitHub. */}
-          <div
+          <motion.div
+            // The skeleton and the source are two different shapes; crossing
+            // between them instantly reads as a flicker.
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: DURATION.micro, ease: "easeOut" }}
             className="code-block p-3 text-xs leading-relaxed"
             style={{ counterReset: `line ${startLine - 1}` }}
             dangerouslySetInnerHTML={{ __html: html }}

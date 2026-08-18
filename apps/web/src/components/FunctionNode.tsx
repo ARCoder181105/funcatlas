@@ -2,8 +2,8 @@ import { motion } from "framer-motion";
 import { Code2, CircleDashed } from "lucide-react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { cn } from "../lib/cn";
-import { CODE_HEIGHT, CODE_WIDTH, NODE_HEIGHT, NODE_WIDTH, type GraphNodeData } from "../lib/graph";
-import { useMotionEnabled, useMotionTransition } from "../lib/motion";
+import { NODE_HEIGHT, NODE_WIDTH, type GraphNodeData } from "../lib/graph";
+import { DURATION, useMotionEnabled, useMotionTransition } from "../lib/motion";
 import { useUiStore } from "../store/ui";
 import { CodeBlock } from "./CodeBlock";
 import { ExpandIndicator, expandLabel } from "./ExpandIndicator";
@@ -50,18 +50,24 @@ export function FunctionNode({ data }: NodeProps<GraphNodeData>) {
 
   return (
     <motion.div
+      // The box the layout reserved, in `style` rather than animated: it has to
+      // be true on the first frame and with no frames at all. A card showing
+      // its source is sized to that source, so this is not two constants -- see
+      // `codeCardSize`. The growth is a CSS transition below: decoration over a
+      // value that is already correct.
+      style={data.size}
       initial={animated ? { opacity: 0, scale: 0.9 } : false}
       animate={{ opacity: 1, scale: 1 }}
+      // A card lifts under the pointer. Small on purpose: it says "this is a
+      // thing you can act on" without the canvas twitching as the pointer
+      // crosses it.
+      whileHover={animated ? { y: -2 } : undefined}
       transition={transition}
-      // Sized from the same constants the layout spaced the graph with -- both
-      // axes, borders included, so the card occupies exactly the box the graph
-      // reserved for it. A class here that disagreed would overlap a neighbour.
-      style={{
-        width: data.showCode ? CODE_WIDTH : NODE_WIDTH,
-        height: data.showCode ? NODE_HEIGHT + CODE_HEIGHT : NODE_HEIGHT,
-      }}
       className={cn(
-        "flex flex-col overflow-hidden rounded-token border bg-card transition-colors duration-micro",
+        "flex flex-col overflow-hidden rounded-token border bg-card",
+        // The card grows into its new box rather than snapping to it. Paired
+        // with `useAnimatedNodes` re-spacing the graph over the same beat.
+        "transition-colors duration-micro motion-safe:transition-[width,height,background-color,border-color] motion-safe:duration-panel motion-safe:ease-out",
         data.isRoot
           ? "border-primary shadow-[0_0_0_3px_color-mix(in_oklch,var(--primary)_18%,transparent)]"
           : "border-border",
@@ -138,9 +144,16 @@ export function FunctionNode({ data }: NodeProps<GraphNodeData>) {
         // Whatever is left of the card, scrolling inside: source length is
         // unbounded, and a node that grew with it could not be placed without
         // measuring it first.
-        <div className="min-h-0 flex-1 border-t border-border">
+        <motion.div
+          // Fades in behind the card's own growth, so the source arrives with
+          // the space made for it rather than snapping in at full strength.
+          initial={animated ? { opacity: 0 } : false}
+          animate={{ opacity: 1 }}
+          transition={{ duration: DURATION.panel, ease: "easeOut" }}
+          className="min-h-0 flex-1 border-t border-border"
+        >
           <CodeBlock functionId={data.functionId} />
-        </div>
+        </motion.div>
       ) : null}
     </motion.div>
   );

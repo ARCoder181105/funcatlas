@@ -263,6 +263,71 @@ same 32 with an identical node set.
 
 ---
 
+## 4f. The map moves, and nothing dims
+
+**Decided:** after "they all are pretty much like a static", then "don't make the other card
+transparent".
+**Status:** built.
+
+Three things, all about the canvas feeling alive rather than correct-but-frozen.
+
+**Cards glide, they do not teleport.** `buildGraph` re-lays the whole map out whenever anything
+opens or closes, and React Flow applies the result on the next frame — so a card that had to move
+two hundred pixels to make room simply appeared two hundred pixels away. `useAnimatedNodes` tweens
+the positions over 420ms.
+
+The tween runs over the **positions**, not over CSS transforms. A CSS transition on
+`.react-flow__node` would have been one line, but React Flow computes every edge path from the
+positions in its store: the cards would slide while their edges were already drawn at the
+destination, detached, for the length of the animation.
+
+It also keeps the positions in a ref and forces a redraw with a counter, rather than holding the
+animated array in state. Holding it in state means every render that produces a new (but equal)
+`nodes` array restarts the tween, which sets state, which renders — an update loop React kills
+mid-frame inside React Flow's own store updater, taking the app with it. That is not hypothetical:
+it happened, from `useQueries`'s `combine` handing back a fresh array each render. `useSources`
+caches on a signature of its contents for the same reason.
+
+**There is no focus mode.** Selecting a function used to dim everything outside its immediate
+neighbourhood. On a map the reader has been building for a while that is most of their own work
+greyed out, and it fired on *every* click — including opening a card's source, where the cards being
+compared are exactly the ones that went transparent. It also dimmed the file card, which read as the
+file having closed itself. The selected card carries a ring instead: same information, nothing taken
+away. `UI_GUIDE.md` §3.2 is corrected; the `focus` function and its tests are deleted rather than
+left unreachable.
+
+**Everything else that moves.** Cards lift 2px under the pointer; the source fades in behind the
+card's growth; the card grows into its new box on a CSS transition rather than snapping. All of it
+sits behind `motion-safe:` or `useMotionEnabled`, so a reduced-motion reader gets the final state
+rather than a faster animation. A background tab gets the final state too — `document.hidden` skips
+the tween, because a tab with no animation frames would otherwise hold the map at the positions it
+had when the reader looked away.
+
+---
+
+## 4g. A card is the size of the code in it
+
+**Decided:** after "the width and height are like static, they are just not able to show the
+complete code".
+**Status:** built.
+
+The first version gave every open card the same 420×280 box. That makes every function the shape of
+the worst one: a three-line helper gets a scrollbar's worth of empty space, and a function with
+100-character lines is clipped with the ends of its lines out of reach.
+
+`codeCardSize` measures the card from the text instead — longest line for the width, line count for
+the height — clamped to 320–1040 wide and 140–560 tall. The character metrics are measured off the
+rendered block (6.6px per character at 12px JetBrains Mono, a 48px gutter, 26px of padding, a 33px
+header) rather than guessed. Verified: a 13-line function whose longest line is 105 characters gets
+a 767px card and does not scroll sideways.
+
+The source has to reach the layout for this, not just the card, so `MindMap` subscribes to the same
+query the card uses — same key, one request — and passes the text into `buildGraph`. The size is
+still *declared* rather than measured after render (§4): estimating from the text keeps the whole
+layout independent of anything the environment has to measure, which is what keeps edges drawn.
+
+---
+
 ## 5. A provider per surface
 
 **Decided:** during B5. **Superseded by 4b.**

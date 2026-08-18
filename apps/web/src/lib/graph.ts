@@ -46,11 +46,59 @@ import type { Edge, Node } from "reactflow";
 export const NODE_WIDTH = 208;
 export const NODE_HEIGHT = 44;
 
-/** A card showing its source. Wide enough for a line of code, and a fixed
- *  height with the block scrolling inside it -- source length is unbounded and
- *  a node that grows with it cannot be placed. */
-export const CODE_WIDTH = 420;
-export const CODE_HEIGHT = 280;
+/**
+ * A card showing its source, sized to the source it is showing.
+ *
+ * A fixed box made every function the same shape as the worst one: a
+ * three-line helper got a scrollbar's worth of empty space and a wide function
+ * got clipped at 420px with the ends of its lines out of reach. The card is
+ * measured from the text instead -- longest line for the width, line count for
+ * the height -- and clamped at both ends, because a card the size of a 400-line
+ * function cannot be placed and one the size of `return x` cannot be read.
+ *
+ * These are the defaults, used until the source has arrived.
+ */
+export const CODE_WIDTH = 460;
+export const CODE_HEIGHT = 260;
+
+export const CODE_MIN_WIDTH = 320;
+export const CODE_MAX_WIDTH = 1040;
+export const CODE_MIN_HEIGHT = 140;
+export const CODE_MAX_HEIGHT = 560;
+
+/**
+ * Measured off the rendered block rather than guessed: JetBrains Mono at 12px
+ * comes out at 6.6px a character, the 4ch gutter and its margin at 48, and the
+ * card's padding and header at 26 and 33.
+ *
+ * They are estimates of a real measurement, which is the trade §4 makes on
+ * purpose -- the alternative is measuring the card after it renders, and a
+ * layout that depends on measurement is the one that leaves edges undrawn.
+ */
+const CHAR_WIDTH = 6.6;
+const LINE_HEIGHT = 19.5;
+const GUTTER = 48;
+const PADDING = 26;
+const HEADER = 33;
+
+const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
+
+/** The box a card needs to show this source without scrolling, within reason. */
+export function codeCardSize(source: string | null | undefined): { width: number; height: number } {
+  if (source === null || source === undefined || source === "") {
+    return { width: CODE_WIDTH, height: CODE_HEIGHT };
+  }
+
+  const lines = source.split("\n");
+  // Tabs are what TypeScript in the wild is actually indented with, and one
+  // counts as far more than one character on screen.
+  const longest = Math.max(...lines.map((line) => line.replace(/\t/g, "  ").length));
+
+  return {
+    width: clamp(longest * CHAR_WIDTH + GUTTER + PADDING, CODE_MIN_WIDTH, CODE_MAX_WIDTH),
+    height: clamp(lines.length * LINE_HEIGHT + HEADER + PADDING, CODE_MIN_HEIGHT, CODE_MAX_HEIGHT),
+  };
+}
 
 /** Clear space between cards, whatever their size. */
 const GAP_X = 92;
@@ -100,6 +148,11 @@ export interface GraphNodeData {
   /** Whether the card is showing the function's source. Drives the node's own
    *  size, which is what the layout spaces around. */
   showCode: boolean;
+
+  /** The box the layout reserved for this card. The component renders itself at
+   *  exactly this size -- two places deciding it is how cards start
+   *  overlapping. */
+  size: { width: number; height: number };
 }
 
 export interface BuiltGraph {
@@ -136,6 +189,9 @@ export function buildGraph(
   rootIds: number[] = [],
   collapsedIds: number[] = [],
   codeIds: number[] = [],
+  /** Source by function id, for the cards showing it. Absent until the request
+   *  lands, which is what `CODE_WIDTH`/`CODE_HEIGHT` are the default for. */
+  sources: Map<number, string | null> = new Map(),
 ): BuiltGraph {
   // Roots are passed in rather than read off `responses[0]`. Expansions arrive
   // as their queries resolve and the pending ones are filtered out, so the
@@ -230,6 +286,7 @@ export function buildGraph(
         expandedIds.has(fn.id),
         leafIds.has(fn.id),
         showingCode.has(fn.id),
+        sources.get(fn.id),
       ),
     ),
     ...ghostGroups.flatMap(({ callerId, ghosts }) =>
@@ -352,13 +409,19 @@ function toFunctionNode(
   expanded: boolean,
   isLeaf: boolean,
   showCode: boolean,
+  source: string | null | undefined,
 ): Node<GraphNodeData> {
+  const code = codeCardSize(source);
+  const size = showCode
+    ? { width: code.width, height: NODE_HEIGHT + code.height }
+    : { width: NODE_WIDTH, height: NODE_HEIGHT };
+
   return {
     id: functionId(fn.id),
     type: FUNCTION_NODE,
     position: { x: 0, y: 0 },
-    width: showCode ? CODE_WIDTH : NODE_WIDTH,
-    height: showCode ? NODE_HEIGHT + CODE_HEIGHT : NODE_HEIGHT,
+    width: size.width,
+    height: size.height,
     data: {
       kind: "function",
       label: fn.name,
@@ -374,6 +437,7 @@ function toFunctionNode(
       expanded,
       isLeaf,
       showCode,
+      size,
     },
   };
 }
@@ -399,6 +463,7 @@ function toGhostNode(ghost: Ghost, depth: number): Node<GraphNodeData> {
       expanded: false,
       isLeaf: true,
       showCode: false,
+      size: { width: NODE_WIDTH, height: NODE_HEIGHT },
     },
   };
 }

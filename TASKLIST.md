@@ -381,7 +381,8 @@ a guess differently from a fact. PRD §8 calls it the reason to trust the tool.
 6. ~~Direction and depth controls.~~ **Cut.** Depth is how many times the reader clicked; direction
    was removed from the canvas entirely rather than left as an unreachable prop. CANVAS_DECISIONS §2.
 7. Node ceiling of 2000: truncate and say so rather than freezing the tab.
-8. Focus mode — the selected function's neighbourhood stays lit, the rest dims.
+8. ~~Focus mode — the selected function's neighbourhood stays lit, the rest dims.~~ Built, then
+   removed: see `docs/CANVAS_DECISIONS.md` §4f. The selected card carries a ring.
 9. The edge-draw animation is this phase's one orchestrated moment (UI_GUIDE §4): edges draw in
    staggered by depth, like a route being plotted. `prefers-reduced-motion` disables it, via the
    B1 helper rather than a local check.

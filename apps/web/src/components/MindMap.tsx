@@ -6,13 +6,11 @@ import ReactFlow, {
   MiniMap,
   Panel,
   useReactFlow,
-  type Edge,
   type Node,
 } from "reactflow";
 import { AlertTriangle } from "lucide-react";
 import { ApiError } from "../lib/api";
-import { cn } from "../lib/cn";
-import { useExpansions } from "../lib/functions";
+import { useExpansions, useSources } from "../lib/functions";
 import { useRepoTree } from "../lib/repos";
 import {
   buildGraph,
@@ -25,6 +23,7 @@ import {
   type GraphNodeData,
 } from "../lib/graph";
 import { useTheme } from "../lib/theme";
+import { useAnimatedNodes } from "../lib/useAnimatedNodes";
 import { PALETTE } from "../lib/tokens";
 import { useUiStore } from "../store/ui";
 import { ConfidenceEdge } from "./ConfidenceEdge";
@@ -76,9 +75,13 @@ export function MindMap() {
   const palette = PALETTE[mode];
   const flow = useReactFlow();
 
+  // Cards showing their source are sized to it, so the layout needs the text
+  // as well as the card. One query key, shared with the card itself.
+  const sources = useSources(codeFunctionIds);
+
   const graph = useMemo(
-    () => buildGraph(expansions.data, rootFunctionIds, collapsedFunctionIds, codeFunctionIds),
-    [expansions.data, rootFunctionIds, collapsedFunctionIds, codeFunctionIds],
+    () => buildGraph(expansions.data, rootFunctionIds, collapsedFunctionIds, codeFunctionIds, sources),
+    [expansions.data, rootFunctionIds, collapsedFunctionIds, codeFunctionIds, sources],
   );
 
   /**
@@ -163,13 +166,17 @@ export function MindMap() {
     return () => cancelAnimationFrame(id);
   }, [selectedFunctionId, withFile.nodes, flow]);
 
-  // Focus mode: the selected function's immediate neighbourhood stays lit and
-  // everything else dims. Computed here rather than in the nodes so each one
-  // does not have to know the whole graph to decide how to draw itself.
-  const { nodes, edges } = useMemo(
-    () => focus(withFile.nodes, withFile.edges, selectedFunctionId),
-    [withFile, selectedFunctionId],
-  );
+  /*
+   * There is no focus mode.
+   *
+   * Selecting a function used to dim everything outside its immediate
+   * neighbourhood. On a map the reader has been building for a while that is
+   * most of their own work greyed out, and it fired on every click -- including
+   * opening a card's source, where the cards being compared are exactly the
+   * ones that went transparent. The selected card marks itself with a ring
+   * instead, which says the same thing without taking anything away.
+   */
+  const gliding = useAnimatedNodes(withFile.nodes);
 
   // Only the very first load is a blank canvas. Expanding keeps what is
   // already drawn on screen while the new branch arrives, because taking the
@@ -195,8 +202,8 @@ export function MindMap() {
 
   return (
     <ReactFlow
-      nodes={nodes}
-      edges={edges}
+      nodes={gliding}
+      edges={withFile.edges}
       nodeTypes={NODE_TYPES}
       edgeTypes={EDGE_TYPES}
       fitView
@@ -262,44 +269,6 @@ export function MindMap() {
   );
 }
 
-/**
- * Dims everything outside the selected function's immediate neighbourhood.
- *
- * Exported for its test: "which nodes stay lit" is a rule, and a rule that
- * only exists inside a `useMemo` cannot be checked without a canvas.
- */
-export function focus(
-  nodes: Node<GraphNodeData>[],
-  edges: Edge[],
-  selectedFunctionId: number | null,
-): { nodes: Node<GraphNodeData>[]; edges: Edge[] } {
-  const selectedId = nodes.find(
-    (node) => node.data.functionId !== null && node.data.functionId === selectedFunctionId,
-  )?.id;
-
-  // Nothing selected, or the selection is not on this graph: everything stays
-  // lit. Dimming the whole canvas would be worse than dimming none of it.
-  if (selectedId === undefined) {
-    return { nodes, edges };
-  }
-
-  const lit = new Set<string>([selectedId]);
-  for (const edge of edges) {
-    if (edge.source === selectedId) lit.add(edge.target);
-    if (edge.target === selectedId) lit.add(edge.source);
-  }
-
-  return {
-    nodes: nodes.map((node) =>
-      lit.has(node.id) ? node : { ...node, className: cn(node.className, "opacity-35") },
-    ),
-    edges: edges.map((edge) =>
-      lit.has(edge.source) && lit.has(edge.target)
-        ? edge
-        : { ...edge, className: cn(edge.className, "opacity-25") },
-    ),
-  };
-}
 
 /** The shape that is coming: a root and a first layer (UI_GUIDE §3.3). */
 function MindMapSkeleton() {

@@ -9,6 +9,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildGraph,
   CODE_HEIGHT,
+  codeCardSize,
+  CODE_MAX_HEIGHT,
+  CODE_MAX_WIDTH,
+  CODE_MIN_WIDTH,
   CODE_WIDTH,
   FUNCTION_NODE,
   GHOST_NODE,
@@ -221,6 +225,48 @@ describe("buildGraph", () => {
       ...response([ROOT, fn(2, 1, 1, "exact"), fn(3, 1, 1, "exact")], [call(10, "logger.debug", 1)]),
       ...response([fn(2, 0, null, null), fn(4, 1, 2, "exact")], [call(11, "fetch", 2)], 2),
     ]);
+
+    expectNoOverlap(built.nodes);
+  });
+
+  it("sizes a card to the source it is showing", () => {
+    const short = ["function a() {", "  return 1;", "}"].join("\n");
+    const wide = `const x = ${"y".repeat(200)};`;
+    const long = Array.from({ length: 400 }, (_, index) => `line ${index}`).join("\n");
+
+    // A three-line helper does not need the box a 400-line function needs, and
+    // a wide line has to be reachable rather than clipped at a fixed width.
+    expect(codeCardSize(short).height).toBeLessThan(codeCardSize(long).height);
+    expect(codeCardSize(short).width).toBeLessThan(codeCardSize(wide).width);
+
+    // Clamped at both ends: a card the size of a 400-line function cannot be
+    // placed, and one the size of `return x` cannot be read.
+    expect(codeCardSize(long).height).toBe(CODE_MAX_HEIGHT);
+    expect(codeCardSize(wide).width).toBe(CODE_MAX_WIDTH);
+    expect(codeCardSize("x").width).toBe(CODE_MIN_WIDTH);
+
+    // Nothing to measure yet, or nothing stored at all: the default box.
+    expect(codeCardSize(undefined)).toEqual({ width: CODE_WIDTH, height: CODE_HEIGHT });
+    expect(codeCardSize(null)).toEqual({ width: CODE_WIDTH, height: CODE_HEIGHT });
+  });
+
+  it("lays the graph out around the size each card actually needs", () => {
+    const wide = `const x = ${"y".repeat(120)};\nreturn x;`;
+    const responses = [
+      ...response([ROOT, fn(2, 1, 1, "exact"), fn(3, 1, 1, "exact")]),
+      ...response([fn(2, 0, null, null), fn(4, 1, 2, "exact")], [], 2),
+    ];
+
+    const built = buildGraph(responses, [1], [], [2], new Map([[2, wide]]));
+    const node = (id: number) => built.nodes.find((candidate) => candidate.id === `fn-${id}`);
+
+    expect(node(2)?.width).toBe(codeCardSize(wide).width);
+    expect(node(2)?.data.size).toEqual({
+      width: codeCardSize(wide).width,
+      height: NODE_HEIGHT + codeCardSize(wide).height,
+    });
+    // The card the reader has not opened is still a card.
+    expect(node(3)?.data.size).toEqual({ width: NODE_WIDTH, height: NODE_HEIGHT });
 
     expectNoOverlap(built.nodes);
   });
