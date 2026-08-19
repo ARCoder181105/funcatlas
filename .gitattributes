@@ -1,0 +1,7 @@
+# Generated, not written. GitHub collapses these in a diff and leaves them out
+# of the language stats, so a dependency bump stops drowning the review.
+#
+# The lockfile stays in the repository regardless: CI installs with
+# --frozen-lockfile, which fails without it, and it is what makes an install
+# reproducible and auditable.
+pnpm-lock.yaml linguist-generated=true
