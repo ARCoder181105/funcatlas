@@ -57,17 +57,28 @@ export const NODE_HEIGHT = 44;
 export const NODE_MIN_WIDTH = 176;
 export const NODE_MAX_WIDTH = 380;
 
-/** Mono at 12px for the name, 10px for the qualified name under it, plus the
- *  chevron, the code button and the padding around them. */
+/**
+ * Mono at 12px for the name, 10px for the qualified name under it, and then
+ * everything that shares the row with them: the chevron, the code button, the
+ * padding and the gaps -- plus the "start" badge on a branch root, which is
+ * what was squeezing `cloneRetryOptions` down to `cloneRet...` on a card
+ * supposedly measured to fit it.
+ */
 const LABEL_CHAR = 6.6;
 const SUBLABEL_CHAR = 5.5;
-const CARD_CHROME = 92;
+const CARD_CHROME = 118;
+const ROOT_BADGE = 50;
 
-export function functionCardWidth(label: string, qualifiedName: string | null): number {
+export function functionCardWidth(
+  label: string,
+  qualifiedName: string | null,
+  isRoot = false,
+): number {
   const sublabel = qualifiedName !== null && qualifiedName !== label ? qualifiedName.length : 0;
   const text = Math.max(label.length * LABEL_CHAR, sublabel * SUBLABEL_CHAR);
+  const chrome = CARD_CHROME + (isRoot ? ROOT_BADGE : 0);
 
-  return clamp(text + CARD_CHROME, NODE_MIN_WIDTH, NODE_MAX_WIDTH);
+  return clamp(text + chrome, NODE_MIN_WIDTH, NODE_MAX_WIDTH);
 }
 
 /**
@@ -454,7 +465,7 @@ function toFunctionNode(
   const code = codeCardSize(source);
   const size = showCode
     ? { width: code.width, height: NODE_HEIGHT + code.height }
-    : { width: functionCardWidth(fn.name, fn.qualifiedName), height: NODE_HEIGHT };
+    : { width: functionCardWidth(fn.name, fn.qualifiedName, depth === 0), height: NODE_HEIGHT };
 
   return {
     id: functionId(fn.id),

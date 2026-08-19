@@ -31,6 +31,27 @@ export interface Viewport {
 const MARGIN = 56;
 
 /**
+ * The box around a card and whatever it just drew.
+ *
+ * Revealing only the card the reader clicked reveals something they were
+ * already looking at -- they clicked it -- and leaves the column it just opened
+ * off the screen, which is the "nothing happened" complaint again. The thing to
+ * bring into view is the card *and its new children*.
+ */
+export function boundingBox(boxes: Box[]): Box | null {
+  if (boxes.length === 0) {
+    return null;
+  }
+
+  const left = Math.min(...boxes.map((box) => box.x));
+  const top = Math.min(...boxes.map((box) => box.y));
+  const right = Math.max(...boxes.map((box) => box.x + box.width));
+  const bottom = Math.max(...boxes.map((box) => box.y + box.height));
+
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/**
  * The new viewport offset, or `null` when the card is already comfortably in
  * view and the camera should stay exactly where it is.
  */
@@ -54,13 +75,20 @@ export function panToReveal(
 /**
  * One axis. Zero when the card already fits inside the margins.
  *
- * A card larger than the pane can never fit, so its leading edge is aligned
- * instead -- reading starts at the top-left of a card, and a card scrolled to
- * its bottom-right corner is worse than one whose far edge is off screen.
+ * A box larger than the pane can never fit, and the temptation is to align its
+ * leading edge. That is what took the file card off the screen: opening a
+ * source card makes a box wider than the canvas, so the camera snapped its left
+ * edge to the margin and swept everything to the left of it away -- the file
+ * card included, for as long as the card stayed open.
+ *
+ * So a box too large to frame moves the camera only when its leading edge is
+ * *also* off screen. Reading starts at the top-left; if that corner is already
+ * in view, the reader can see where the thing begins, and the far edge running
+ * past the screen is what panning is for.
  */
 function shift(position: number, size: number, pane: number, margin: number): number {
   if (size > pane - margin * 2) {
-    return margin - position;
+    return position < margin ? margin - position : 0;
   }
   if (position < margin) {
     return margin - position;

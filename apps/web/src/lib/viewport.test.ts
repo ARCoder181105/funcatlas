@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { panToReveal } from "./viewport";
+import { boundingBox, panToReveal } from "./viewport";
 
 const PANE = { width: 1000, height: 700 };
 const STILL = { x: 0, y: 0, zoom: 1 };
@@ -48,5 +48,21 @@ describe("panToReveal", () => {
 
     expect(next).not.toBeNull();
     expect(Object.keys(next ?? {}).sort()).toEqual(["x", "y"]);
+  });
+});
+
+describe("boundingBox", () => {
+  it("spans a card and the column it just opened", () => {
+    const box = boundingBox([
+      { x: 0, y: 0, width: 200, height: 44 },
+      { x: 300, y: -60, width: 200, height: 44 },
+      { x: 300, y: 60, width: 200, height: 44 },
+    ]);
+
+    expect(box).toEqual({ x: 0, y: -60, width: 500, height: 164 });
+  });
+
+  it("has nothing to span when the card drew nothing", () => {
+    expect(boundingBox([])).toBeNull();
   });
 });

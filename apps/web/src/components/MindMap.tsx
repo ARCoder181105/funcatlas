@@ -24,7 +24,7 @@ import {
 } from "../lib/graph";
 import { useTheme } from "../lib/theme";
 import { useAnimatedNodes } from "../lib/useAnimatedNodes";
-import { panToReveal } from "../lib/viewport";
+import { boundingBox, panToReveal } from "../lib/viewport";
 import { PALETTE } from "../lib/tokens";
 import { useUiStore } from "../store/ui";
 import { ConfidenceEdge } from "./ConfidenceEdge";
@@ -187,28 +187,39 @@ export function MindMap() {
     const pane = paneRef.current;
     if (target === undefined || pane === null) return;
 
+    // The card *and what it just drew*. Revealing only the card the reader
+    // clicked reveals something they were already looking at, and leaves the
+    // column it opened off the screen -- which is the "nothing happened"
+    // complaint from the other direction.
+    const children = new Set(
+      withFile.edges.filter((edge) => edge.source === target.id).map((edge) => edge.target),
+    );
+    const family = withFile.nodes
+      .filter((node) => node.id === target.id || children.has(node.id))
+      .map((node) => ({
+        x: node.position.x,
+        y: node.position.y,
+        width: node.width ?? NODE_WIDTH,
+        height: node.height ?? NODE_HEIGHT,
+      }));
+
+    const box = boundingBox(family);
+    if (box === null) return;
+
     // A frame late on purpose: React Flow measures the new nodes first, and
     // panning before that uses stale positions.
     const id = requestAnimationFrame(() => {
-      const box = pane.getBoundingClientRect();
-      const next = panToReveal(
-        {
-          x: target.position.x,
-          y: target.position.y,
-          width: target.width ?? NODE_WIDTH,
-          height: target.height ?? NODE_HEIGHT,
-        },
-        flow.getViewport(),
-        { width: box.width, height: box.height },
-      );
+      const bounds = pane.getBoundingClientRect();
+      const viewport = flow.getViewport();
+      const next = panToReveal(box, viewport, { width: bounds.width, height: bounds.height });
 
       if (next !== null) {
         // The zoom the reader chose is carried through untouched.
-        flow.setViewport({ ...next, zoom: flow.getViewport().zoom }, { duration: 400 });
+        flow.setViewport({ ...next, zoom: viewport.zoom }, { duration: 400 });
       }
     });
     return () => cancelAnimationFrame(id);
-  }, [selectedFunctionId, withFile.nodes, flow]);
+  }, [selectedFunctionId, withFile.nodes, withFile.edges, flow]);
 
   /*
    * There is no focus mode.
