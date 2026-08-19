@@ -61,6 +61,9 @@ interface UiState {
 
   selectRepo: (id: number | null) => void;
   selectFile: (id: number | null) => void;
+  /** Opens a file's card, or closes it when it is the one already open. The
+   *  tree row toggles like every other control on the canvas does. */
+  toggleFile: (id: number) => void;
   /** Opens a function from the file card as a new branch, or closes that
    *  branch if it is already open. */
   toggleRoot: (id: number) => void;
@@ -114,6 +117,9 @@ export const useUiStore = create<UiState>((set) => ({
   selectRepo: (selectedRepoId) => set({ ...empty(), selectedRepoId }),
 
   selectFile: (selectedFileId) => set({ ...noMap(), selectedFileId }),
+
+  toggleFile: (id) =>
+    set((state) => ({ ...noMap(), selectedFileId: state.selectedFileId === id ? null : id })),
 
   selectFunction: (selectedFunctionId) =>
     set(selectedFunctionId === null ? noMap() : { selectedFunctionId }),

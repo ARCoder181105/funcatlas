@@ -103,6 +103,32 @@ describe("Sidebar", () => {
     expect(useUiStore.getState().selectedFileId).toBe(target.id);
   });
 
+  it("closes the file it already has open, and clears the canvas with it", async () => {
+    // The same toggle every card on the canvas has. Clicking the open file
+    // again used to rebuild the identical card, which meant the tree could
+    // open a canvas but never put it away.
+    const user = userEvent.setup();
+    useUiStore.getState().selectRepo(7);
+    const target = file("src/index.ts", 2);
+    mocked.tree.mockResolvedValue({ repoId: 7, files: [target] });
+
+    renderSidebar();
+    const row = await screen.findByText("index.ts");
+
+    await user.click(row);
+    useUiStore.getState().toggleRoot(99);
+    expect(useUiStore.getState().rootFunctionIds).toEqual([99]);
+
+    await user.click(row);
+
+    const state = useUiStore.getState();
+    expect(state.selectedFileId).toBeNull();
+    // And the map goes with it -- a branch left in the store would come back
+    // the moment the same file was opened again.
+    expect(state.rootFunctionIds).toEqual([]);
+    expect(state.selectedFunctionId).toBeNull();
+  });
+
   it("shows no count badge for a file with no functions", async () => {
     useUiStore.getState().selectRepo(7);
     mocked.tree.mockResolvedValue({ repoId: 7, files: [file("README.md", 0)] });

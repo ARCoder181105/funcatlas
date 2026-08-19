@@ -185,7 +185,7 @@ function Node({
   toggle: (path: string) => void;
 }) {
   const selectedFileId = useUiStore((state) => state.selectedFileId);
-  const selectFile = useUiStore((state) => state.selectFile);
+  const toggleFile = useUiStore((state) => state.toggleFile);
 
   if (entry.kind === "file") {
     const active = entry.file.id === selectedFileId;
@@ -194,7 +194,9 @@ function Node({
       <SidebarMenuItem>
         <SidebarMenuButton
           isActive={active}
-          onClick={() => selectFile(entry.file.id)}
+          // Clicking the open file again closes its card and clears the
+          // canvas, the same way every card on the canvas closes itself.
+          onClick={() => toggleFile(entry.file.id)}
           tooltip={entry.path}
         >
           <FileCode2 strokeWidth={1.5} aria-hidden />

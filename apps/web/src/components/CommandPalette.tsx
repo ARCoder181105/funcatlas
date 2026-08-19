@@ -182,7 +182,14 @@ function Results({
           // this value, so it has to stay unique and stable.
           value={String(result.id)}
           onSelect={() => onChoose(result)}
-          className="gap-3"
+          // The keyboard selection has to be *visible*.
+          //
+          // The component marks the selected row with `bg-muted`, and in this
+          // theme `--muted` and `--popover` are both `surface.raised` -- the
+          // highlight was the same colour as the dialog behind it. Arrow keys
+          // moved the selection correctly and nothing on screen changed, so
+          // the list read as unnavigable.
+          className="gap-3 data-selected:bg-accent data-selected:ring-1 data-selected:ring-primary/40"
         >
           <span className="min-w-0 flex-1">
             <span className="block truncate font-mono text-xs text-foreground">{result.name}</span>
