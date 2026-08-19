@@ -130,10 +130,16 @@ export function MindMap() {
   // The names as one string: the array behind it is rebuilt on every render,
   // and what the size depends on is its contents.
   const names = (fileFunctions.data?.functions ?? []).map((fn) => fn.name).join("|");
+  const pendingFunctions = fileFunctions.isPending;
 
   const fileData = useMemo(() => {
     if (file === undefined) return null;
-    const size = fileCardSize(names === "" ? [] : names.split("|"), file.path, fileListExpanded);
+    const size = fileCardSize(
+      names === "" ? [] : names.split("|"),
+      file.path,
+      fileListExpanded,
+      pendingFunctions,
+    );
     return {
       fileId: file.id,
       path: file.path,
@@ -141,7 +147,7 @@ export function MindMap() {
       size,
       showAll: fileListExpanded,
     };
-  }, [file, names, fileListExpanded]);
+  }, [file, names, fileListExpanded, pendingFunctions]);
 
   const withFile = useMemo(() => {
     if (fileData === null) {

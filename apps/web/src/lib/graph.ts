@@ -208,6 +208,17 @@ const LIST_PADDING = 38;
 const MORE_ROW = 38;
 
 /**
+ * The two bodies that are not a list of rows, and are not one row tall either.
+ *
+ * A file the parser found nothing in shows a title and a sentence explaining
+ * that; a file still loading shows four skeleton rows. Sizing both as "one row"
+ * clipped the explanation halfway through its second line -- the card said
+ * there was nothing here and then cut off why.
+ */
+const EMPTY_BODY = 104;
+const PENDING_BODY = 116;
+
+/**
  * Wide enough for the longest name, tall enough for every row it is showing.
  *
  * Neither axis is capped. The card is exactly as wide as its longest name and
@@ -218,6 +229,8 @@ export function fileCardSize(
   names: string[],
   path: string,
   showAll = false,
+  /** No answer yet, which is a different body from an answer of "none". */
+  pending = false,
 ): { width: number; height: number } {
   const longest = names.reduce((widest, name) => Math.max(widest, name.length), 0);
   const width = Math.max(longest * LABEL_CHAR + ROW_CHROME, FILE_CARD_MIN_WIDTH);
@@ -227,12 +240,13 @@ export function fileCardSize(
   const pathLines = Math.max(1, Math.ceil((path.length * LABEL_CHAR) / (width - 72)));
   const rows = showAll ? names.length : Math.min(names.length, FILE_PREVIEW_ROWS);
   const more = names.length > rows ? MORE_ROW : 0;
+  const body = pending
+    ? PENDING_BODY
+    : names.length === 0
+      ? EMPTY_BODY
+      : rows * ROW_HEIGHT + more;
 
-  return {
-    width,
-    height:
-      FILE_HEADER + pathLines * PATH_LINE + Math.max(rows, 1) * ROW_HEIGHT + LIST_PADDING + more,
-  };
+  return { width, height: FILE_HEADER + pathLines * PATH_LINE + body + LIST_PADDING };
 }
 
 /** Where the file card sits: its own width clear of the first column, so

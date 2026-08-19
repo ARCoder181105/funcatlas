@@ -256,6 +256,20 @@ describe("buildGraph", () => {
     expect(fileCardSize([], "a.ts").width).toBe(FILE_CARD_MIN_WIDTH);
   });
 
+  it("gives an empty file room for its explanation", () => {
+    // A file the parser found nothing in shows a title and a sentence saying
+    // so. Sized as one row, the card cut that sentence off halfway through its
+    // second line -- it said there was nothing here and then hid why.
+    const empty = fileCardSize([], "source/types/ky.ts");
+    const oneFunction = fileCardSize(["get"], "source/types/ky.ts");
+
+    expect(empty.height).toBeGreaterThan(oneFunction.height);
+
+    // And an answer that has not arrived is a third body again: four skeleton
+    // rows, not a sentence.
+    expect(fileCardSize([], "a.ts", false, true).height).toBeGreaterThan(empty.height);
+  });
+
   it("shows a screenful of functions and grows to the rest on request", () => {
     // Nothing inside a node scrolls: over this canvas the wheel zooms the map,
     // and a scroll region under the pointer would change what the reader's own
