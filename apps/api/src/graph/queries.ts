@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { ANONYMOUS_SCOPE } from "@funcatlas/shared";
 import type {
   CallEdge,
   FileNode,
@@ -300,6 +301,14 @@ export async function functionSource(
  * Scoped through files.repo_id -- without the join this returns another
  * repository's functions. Prefix matches rank above substring matches, then
  * shorter names, so searching "get" offers getUser before forgetPassword.
+ *
+ * Functions declared inside an anonymous scope rank below the rest, ahead of
+ * even the prefix bonus. They are real and stay findable -- hiding them would
+ * be the same dishonesty as dropping an unresolved edge -- but `ky` has one
+ * `fetch` you can point at and 121 callbacks called `fetch` inside its tests,
+ * and with the prefix bonus applied first all 121 came before the definition.
+ * A function whose scope has a name is the better answer even when a callback
+ * matches more tightly.
  */
 export async function searchFunctions(
   db: Db,
@@ -326,7 +335,9 @@ export async function searchFunctions(
     JOIN files fl ON fl.id = fn.file_id
     WHERE fl.repo_id = ${repoId}
       AND fn.name ILIKE ${`%${escaped}%`}
-    ORDER BY (fn.name ILIKE ${`${escaped}%`}) DESC, length(fn.name), fn.name, fn.id
+    ORDER BY (fn.qualified_name LIKE ${`${ANONYMOUS_SCOPE}%`}),
+             (fn.name ILIKE ${`${escaped}%`}) DESC,
+             length(fn.name), fn.name, fn.id
     LIMIT ${limit}
   `);
 

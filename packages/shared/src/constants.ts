@@ -22,6 +22,17 @@ export const TRAVERSAL_MAX_DEPTH = 10;
 /** The starting function is depth 0; its direct calls are depth 1. */
 export const TRAVERSAL_ROOT_DEPTH = 0;
 
+/**
+ * The scope the parser gives a function declared inside an anonymous one --
+ * a callback, a test body, an IIFE. Mirrors `utils.Anonymous` in the Go
+ * parser, which builds the qualified name.
+ *
+ * They are real functions and stay findable, but a repository's test file can
+ * hold sixty `<anonymous>.fetch` helpers, so search ranks them below functions
+ * with a name their scope can be pointed at.
+ */
+export const ANONYMOUS_SCOPE = "<anonymous>";
+
 /** The host a stored repository URL is normalised to. */
 export const GITHUB_HOST = "github.com";
 
