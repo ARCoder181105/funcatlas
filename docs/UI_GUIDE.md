@@ -118,6 +118,20 @@ accessibility than the version we would write this afternoon. Check before concl
 there — `curl -s -o /dev/null -w "%{http_code}" https://ui.shadcn.com/r/styles/base-nova/<name>.json`
 answers in a second.
 
+**A Base UI popup does not unmount itself.** A closing `Dialog` keeps `data-closed`, stays in the
+DOM, stays on screen and goes on taking clicks — it is waiting for an exit animation whose
+completion it never observes (`getAnimations()` comes back empty while the popup still has
+`animation-name: exit`). It cost an afternoon on the ⌘K palette: selecting a result moved the canvas
+behind a palette that would not go away, and Escape could not shift it either. Both dialogs now
+render their content only while open:
+
+```tsx
+{open ? <DialogContent>…</DialogContent> : null}
+```
+
+Any new `Dialog`, `Popover` or `Sheet` needs the same. A test that asserts state rather than the DOM
+will not catch it — assert the thing is gone from the page.
+
 *This reverses the earlier position*, which was "behaviour from Radix, styling from §1.1, nothing
 generated" — the CLI was to be avoided because its theme layer would duplicate the token table. That
 concern turned out to be solvable rather than fundamental: §1.1's variables are wired to shadcn's

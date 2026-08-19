@@ -32,7 +32,9 @@ import { Spinner } from "./ui/spinner";
 /** `owner/repo`, which is what the reader recognises. The full URL is noise in
  *  a menu row and the API canonicalises it anyway. */
 function shortName(githubUrl: string): string {
-  return githubUrl.replace(/^https?:\/\/(www\.)?github\.com\//i, "").replace(/\.git$/i, "");
+  return githubUrl
+    .replace(/^https?:\/\/(www\.)?github\.com\//i, "")
+    .replace(/\.git$/i, "");
 }
 
 /**
@@ -71,11 +73,17 @@ export function RepoPicker() {
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button variant="outline" size="sm" className="min-w-0 flex-1 justify-between">
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-w-0 flex-1 justify-between"
+            >
               <span className="flex min-w-0 items-center gap-2">
                 <FolderGit2 strokeWidth={1.5} aria-hidden />
                 <span className="truncate font-mono text-xs">
-                  {current ? shortName(current.githubUrl) : "Choose a repository"}
+                  {current
+                    ? shortName(current.githubUrl)
+                    : "Choose a repository"}
                 </span>
               </span>
               <ChevronsUpDown strokeWidth={1.5} aria-hidden />
@@ -95,15 +103,24 @@ export function RepoPicker() {
               <DropdownMenuItem disabled>Nothing charted yet</DropdownMenuItem>
             ) : (
               list.map((repo) => (
-                <DropdownMenuItem key={repo.id} onClick={() => selectRepo(repo.id)}>
+                <DropdownMenuItem
+                  key={repo.id}
+                  onClick={() => selectRepo(repo.id)}
+                >
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-mono text-xs">{shortName(repo.githubUrl)}</span>
+                    <span className="truncate font-mono text-xs">
+                      {shortName(repo.githubUrl)}
+                    </span>
                     <span className="text-[11px] text-ink-muted tabular-nums">
                       {repo.fileCount} files · {repo.functionCount} functions
                     </span>
                   </span>
                   {repo.id === selectedRepoId ? (
-                    <Check strokeWidth={1.5} className="text-primary" aria-hidden />
+                    <Check
+                      strokeWidth={1.5}
+                      className="text-primary"
+                      aria-hidden
+                    />
                   ) : null}
                 </DropdownMenuItem>
               ))
@@ -151,60 +168,74 @@ function RegisterDialog() {
     >
       <DialogTrigger
         render={
-          <Button variant="outline" size="icon-sm" aria-label="Chart a repository">
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Chart a repository"
+          >
             <Plus strokeWidth={1.5} aria-hidden />
           </Button>
         }
       />
 
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Chart a repository</DialogTitle>
-          <DialogDescription>
-            Public repositories only. funcatlas clones over HTTPS and reads the default branch.
-          </DialogDescription>
-        </DialogHeader>
+      {/* Mounted only while open. Base UI holds a closing popup in the tree
+          until it sees its exit animation finish, and here it never does: the
+          popup keeps `data-closed`, stays on screen and goes on taking clicks.
+          See `docs/UI_GUIDE.md` §2. */}
+      {open ? (
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Chart a repository</DialogTitle>
+            <DialogDescription>
+              Public repositories only. funcatlas clones over HTTPS and reads
+              the default branch.
+            </DialogDescription>
+          </DialogHeader>
 
-        <Field>
-          <FieldLabel htmlFor="repo-url">Repository URL</FieldLabel>
-          <Input
-            id="repo-url"
-            value={url}
-            placeholder="https://github.com/owner/repo"
-            disabled={register.isPending}
-            onChange={(event) => setUrl(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") submit();
-            }}
-          />
-          <FieldDescription>
-            {register.isPending
-              ? "Cloning and parsing. Large repositories take a few minutes; this window stays open until it finishes."
-              : "Parsing runs while you wait — there is no queue yet."}
-          </FieldDescription>
-        </Field>
+          <Field>
+            <FieldLabel htmlFor="repo-url">Repository URL</FieldLabel>
+            <Input
+              id="repo-url"
+              value={url}
+              placeholder="https://github.com/owner/repo"
+              disabled={register.isPending}
+              onChange={(event) => setUrl(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submit();
+              }}
+            />
+            <FieldDescription>
+              {register.isPending
+                ? "Cloning and parsing. Large repositories take a few minutes; this window stays open until it finishes."
+                : "Parsing runs while you wait — there is no queue yet."}
+            </FieldDescription>
+          </Field>
 
-        {register.isError ? (
-          <p className="text-sm text-destructive">
-            {shortName(url.trim()) || "That repository"} was not charted.{" "}
-            {messageFor(register.error)}
-          </p>
-        ) : null}
+          {register.isError ? (
+            <p className="text-sm text-destructive">
+              {shortName(url.trim()) || "That repository"} was not charted.{" "}
+              {messageFor(register.error)}
+            </p>
+          ) : null}
 
-        <DialogFooter>
-          <DialogClose
-            render={
-              <Button variant="ghost" disabled={register.isPending}>
-                Cancel
-              </Button>
-            }
-          />
-          <Button onClick={submit} disabled={url.trim() === "" || register.isPending}>
-            {register.isPending ? <Spinner aria-hidden /> : null}
-            {register.isPending ? "Charting…" : "Chart repository"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+          <DialogFooter>
+            <DialogClose
+              render={
+                <Button variant="ghost" disabled={register.isPending}>
+                  Cancel
+                </Button>
+              }
+            />
+            <Button
+              onClick={submit}
+              disabled={url.trim() === "" || register.isPending}
+            >
+              {register.isPending ? <Spinner aria-hidden /> : null}
+              {register.isPending ? "Charting…" : "Chart repository"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      ) : null}
     </Dialog>
   );
 }

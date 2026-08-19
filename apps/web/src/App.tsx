@@ -3,6 +3,7 @@ import type { SessionUser } from "@funcatlas/shared";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { AppHeader } from "./components/AppHeader";
 import { Canvas } from "./components/Canvas";
+import { CommandPalette } from "./components/CommandPalette";
 import { LoginScreen } from "./components/LoginScreen";
 import { Sidebar } from "./components/Sidebar";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./components/ui/resizable";
@@ -91,6 +92,11 @@ function Explorer({ user }: { user: SessionUser }) {
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
       <AppHeader user={user} sidebarCollapsed={collapsed} onToggleSidebar={toggle} />
+
+      {/* Mounted with the explorer rather than inside the sidebar: ⌘K is a
+          window-level shortcut, and a palette that only exists while the tree
+          is open would stop answering when the tree is collapsed. */}
+      <CommandPalette />
 
       <ResizablePanelGroup className="min-h-0 flex-1" onLayoutChange={sync}>
         <ResizablePanel

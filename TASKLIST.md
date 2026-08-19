@@ -440,7 +440,7 @@ absolute line numbers, and the null-source case is covered by a test.
 
 ---
 
-## B7 — Search and the ⌘K palette  `[ ]`
+## B7 — Search and the ⌘K palette  `[x]`
 
 **Why.** The half of the phase's exit test that the canvas does not cover: *find a function by
 name*. `GET /api/repos/:id/search` already ranks prefix matches above substring matches; nothing
