@@ -10,10 +10,13 @@ import {
   buildGraph,
   CODE_HEIGHT,
   codeCardSize,
-  CODE_MAX_HEIGHT,
-  CODE_MAX_WIDTH,
+  CODE_PREVIEW_LINES,
   CODE_MIN_WIDTH,
   CODE_WIDTH,
+  fileCardPosition,
+  fileCardSize,
+  FILE_CARD_MIN_WIDTH,
+  FILE_PREVIEW_ROWS,
   functionCardWidth,
   FUNCTION_NODE,
   GHOST_NODE,
@@ -230,6 +233,59 @@ describe("buildGraph", () => {
     expectNoOverlap(built.nodes);
   });
 
+  it("sizes the file card to the file, both ways", () => {
+    const few = ["get", "post"];
+    const many = Array.from({ length: 12 }, (_, index) => `handler${index}`);
+
+    // Taller with more functions, wider with longer names. The list used to sit
+    // in a 256px scroll area on a card fixed at 288 wide, so a dozen functions
+    // were mostly hidden and a long name wrapped inside its own row.
+    expect(fileCardSize(many, "a.ts").height).toBeGreaterThan(fileCardSize(few, "a.ts").height);
+    expect(fileCardSize(["cloneSearchParametersForInitHook"], "a.ts").width).toBeGreaterThan(
+      fileCardSize(few, "a.ts").width,
+    );
+
+    // A wrapped path makes the header taller, because the path is an
+    // identifier and wraps rather than truncating.
+    const deep = "source/core/internal/really/quite/deeply/nested/module-name.ts";
+    expect(fileCardSize(few, deep).height).toBeGreaterThan(fileCardSize(few, "a.ts").height);
+
+    // No ceiling, a floor only: the card is as wide as its longest name.
+    const huge = Array.from({ length: 300 }, () => "x".repeat(80));
+    expect(fileCardSize(huge, "a.ts").width).toBeGreaterThan(500);
+    expect(fileCardSize([], "a.ts").width).toBe(FILE_CARD_MIN_WIDTH);
+  });
+
+  it("shows a screenful of functions and grows to the rest on request", () => {
+    // Nothing inside a node scrolls: over this canvas the wheel zooms the map,
+    // and a scroll region under the pointer would change what the reader's own
+    // gesture means depending on where it happened to be.
+    const many = Array.from({ length: 40 }, (_, index) => `handler${index}`);
+
+    const preview = fileCardSize(many, "a.ts");
+    const full = fileCardSize(many, "a.ts", true);
+
+    // The preview is a fixed number of rows plus the row that offers the rest,
+    // however many functions the file has.
+    expect(preview.height).toBe(fileCardSize(many.slice(0, FILE_PREVIEW_ROWS + 1), "a.ts").height);
+    expect(full.height).toBeGreaterThan(preview.height * 3);
+
+    // A file that fits gets no "more" row at all.
+    const few = Array.from({ length: 3 }, (_, index) => `handler${index}`);
+    expect(fileCardSize(few, "a.ts")).toEqual(fileCardSize(few, "a.ts", true));
+  });
+
+  it("keeps the file card clear of the first column however wide it is", () => {
+    // Placed against its own width rather than a constant, so widening it moves
+    // it left instead of into the graph.
+    const narrow = fileCardPosition(FILE_CARD_MIN_WIDTH);
+    const wide = fileCardPosition(900);
+
+    expect(narrow.x + FILE_CARD_MIN_WIDTH).toBeLessThan(0);
+    expect(wide.x + 900).toBeLessThan(0);
+    expect(wide.x).toBeLessThan(narrow.x);
+  });
+
   it("sizes a card to the source it is showing", () => {
     const short = ["function a() {", "  return 1;", "}"].join("\n");
     const wide = `const x = ${"y".repeat(200)};`;
@@ -240,11 +296,19 @@ describe("buildGraph", () => {
     expect(codeCardSize(short).height).toBeLessThan(codeCardSize(long).height);
     expect(codeCardSize(short).width).toBeLessThan(codeCardSize(wide).width);
 
-    // Clamped at both ends: a card the size of a 400-line function cannot be
-    // placed, and one the size of `return x` cannot be read.
-    expect(codeCardSize(long).height).toBe(CODE_MAX_HEIGHT);
-    expect(codeCardSize(wide).width).toBe(CODE_MAX_WIDTH);
+    // No ceiling on either axis: a card that caps its size only moves the
+    // clipping somewhere less obvious. There is a floor, so a one-line function
+    // is still readable.
+    expect(codeCardSize(wide).width).toBeGreaterThan(1000);
     expect(codeCardSize("x").width).toBe(CODE_MIN_WIDTH);
+
+    const preview = codeCardSize(long);
+    const full = codeCardSize(long, true);
+    expect(preview.height).toBeLessThan(full.height / 5);
+    // The preview is the same height whatever the file's length past it.
+    const longer = Array.from({ length: 900 }, (_, index) => `line ${index}`).join("\n");
+    expect(codeCardSize(longer).height).toBe(preview.height);
+    expect(preview.height).toBeGreaterThan(CODE_PREVIEW_LINES * 19);
 
     // Nothing to measure yet, or nothing stored at all: the default box.
     expect(codeCardSize(undefined)).toEqual({ width: CODE_WIDTH, height: CODE_HEIGHT });

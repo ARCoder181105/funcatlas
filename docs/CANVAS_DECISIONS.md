@@ -328,6 +328,43 @@ layout independent of anything the environment has to measure, which is what kee
 
 ---
 
+## 4h. Nothing inside a node scrolls, and no card has a size cap
+
+**Decided:** after "I don't like scroll bar", and the reason behind it: *"because we are on canvas
+the scroll is doing work — one is scrolling and one is like zoom in and zoom out, it makes things
+complex"*.
+**Status:** built.
+
+That observation is the whole rule. Over this canvas the wheel zooms the map. A scroll region
+inside a node means the reader's own gesture changes meaning depending on where the pointer
+happens to be — the same wheel either scrolls a list or zooms the graph, and there is no way to tell
+which without looking. That is not density, it is ambiguity.
+
+So no node scrolls. Instead:
+
+- **Cards are measured to their content.** `fileCardSize` from the longest function name and the
+  number of rows, `codeCardSize` from the longest line and the line count. Both are exact enough
+  that nothing overflows — verified in a browser by asserting `scrollHeight <= clientHeight` on
+  every element inside a card.
+- **A card too big for one screenful previews and grows.** Ten rows on a file card, twenty-four
+  lines on a source card, then a row that says how many are left and opens the rest. The card
+  expands, the layout re-spaces around it, and `useAnimatedNodes` glides the neighbours out of the
+  way. Verified: `test/hooks.ts` shows 10 rows and "91 more", and expands to 101 rows in a 4757px
+  card with nothing clipped.
+- **Neither axis is capped.** The caps went after the reader asked for them to go, and they were
+  wrong anyway: a maximum width is just a place where clipping happens somewhere less obvious. A
+  170-line function with 195-character lines gets a 1589×3948 card. It is enormous, and reading it
+  is what the canvas's zoom is *for* — which is the point of not having a second scroller inside it.
+
+**Two measurement lessons, both found the hard way.** The row component ships as `flex-wrap`, so a
+name a few pixels too long dropped its line number onto a second line and made every row taller than
+the card was measured for — it is `flex-nowrap` now. And a character in a card name renders at
+7.2px, not the 6.6px measured off the code block; using the code figure left every long name a few
+pixels short of its row, which is what the wrapping was reacting to. Both numbers are measured off
+rendered DOM, and both are wrong the moment the type scale changes.
+
+---
+
 ## 5. A provider per surface
 
 **Decided:** during B5. **Superseded by 4b.**

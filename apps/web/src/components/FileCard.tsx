@@ -1,17 +1,18 @@
 import { memo } from "react";
 import { motion, type Variants } from "framer-motion";
-import { FileCode2 } from "lucide-react";
+import { ChevronDown, FileCode2 } from "lucide-react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { cn } from "../lib/cn";
 import { useFileFunctions } from "../lib/files";
+import { FILE_PREVIEW_ROWS } from "../lib/graph";
 import { DURATION, useMotionEnabled, useMotionTransition } from "../lib/motion";
 import { useUiStore } from "../store/ui";
 import { ExpandIndicator, expandLabel } from "./ExpandIndicator";
 import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Empty, EmptyDescription, EmptyTitle } from "./ui/empty";
 import { Item, ItemActions, ItemContent, ItemGroup, ItemTitle } from "./ui/item";
-import { ScrollArea } from "./ui/scroll-area";
 import { Skeleton } from "./ui/skeleton";
 
 /** What the canvas puts in `node.data` for this node type. */
@@ -19,6 +20,13 @@ export interface FileCardData {
   fileId: number;
   path: string;
   language: string;
+  /** Measured from the file's own contents by `fileCardSize`, and the box the
+   *  layout placed the card against. Two places deciding it is how a card
+   *  starts overlapping the graph. */
+  size: { width: number; height: number };
+  /** Whether the card is showing every function or the first `FILE_PREVIEW_ROWS`
+   *  of them. Drives the size above, so the canvas owns it. */
+  showAll: boolean;
 }
 
 /**
@@ -52,6 +60,7 @@ function File({ data }: NodeProps<FileCardData>) {
   const rootFunctionIds = useUiStore((state) => state.rootFunctionIds);
   const collapsedFunctionIds = useUiStore((state) => state.collapsedFunctionIds);
   const toggleRoot = useUiStore((state) => state.toggleRoot);
+  const toggleFileList = useUiStore((state) => state.toggleFileList);
   const transition = useMotionTransition("spring");
   const animated = useMotionEnabled();
 
@@ -66,7 +75,9 @@ function File({ data }: NodeProps<FileCardData>) {
           edge geometry B5 draws. */}
       <Handle type="source" position={Position.Right} className="!bg-surface-border" />
 
-      <Card size="sm" className="w-72 gap-0 shadow-lg">
+      {/* Sized to what is in it, both ways: a dozen functions used to sit
+          behind a 256px scrollbar on a card fixed at 288px wide. */}
+      <Card size="sm" style={data.size} className="flex flex-col gap-0 shadow-lg">
         <CardHeader className="flex-row items-start gap-2 border-b pb-(--card-spacing)">
           <FileCode2
             strokeWidth={1.5}
@@ -81,12 +92,14 @@ function File({ data }: NodeProps<FileCardData>) {
           </div>
         </CardHeader>
 
-        <CardContent className="px-1.5">
+        <CardContent className="min-h-0 flex-1 px-1.5">
           <FunctionList
             query={functions}
             selectedFunctionId={selectedFunctionId}
             openIds={rootFunctionIds.filter((id) => !collapsedFunctionIds.includes(id))}
             onSelect={toggleRoot}
+            showAll={data.showAll}
+            onShowAll={toggleFileList}
             animated={animated}
           />
         </CardContent>
@@ -109,6 +122,8 @@ function FunctionList({
   selectedFunctionId,
   openIds,
   onSelect,
+  showAll,
+  onShowAll,
   animated,
 }: {
   query: ReturnType<typeof useFileFunctions>;
@@ -116,6 +131,8 @@ function FunctionList({
   /** Which of these already have a branch on the canvas. */
   openIds: number[];
   onSelect: (id: number) => void;
+  showAll: boolean;
+  onShowAll: () => void;
   animated: boolean;
 }) {
   if (query.isPending) {
@@ -149,16 +166,22 @@ function FunctionList({
     );
   }
 
+  // Nothing inside a node scrolls. The wheel over this canvas zooms the map,
+  // and a scroll region under the pointer would quietly change what the reader's
+  // own gesture means. A card that cannot show everything says how much is left
+  // and grows when asked -- `fileCardSize` measures the same two cases, so the
+  // graph re-spaces around whichever one is drawn.
+  const shown = showAll ? functions : functions.slice(0, FILE_PREVIEW_ROWS);
+  const rest = functions.length - shown.length;
+
   return (
-    // Capped rather than unbounded: a file with two hundred functions would
-    // make a node taller than the viewport and impossible to place.
-    <ScrollArea className="max-h-64">
+    <div className="h-full">
       {/* The list arrives as one gesture rather than as N separate fades: the
           container drives the stagger, so the rows cannot drift out of step
           with each other (UI_GUIDE §4). */}
       <motion.div variants={LIST} initial={animated ? "hidden" : false} animate="shown">
         <ItemGroup>
-          {functions.map((fn) => {
+          {shown.map((fn) => {
             const active = fn.id === selectedFunctionId;
             const open = openIds.includes(fn.id);
 
@@ -169,7 +192,12 @@ function FunctionList({
                 className={cn(
                   // nodrag: without it React Flow reads the press as the start
                   // of a node drag and the click never lands.
-                  "nodrag cursor-pointer text-left",
+                  //
+                  // flex-nowrap: the row ships as flex-wrap, so a name a few
+                  // pixels too long dropped its line number onto a second line
+                  // and made the row taller than the card was measured for.
+                  // The card is sized to the longest name instead.
+                  "nodrag cursor-pointer flex-nowrap text-left",
                   active ? "bg-accent text-accent-foreground" : "hover:bg-muted",
                 )}
                 render={
@@ -199,6 +227,23 @@ function FunctionList({
           })}
         </ItemGroup>
       </motion.div>
-    </ScrollArea>
+
+      {rest > 0 || showAll ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onShowAll}
+          className="nodrag h-8 w-full justify-center gap-1.5 text-xs text-muted-foreground"
+        >
+          <ChevronDown
+            strokeWidth={1.5}
+            className={cn("size-3.5 transition-transform duration-micro", showAll && "rotate-180")}
+            aria-hidden
+          />
+          {showAll ? "Show fewer" : `${rest} more`}
+        </Button>
+      ) : null}
+    </div>
   );
 }

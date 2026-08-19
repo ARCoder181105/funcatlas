@@ -46,6 +46,19 @@ interface UiState {
    */
   codeFunctionIds: number[];
 
+  /**
+   * Whether the file card is showing every function or just the first screen
+   * of them.
+   *
+   * On the card rather than in it, because the canvas sizes the card from its
+   * contents and has to know which of the two it is drawing.
+   */
+  fileListExpanded: boolean;
+
+  /** Cards showing every line of their source rather than the first screenful.
+   *  Same reason as `fileListExpanded`: the card grows, nothing scrolls. */
+  fullSourceIds: number[];
+
   selectRepo: (id: number | null) => void;
   selectFile: (id: number | null) => void;
   /** Opens a function from the file card as a new branch, or closes that
@@ -56,6 +69,10 @@ interface UiState {
   toggleFunction: (id: number) => void;
   /** Opens a function's source inside its card, or closes it again. */
   toggleCode: (id: number) => void;
+  /** Shows the rest of a file's functions, or folds them away again. */
+  toggleFileList: () => void;
+  /** Shows the rest of a function's source, or folds it back to a screenful. */
+  toggleFullSource: (id: number) => void;
   /** Clears the map. Used when the file or repository changes. */
   selectFunction: (id: number | null) => void;
   /** Signing out, where nothing selected should survive the next session. */
@@ -83,6 +100,8 @@ const noMap = () => ({
   expandedFunctionIds: [] as number[],
   collapsedFunctionIds: [] as number[],
   codeFunctionIds: [] as number[],
+  fileListExpanded: false,
+  fullSourceIds: [] as number[],
 });
 
 const empty = () => ({ selectedRepoId: null, selectedFileId: null, ...noMap() });
@@ -149,6 +168,15 @@ export const useUiStore = create<UiState>((set) => ({
       codeFunctionIds: state.codeFunctionIds.includes(id)
         ? state.codeFunctionIds.filter((candidate) => candidate !== id)
         : [...state.codeFunctionIds, id],
+    })),
+
+  toggleFileList: () => set((state) => ({ fileListExpanded: !state.fileListExpanded })),
+
+  toggleFullSource: (id) =>
+    set((state) => ({
+      fullSourceIds: state.fullSourceIds.includes(id)
+        ? state.fullSourceIds.filter((candidate) => candidate !== id)
+        : [...state.fullSourceIds, id],
     })),
 
   clearSelection: () => set({ ...empty() }),

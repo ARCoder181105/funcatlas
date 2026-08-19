@@ -10,11 +10,13 @@ import ReactFlow, {
 } from "reactflow";
 import { AlertTriangle } from "lucide-react";
 import { ApiError } from "../lib/api";
+import { useFileFunctions } from "../lib/files";
 import { useExpansions, useSources } from "../lib/functions";
 import { useRepoTree } from "../lib/repos";
 import {
   buildGraph,
-  COLUMN,
+  fileCardPosition,
+  fileCardSize,
   FILE_CARD_NODE,
   FUNCTION_NODE,
   GHOST_NODE,
@@ -67,6 +69,8 @@ export function MindMap() {
   const rootFunctionIds = useUiStore((state) => state.rootFunctionIds);
   const collapsedFunctionIds = useUiStore((state) => state.collapsedFunctionIds);
   const codeFunctionIds = useUiStore((state) => state.codeFunctionIds);
+  const fileListExpanded = useUiStore((state) => state.fileListExpanded);
+  const fullSourceIds = useUiStore((state) => state.fullSourceIds);
 
   const selectedFileId = useUiStore((state) => state.selectedFileId);
   const selectedRepoId = useUiStore((state) => state.selectedRepoId);
@@ -83,8 +87,23 @@ export function MindMap() {
   const sources = useSources(codeFunctionIds);
 
   const graph = useMemo(
-    () => buildGraph(expansions.data, rootFunctionIds, collapsedFunctionIds, codeFunctionIds, sources),
-    [expansions.data, rootFunctionIds, collapsedFunctionIds, codeFunctionIds, sources],
+    () =>
+      buildGraph(
+        expansions.data,
+        rootFunctionIds,
+        collapsedFunctionIds,
+        codeFunctionIds,
+        sources,
+        fullSourceIds,
+      ),
+    [
+      expansions.data,
+      rootFunctionIds,
+      collapsedFunctionIds,
+      codeFunctionIds,
+      sources,
+      fullSourceIds,
+    ],
   );
 
   /**
@@ -105,10 +124,24 @@ export function MindMap() {
     () => tree.data?.files.find((candidate) => candidate.id === selectedFileId),
     [tree.data, selectedFileId],
   );
-  const fileData = useMemo(
-    () => (file === undefined ? null : { fileId: file.id, path: file.path, language: file.language }),
-    [file],
-  );
+  // The same query the card itself runs, so the canvas can size the node to
+  // its contents without a second request.
+  const fileFunctions = useFileFunctions(file?.id ?? null);
+  // The names as one string: the array behind it is rebuilt on every render,
+  // and what the size depends on is its contents.
+  const names = (fileFunctions.data?.functions ?? []).map((fn) => fn.name).join("|");
+
+  const fileData = useMemo(() => {
+    if (file === undefined) return null;
+    const size = fileCardSize(names === "" ? [] : names.split("|"), file.path, fileListExpanded);
+    return {
+      fileId: file.id,
+      path: file.path,
+      language: file.language,
+      size,
+      showAll: fileListExpanded,
+    };
+  }, [file, names, fileListExpanded]);
 
   const withFile = useMemo(() => {
     if (fileData === null) {
@@ -126,9 +159,11 @@ export function MindMap() {
         {
           id: fileNodeId,
           type: FILE_CARD_NODE,
-          // One column left of the root, so the function it opened sits beside
-          // it rather than on top of it.
-          position: { x: -COLUMN - 60, y: -40 },
+          // Placed against its own width, so a wider card moves further left
+          // rather than reaching into the first column.
+          position: fileCardPosition(fileData.size.width),
+          width: fileData.size.width,
+          height: fileData.size.height,
           data: fileData,
           // A file is not a call, so it carries none of the graph node's data.
         } as unknown as Node<GraphNodeData>,

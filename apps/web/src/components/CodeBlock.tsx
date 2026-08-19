@@ -1,8 +1,10 @@
 import { motion } from "framer-motion";
-import { FileCode2 } from "lucide-react";
+import { ChevronDown, FileCode2 } from "lucide-react";
 import { useFunctionSource } from "../lib/functions";
+import { CODE_PREVIEW_LINES } from "../lib/graph";
 import { DURATION } from "../lib/motion";
-import { ScrollArea } from "./ui/scroll-area";
+import { useUiStore } from "../store/ui";
+import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 
 /**
@@ -19,8 +21,9 @@ import { Skeleton } from "./ui/skeleton";
  * repository containing `<script>` in a string literal renders as characters.
  * Nothing else may be passed to this element.
  */
-export function CodeBlock({ functionId }: { functionId: number }) {
+export function CodeBlock({ functionId, showAll }: { functionId: number; showAll: boolean }) {
   const query = useFunctionSource(functionId);
+  const toggleFullSource = useUiStore((state) => state.toggleFullSource);
 
   if (query.isPending) {
     return <LoadingSource />;
@@ -30,7 +33,8 @@ export function CodeBlock({ functionId }: { functionId: number }) {
     return <Note>The source could not be loaded.</Note>;
   }
 
-  const { path, startLine, endLine, html } = query.data;
+  const { path, startLine, endLine, html, source } = query.data;
+  const lineCount = source === null ? 0 : source.split("\n").length;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface-raised">
@@ -46,9 +50,11 @@ export function CodeBlock({ functionId }: { functionId: number }) {
           The parser stored no source for this function. Its calls are still on the map.
         </Note>
       ) : (
-        // nowheel, or the wheel zooms the canvas instead of scrolling the
-        // source; nodrag, or a text selection drags the card away.
-        <ScrollArea className="nodrag nowheel min-h-0 flex-1">
+        // Clipped, never scrolled. The wheel over this canvas zooms the map, so
+        // a scroll region here would make the reader's own gesture mean two
+        // things depending on where the pointer landed. `codeCardSize` measured
+        // the card to the lines it is showing, and the button below grows it.
+        <div className="nodrag relative min-h-0 flex-1 overflow-hidden">
           {/* Line numbers are the file's, not the block's: the counter starts
               one below startLine and index.css increments it per line, so they
               match the file on GitHub. */}
@@ -62,8 +68,25 @@ export function CodeBlock({ functionId }: { functionId: number }) {
             style={{ counterReset: `line ${startLine - 1}` }}
             dangerouslySetInnerHTML={{ __html: html }}
           />
-        </ScrollArea>
+        </div>
       )}
+
+      {html !== null && lineCount > CODE_PREVIEW_LINES ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => toggleFullSource(functionId)}
+          className="nodrag h-8 w-full shrink-0 justify-center gap-1.5 border-t border-surface-border text-xs text-ink-muted"
+        >
+          <ChevronDown
+            strokeWidth={1.5}
+            className={`size-3.5 transition-transform duration-micro ${showAll ? "rotate-180" : ""}`}
+            aria-hidden
+          />
+          {showAll ? "Show fewer lines" : `${lineCount - CODE_PREVIEW_LINES} more lines`}
+        </Button>
+      ) : null}
     </div>
   );
 }

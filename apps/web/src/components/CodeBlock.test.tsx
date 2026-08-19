@@ -35,7 +35,7 @@ function renderCodeBlock() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CodeBlock functionId={1} />
+      <CodeBlock functionId={1} showAll={false} />
     </QueryClientProvider>,
   );
 }

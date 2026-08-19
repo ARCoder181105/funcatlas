@@ -153,7 +153,7 @@ function FunctionCard({ data }: NodeProps<GraphNodeData>) {
           transition={{ duration: DURATION.panel, ease: "easeOut" }}
           className="min-h-0 flex-1 border-t border-border"
         >
-          <CodeBlock functionId={data.functionId} />
+          <CodeBlock functionId={data.functionId} showAll={data.showAllSource} />
         </motion.div>
       ) : null}
     </motion.div>

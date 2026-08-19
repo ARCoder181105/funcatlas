@@ -55,7 +55,6 @@ export const NODE_HEIGHT = 44;
  * measured from the name and the graph is spaced around the result.
  */
 export const NODE_MIN_WIDTH = 176;
-export const NODE_MAX_WIDTH = 380;
 
 /**
  * Mono at 12px for the name, 10px for the qualified name under it, and then
@@ -63,8 +62,12 @@ export const NODE_MAX_WIDTH = 380;
  * padding and the gaps -- plus the "start" badge on a branch root, which is
  * what was squeezing `cloneRetryOptions` down to `cloneRet...` on a card
  * supposedly measured to fit it.
+ *
+ * 7.2px a character, measured off a rendered name rather than off the code
+ * block: the block came out at 6.6 and using that here left every long name a
+ * few pixels short of its row, which the row then wrapped.
  */
-const LABEL_CHAR = 6.6;
+const LABEL_CHAR = 7.2;
 const SUBLABEL_CHAR = 5.5;
 const CARD_CHROME = 118;
 const ROOT_BADGE = 50;
@@ -78,7 +81,9 @@ export function functionCardWidth(
   const text = Math.max(label.length * LABEL_CHAR, sublabel * SUBLABEL_CHAR);
   const chrome = CARD_CHROME + (isRoot ? ROOT_BADGE : 0);
 
-  return clamp(text + chrome, NODE_MIN_WIDTH, NODE_MAX_WIDTH);
+  // No ceiling. A name is what the reader navigates by, and a card that caps
+  // its width just moves the truncation somewhere less obvious.
+  return Math.max(text + chrome, NODE_MIN_WIDTH);
 }
 
 /**
@@ -88,8 +93,8 @@ export function functionCardWidth(
  * three-line helper got a scrollbar's worth of empty space and a wide function
  * got clipped at 420px with the ends of its lines out of reach. The card is
  * measured from the text instead -- longest line for the width, line count for
- * the height -- and clamped at both ends, because a card the size of a 400-line
- * function cannot be placed and one the size of `return x` cannot be read.
+ * the height -- with a floor so a one-line function is still readable, and no
+ * ceiling, because a ceiling is only ever reached by hiding something.
  *
  * These are the defaults, used until the source has arrived.
  */
@@ -97,9 +102,16 @@ export const CODE_WIDTH = 460;
 export const CODE_HEIGHT = 260;
 
 export const CODE_MIN_WIDTH = 320;
-export const CODE_MAX_WIDTH = 1040;
 export const CODE_MIN_HEIGHT = 140;
-export const CODE_MAX_HEIGHT = 560;
+
+/**
+ * How many lines a card shows before offering the rest.
+ *
+ * Same rule as the file card: nothing inside a node scrolls, because the wheel
+ * over this canvas zooms the map. A long function is shown a screenful at a
+ * time and grows when asked.
+ */
+export const CODE_PREVIEW_LINES = 24;
 
 /**
  * Measured off the rendered block rather than guessed: JetBrains Mono at 12px
@@ -128,10 +140,11 @@ const HEADER = 33;
  */
 const roomy = (needed: number) => needed * 1.15 + 24;
 
-const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
-
-/** The box a card needs to show this source without scrolling, within reason. */
-export function codeCardSize(source: string | null | undefined): { width: number; height: number } {
+/** The box a card needs to show this source without scrolling. */
+export function codeCardSize(
+  source: string | null | undefined,
+  showAll = false,
+): { width: number; height: number } {
   if (source === null || source === undefined || source === "") {
     return { width: CODE_WIDTH, height: CODE_HEIGHT };
   }
@@ -140,20 +153,93 @@ export function codeCardSize(source: string | null | undefined): { width: number
   // Tabs are what TypeScript in the wild is actually indented with, and one
   // counts as far more than one character on screen.
   const longest = Math.max(...lines.map((line) => line.replace(/\t/g, "  ").length));
+  const shown = showAll ? lines.length : Math.min(lines.length, CODE_PREVIEW_LINES);
+  const more = lines.length > shown ? MORE_ROW : 0;
 
   return {
-    width: clamp(roomy(longest * CHAR_WIDTH + GUTTER + PADDING), CODE_MIN_WIDTH, CODE_MAX_WIDTH),
-    height: clamp(
-      roomy(lines.length * LINE_HEIGHT + HEADER + PADDING),
-      CODE_MIN_HEIGHT,
-      CODE_MAX_HEIGHT,
-    ),
+    // No ceiling here either: a line the card cannot show is a line the reader
+    // came to read.
+    width: Math.max(roomy(longest * CHAR_WIDTH + GUTTER + PADDING), CODE_MIN_WIDTH),
+    // No ceiling once the reader has asked for the whole thing. That ceiling is
+    // what the scrollbar used to hide behind.
+    height: Math.max(roomy(shown * LINE_HEIGHT + HEADER + PADDING) + more, CODE_MIN_HEIGHT),
   };
 }
 
 /** Clear space between cards, whatever their size. */
 const GAP_X = 92;
 const GAP_Y = 48;
+
+/**
+ * The file card is measured like every other card.
+ *
+ * It shipped at a fixed 288x(whatever fits), with its list of functions inside
+ * a 256px scroll area -- so a file with a dozen functions hid most of them
+ * behind a scrollbar, and a long name like
+ * `cloneSearchParametersForInitHook` wrapped onto a second line inside a row
+ * built for one. It grows in both directions instead, and the layout places it
+ * against its own width so a wide card cannot reach the first column.
+ */
+export const FILE_CARD_MIN_WIDTH = 288;
+
+/**
+ * How many functions a card shows before offering the rest.
+ *
+ * Nothing on this canvas scrolls except the canvas. A scroll region inside a
+ * node competes with the wheel that zooms the map -- the reader's gesture means
+ * two things depending on where the pointer happens to be, which is the kind of
+ * ambiguity that makes an interface feel broken rather than dense. So a card
+ * that cannot show everything says how much is left and grows when asked.
+ */
+export const FILE_PREVIEW_ROWS = 10;
+
+/**
+ * Measured off the rendered card rather than estimated, because the difference
+ * showed up as content overflowing a box that was supposed to fit it: a row is
+ * 38px with an 8px gap under it, the line-number badge and chevron beside a
+ * name take 92, the header is 56 plus a line of path, the list and the card
+ * between them add 38 of padding, and the "show the rest" row is 38.
+ */
+const ROW_HEIGHT = 46;
+const ROW_CHROME = 92;
+const FILE_HEADER = 56;
+const PATH_LINE = 17;
+const LIST_PADDING = 38;
+const MORE_ROW = 38;
+
+/**
+ * Wide enough for the longest name, tall enough for every row it is showing.
+ *
+ * Neither axis is capped. The card is exactly as wide as its longest name and
+ * exactly as tall as the rows it is drawing, because every cap is a place where
+ * content gets clipped, wrapped or hidden behind a scrollbar instead.
+ */
+export function fileCardSize(
+  names: string[],
+  path: string,
+  showAll = false,
+): { width: number; height: number } {
+  const longest = names.reduce((widest, name) => Math.max(widest, name.length), 0);
+  const width = Math.max(longest * LABEL_CHAR + ROW_CHROME, FILE_CARD_MIN_WIDTH);
+
+  // The path wraps rather than truncating -- it is an identifier and the tail
+  // is what disambiguates it -- so a long one makes the header taller.
+  const pathLines = Math.max(1, Math.ceil((path.length * LABEL_CHAR) / (width - 72)));
+  const rows = showAll ? names.length : Math.min(names.length, FILE_PREVIEW_ROWS);
+  const more = names.length > rows ? MORE_ROW : 0;
+
+  return {
+    width,
+    height:
+      FILE_HEADER + pathLines * PATH_LINE + Math.max(rows, 1) * ROW_HEIGHT + LIST_PADDING + more,
+  };
+}
+
+/** Where the file card sits: its own width clear of the first column, so
+ *  widening it moves it left rather than into the graph. */
+export function fileCardPosition(width: number): { x: number; y: number } {
+  return { x: -(width + GAP_X), y: -40 };
+}
 
 /** One column of the old fixed grid. The file card is placed against this
  *  rather than against a measured layer. */
@@ -200,6 +286,10 @@ export interface GraphNodeData {
    *  size, which is what the layout spaces around. */
   showCode: boolean;
 
+  /** Whether that source is every line or the first `CODE_PREVIEW_LINES` of
+   *  them. Nothing scrolls here; the card grows instead. */
+  showAllSource: boolean;
+
   /** The box the layout reserved for this card. The component renders itself at
    *  exactly this size -- two places deciding it is how cards start
    *  overlapping. */
@@ -243,6 +333,8 @@ export function buildGraph(
   /** Source by function id, for the cards showing it. Absent until the request
    *  lands, which is what `CODE_WIDTH`/`CODE_HEIGHT` are the default for. */
   sources: Map<number, string | null> = new Map(),
+  /** Cards showing every line rather than the first screenful. */
+  fullSourceIds: number[] = [],
 ): BuiltGraph {
   // Roots are passed in rather than read off `responses[0]`. Expansions arrive
   // as their queries resolve and the pending ones are filtered out, so the
@@ -255,6 +347,7 @@ export function buildGraph(
 
   const collapsed = new Set(collapsedIds);
   const showingCode = new Set(codeIds);
+  const showingAll = new Set(fullSourceIds);
   // What the reader has already opened, and which of those turned out to call
   // nothing. Both ride on the node so it can say whether clicking does
   // anything at all.
@@ -338,6 +431,7 @@ export function buildGraph(
         leafIds.has(fn.id),
         showingCode.has(fn.id),
         sources.get(fn.id),
+        showingAll.has(fn.id),
       ),
     ),
     ...ghostGroups.flatMap(({ callerId, ghosts }) =>
@@ -461,8 +555,9 @@ function toFunctionNode(
   isLeaf: boolean,
   showCode: boolean,
   source: string | null | undefined,
+  showAllSource: boolean,
 ): Node<GraphNodeData> {
-  const code = codeCardSize(source);
+  const code = codeCardSize(source, showAllSource);
   const size = showCode
     ? { width: code.width, height: NODE_HEIGHT + code.height }
     : { width: functionCardWidth(fn.name, fn.qualifiedName, depth === 0), height: NODE_HEIGHT };
@@ -488,6 +583,7 @@ function toFunctionNode(
       expanded,
       isLeaf,
       showCode,
+      showAllSource,
       size,
     },
   };
@@ -518,6 +614,7 @@ function toGhostNode(ghost: Ghost, depth: number): Node<GraphNodeData> {
       expanded: false,
       isLeaf: true,
       showCode: false,
+      showAllSource: false,
       size: { width, height: NODE_HEIGHT },
     },
   };
