@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { motion, type Variants } from "framer-motion";
 import { FileCode2 } from "lucide-react";
 import { Handle, Position, type NodeProps } from "reactflow";
@@ -45,7 +46,7 @@ const ROW: Variants = {
  * The card fetches its own list rather than being handed one, so opening a
  * different file does not re-render every node the canvas holds.
  */
-export function FileCard({ data }: NodeProps<FileCardData>) {
+function File({ data }: NodeProps<FileCardData>) {
   const functions = useFileFunctions(data.fileId);
   const selectedFunctionId = useUiStore((state) => state.selectedFunctionId);
   const rootFunctionIds = useUiStore((state) => state.rootFunctionIds);
@@ -93,6 +94,15 @@ export function FileCard({ data }: NodeProps<FileCardData>) {
     </motion.div>
   );
 }
+
+/**
+ * Re-render on what the file *is*, never on where it is.
+ *
+ * The map glides between layouts sixty times a second and React Flow passes
+ * each node its coordinates as props, so without this the card and all its rows
+ * re-rendered on every frame of every animation -- for a card that never moves.
+ */
+export const FileCard = memo(File, (a, b) => a.data === b.data && a.selected === b.selected);
 
 function FunctionList({
   query,

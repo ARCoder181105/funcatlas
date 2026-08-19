@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -24,6 +24,7 @@ import {
 } from "../lib/graph";
 import { useTheme } from "../lib/theme";
 import { useAnimatedNodes } from "../lib/useAnimatedNodes";
+import { panToReveal } from "../lib/viewport";
 import { PALETTE } from "../lib/tokens";
 import { useUiStore } from "../store/ui";
 import { ConfidenceEdge } from "./ConfidenceEdge";
@@ -74,6 +75,8 @@ export function MindMap() {
   const expansions = useExpansions(expandedFunctionIds);
   const palette = PALETTE[mode];
   const flow = useReactFlow();
+  /** The pane's own size, for deciding whether a card is already on screen. */
+  const paneRef = useRef<HTMLDivElement | null>(null);
 
   // Cards showing their source are sized to it, so the layout needs the text
   // as well as the card. One query key, shared with the card itself.
@@ -94,13 +97,25 @@ export function MindMap() {
    * so the chain reads file to function to callees without anything
    * disappearing.
    */
+  // Its own memo, so the file card's props keep their identity while the graph
+  // around it changes. Rebuilding this object on every expansion would defeat
+  // the card's own memo and re-render the whole list for a card that has not
+  // changed.
+  const file = useMemo(
+    () => tree.data?.files.find((candidate) => candidate.id === selectedFileId),
+    [tree.data, selectedFileId],
+  );
+  const fileData = useMemo(
+    () => (file === undefined ? null : { fileId: file.id, path: file.path, language: file.language }),
+    [file],
+  );
+
   const withFile = useMemo(() => {
-    const file = tree.data?.files.find((candidate) => candidate.id === selectedFileId);
-    if (file === undefined) {
+    if (fileData === null) {
       return graph;
     }
 
-    const fileNodeId = `file-${file.id}`;
+    const fileNodeId = `file-${fileData.fileId}`;
     // Every branch root, not one: the reader can open several functions out of
     // one file and explore each independently.
     const rootNodes = graph.nodes.filter((node) => node.data.depth === 0);
@@ -114,7 +129,7 @@ export function MindMap() {
           // One column left of the root, so the function it opened sits beside
           // it rather than on top of it.
           position: { x: -COLUMN - 60, y: -40 },
-          data: { fileId: file.id, path: file.path, language: file.language },
+          data: fileData,
           // A file is not a call, so it carries none of the graph node's data.
         } as unknown as Node<GraphNodeData>,
         ...graph.nodes,
@@ -132,36 +147,65 @@ export function MindMap() {
         ...graph.edges,
       ],
     };
-  }, [graph, tree.data, selectedFileId, palette.surface.border]);
+  }, [graph, fileData, palette.surface.border]);
 
   /**
-   * Travel to whatever was just opened.
+   * A new file frames itself.
+   *
+   * `fitView` as a prop runs once, on mount, and the canvas mounts before a
+   * file is chosen -- so the file card arrived wherever the camera happened to
+   * be pointing, which for a reader who had panned around was off the edge of
+   * the screen entirely. Framing on the file rather than on every change: this
+   * is the one moment the map starts over.
+   */
+  useEffect(() => {
+    if (selectedFileId === null) return;
+    const id = requestAnimationFrame(() => {
+      flow.fitView({ padding: 0.3, maxZoom: 1, duration: 400 });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [selectedFileId, flow]);
+
+  /**
+   * Bring whatever was just opened into view, and move no further than that.
    *
    * `fitView` as a prop only runs on mount, so every expansion added a column
    * outside the viewport and the screen never moved -- which reads exactly
-   * like nothing happened. Centring on the new card rather than refitting the
-   * whole graph, because a map that has been explored for a while zooms out
-   * far enough on a refit that the new branch is unreadable.
+   * like nothing happened.
    *
-   * Keyed on the selection, not the node count: closing a branch changes the
-   * count too, and yanking the view somewhere on a collapse is disorienting.
+   * The first fix over-corrected: it centred on the new card at zoom 1, which
+   * threw away the reader's zoom on every click and pushed the file card --
+   * one column to the left of the graph -- off the edge of the screen. What
+   * the reader reported as the file card "disappearing" was the camera
+   * leaving it behind. `panToReveal` pans the minimum instead, and returns
+   * null when the card is already on screen, so clicking something you can
+   * see moves nothing at all.
    */
   useEffect(() => {
     if (selectedFunctionId === null) return;
     const target = withFile.nodes.find((node) => node.data?.functionId === selectedFunctionId);
-    if (target === undefined) return;
+    const pane = paneRef.current;
+    if (target === undefined || pane === null) return;
 
     // A frame late on purpose: React Flow measures the new nodes first, and
-    // centring before that uses stale positions.
+    // panning before that uses stale positions.
     const id = requestAnimationFrame(() => {
-      // The card's own size, not the default one: a card showing its source is
-      // three hundred pixels taller, and centring on the collapsed size puts
-      // its header off the top of the screen.
-      flow.setCenter(
-        target.position.x + (target.width ?? NODE_WIDTH) / 2,
-        target.position.y + (target.height ?? NODE_HEIGHT) / 2,
-        { zoom: 1, duration: 450 },
+      const box = pane.getBoundingClientRect();
+      const next = panToReveal(
+        {
+          x: target.position.x,
+          y: target.position.y,
+          width: target.width ?? NODE_WIDTH,
+          height: target.height ?? NODE_HEIGHT,
+        },
+        flow.getViewport(),
+        { width: box.width, height: box.height },
       );
+
+      if (next !== null) {
+        // The zoom the reader chose is carried through untouched.
+        flow.setViewport({ ...next, zoom: flow.getViewport().zoom }, { duration: 400 });
+      }
     });
     return () => cancelAnimationFrame(id);
   }, [selectedFunctionId, withFile.nodes, flow]);
@@ -202,6 +246,7 @@ export function MindMap() {
 
   return (
     <ReactFlow
+      ref={paneRef}
       nodes={gliding}
       edges={withFile.edges}
       nodeTypes={NODE_TYPES}

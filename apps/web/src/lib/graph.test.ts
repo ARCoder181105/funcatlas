@@ -14,6 +14,7 @@ import {
   CODE_MAX_WIDTH,
   CODE_MIN_WIDTH,
   CODE_WIDTH,
+  functionCardWidth,
   FUNCTION_NODE,
   GHOST_NODE,
   NODE_CEILING,
@@ -266,7 +267,10 @@ describe("buildGraph", () => {
       height: NODE_HEIGHT + codeCardSize(wide).height,
     });
     // The card the reader has not opened is still a card.
-    expect(node(3)?.data.size).toEqual({ width: NODE_WIDTH, height: NODE_HEIGHT });
+    expect(node(3)?.data.size).toEqual({
+      width: functionCardWidth("fn3", "fn3"),
+      height: NODE_HEIGHT,
+    });
 
     expectNoOverlap(built.nodes);
   });
@@ -287,7 +291,7 @@ describe("buildGraph", () => {
     expect(node(2)?.height).toBe(NODE_HEIGHT + CODE_HEIGHT);
     expect(node(2)?.data.showCode).toBe(true);
     // Its neighbours are not: only the card that was asked for.
-    expect(node(3)?.width).toBe(NODE_WIDTH);
+    expect(node(3)?.width).toBe(functionCardWidth("fn3", "fn3"));
 
     expectNoOverlap(open.nodes);
 

@@ -47,6 +47,30 @@ export const NODE_WIDTH = 208;
 export const NODE_HEIGHT = 44;
 
 /**
+ * A closed card is as wide as its name, within reason.
+ *
+ * At a fixed 208px every card was the width of the longest name anyone might
+ * have, and `Ky.prototype.parseJsonWithSchema` was truncated to nothing on the
+ * same canvas as `get`. Names are what the reader navigates by, so the card is
+ * measured from the name and the graph is spaced around the result.
+ */
+export const NODE_MIN_WIDTH = 176;
+export const NODE_MAX_WIDTH = 380;
+
+/** Mono at 12px for the name, 10px for the qualified name under it, plus the
+ *  chevron, the code button and the padding around them. */
+const LABEL_CHAR = 6.6;
+const SUBLABEL_CHAR = 5.5;
+const CARD_CHROME = 92;
+
+export function functionCardWidth(label: string, qualifiedName: string | null): number {
+  const sublabel = qualifiedName !== null && qualifiedName !== label ? qualifiedName.length : 0;
+  const text = Math.max(label.length * LABEL_CHAR, sublabel * SUBLABEL_CHAR);
+
+  return clamp(text + CARD_CHROME, NODE_MIN_WIDTH, NODE_MAX_WIDTH);
+}
+
+/**
  * A card showing its source, sized to the source it is showing.
  *
  * A fixed box made every function the same shape as the worst one: a
@@ -81,6 +105,18 @@ const GUTTER = 48;
 const PADDING = 26;
 const HEADER = 33;
 
+/**
+ * Room around the code, not just room for it.
+ *
+ * A card cut to exactly the text is a box the code is wedged into: the last
+ * character sits on the border and every line ends at the edge. The reader
+ * asked for a two-by-two block of source to get a three-by-three card, so the
+ * measurement is scaled and then given a fixed margin on top -- the scale is
+ * what makes a small function feel unhurried, the margin is what stops a wide
+ * one losing its last few characters to rounding.
+ */
+const roomy = (needed: number) => needed * 1.15 + 24;
+
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
 /** The box a card needs to show this source without scrolling, within reason. */
@@ -95,8 +131,12 @@ export function codeCardSize(source: string | null | undefined): { width: number
   const longest = Math.max(...lines.map((line) => line.replace(/\t/g, "  ").length));
 
   return {
-    width: clamp(longest * CHAR_WIDTH + GUTTER + PADDING, CODE_MIN_WIDTH, CODE_MAX_WIDTH),
-    height: clamp(lines.length * LINE_HEIGHT + HEADER + PADDING, CODE_MIN_HEIGHT, CODE_MAX_HEIGHT),
+    width: clamp(roomy(longest * CHAR_WIDTH + GUTTER + PADDING), CODE_MIN_WIDTH, CODE_MAX_WIDTH),
+    height: clamp(
+      roomy(lines.length * LINE_HEIGHT + HEADER + PADDING),
+      CODE_MIN_HEIGHT,
+      CODE_MAX_HEIGHT,
+    ),
   };
 }
 
@@ -414,7 +454,7 @@ function toFunctionNode(
   const code = codeCardSize(source);
   const size = showCode
     ? { width: code.width, height: NODE_HEIGHT + code.height }
-    : { width: NODE_WIDTH, height: NODE_HEIGHT };
+    : { width: functionCardWidth(fn.name, fn.qualifiedName), height: NODE_HEIGHT };
 
   return {
     id: functionId(fn.id),
@@ -443,11 +483,15 @@ function toFunctionNode(
 }
 
 function toGhostNode(ghost: Ghost, depth: number): Node<GraphNodeData> {
+  // Measured like a function card, so the name the parser saw is readable
+  // rather than truncated -- on a ghost the name is the only thing there is.
+  const width = functionCardWidth(ghost.name, null);
+
   return {
     id: ghostId(ghost.name),
     type: GHOST_NODE,
     position: { x: 0, y: 0 },
-    width: NODE_WIDTH,
+    width,
     height: NODE_HEIGHT,
     data: {
       kind: "ghost",
@@ -463,7 +507,7 @@ function toGhostNode(ghost: Ghost, depth: number): Node<GraphNodeData> {
       expanded: false,
       isLeaf: true,
       showCode: false,
-      size: { width: NODE_WIDTH, height: NODE_HEIGHT },
+      size: { width, height: NODE_HEIGHT },
     },
   };
 }

@@ -1,8 +1,9 @@
+import { memo } from "react";
 import { motion } from "framer-motion";
 import { Code2, CircleDashed } from "lucide-react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { cn } from "../lib/cn";
-import { NODE_HEIGHT, NODE_WIDTH, type GraphNodeData } from "../lib/graph";
+import { NODE_HEIGHT, type GraphNodeData } from "../lib/graph";
 import { DURATION, useMotionEnabled, useMotionTransition } from "../lib/motion";
 import { useUiStore } from "../store/ui";
 import { CodeBlock } from "./CodeBlock";
@@ -39,7 +40,7 @@ function Anchors() {
  * width. `lib/graph.ts` knows both sizes and spaces the graph around whichever
  * one is showing.
  */
-export function FunctionNode({ data }: NodeProps<GraphNodeData>) {
+function FunctionCard({ data }: NodeProps<GraphNodeData>) {
   const selectedFunctionId = useUiStore((state) => state.selectedFunctionId);
   const toggleFunction = useUiStore((state) => state.toggleFunction);
   const toggleCode = useUiStore((state) => state.toggleCode);
@@ -168,7 +169,7 @@ export function FunctionNode({ data }: NodeProps<GraphNodeData>) {
  * Hiding it instead would show the caller calling nothing, which is precisely
  * the dishonesty PRD §8 exists to prevent.
  */
-export function GhostNode({ data }: NodeProps<GraphNodeData>) {
+function Ghost({ data }: NodeProps<GraphNodeData>) {
   const transition = useMotionTransition("spring");
   const animated = useMotionEnabled();
 
@@ -187,7 +188,7 @@ export function GhostNode({ data }: NodeProps<GraphNodeData>) {
             initial={animated ? { opacity: 0, scale: 0.9 } : false}
             animate={{ opacity: 1, scale: 1 }}
             transition={transition}
-            style={{ width: NODE_WIDTH, height: NODE_HEIGHT }}
+            style={data.size}
             className={cn(
               "flex items-center gap-2 rounded-token px-3",
               // Dotted border and no fill: the same notation as its edge, so
@@ -219,3 +220,19 @@ export function GhostNode({ data }: NodeProps<GraphNodeData>) {
     </Tooltip>
   );
 }
+
+/**
+ * Re-render on what the card *is*, never on where it is.
+ *
+ * The map glides between layouts by tweening positions sixty times a second
+ * (`useAnimatedNodes`), and React Flow passes each node its coordinates as
+ * props -- so without this every card, including the Shiki markup inside an
+ * open one, re-rendered on every frame of every animation. That is what made
+ * the motion stutter. The wrapper's transform still moves each frame; only the
+ * card inside it stays put.
+ */
+const sameCard = (a: NodeProps<GraphNodeData>, b: NodeProps<GraphNodeData>) =>
+  a.data === b.data && a.selected === b.selected;
+
+export const FunctionNode = memo(FunctionCard, sameCard);
+export const GhostNode = memo(Ghost, sameCard);
