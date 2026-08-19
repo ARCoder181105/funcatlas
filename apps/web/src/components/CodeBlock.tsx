@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { ChevronDown, FileCode2 } from "lucide-react";
 import { useFunctionSource } from "../lib/functions";
 import { CODE_PREVIEW_LINES } from "../lib/graph";
-import { DURATION } from "../lib/motion";
+import { DURATION, useMotionEnabled } from "../lib/motion";
 import { useUiStore } from "../store/ui";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
@@ -24,6 +24,7 @@ import { Skeleton } from "./ui/skeleton";
 export function CodeBlock({ functionId, showAll }: { functionId: number; showAll: boolean }) {
   const query = useFunctionSource(functionId);
   const toggleFullSource = useUiStore((state) => state.toggleFullSource);
+  const animated = useMotionEnabled();
 
   if (query.isPending) {
     return <LoadingSource />;
@@ -61,7 +62,7 @@ export function CodeBlock({ functionId, showAll }: { functionId: number; showAll
           <motion.div
             // The skeleton and the source are two different shapes; crossing
             // between them instantly reads as a flicker.
-            initial={{ opacity: 0 }}
+            initial={animated ? { opacity: 0 } : false}
             animate={{ opacity: 1 }}
             transition={{ duration: DURATION.micro, ease: "easeOut" }}
             className="code-block p-3 text-xs leading-relaxed"

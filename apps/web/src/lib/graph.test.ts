@@ -22,7 +22,6 @@ import {
   GHOST_NODE,
   NODE_CEILING,
   NODE_HEIGHT,
-  NODE_WIDTH,
   type GraphNodeData,
 } from "./graph";
 
@@ -65,11 +64,13 @@ const ROOT = fn(1, 0, null, null, "generateText");
  * overlap". Every fixture that lays anything out ends here.
  */
 function expectNoOverlap(nodes: Node<GraphNodeData>[]): void {
+  // From `data.size`, which is where the layout keeps them. They are
+  // deliberately not on `node.width` -- see the note at the top of graph.ts.
   const box = (node: Node<GraphNodeData>) => ({
     left: node.position.x,
-    right: node.position.x + (node.width ?? NODE_WIDTH),
+    right: node.position.x + node.data.size.width,
     top: node.position.y,
-    bottom: node.position.y + (node.height ?? NODE_HEIGHT),
+    bottom: node.position.y + node.data.size.height,
   });
 
   for (const a of nodes) {
@@ -339,7 +340,7 @@ describe("buildGraph", () => {
     const built = buildGraph(responses, [1], [], [2], new Map([[2, wide]]));
     const node = (id: number) => built.nodes.find((candidate) => candidate.id === `fn-${id}`);
 
-    expect(node(2)?.width).toBe(codeCardSize(wide).width);
+    expect(node(2)?.data.size.width).toBe(codeCardSize(wide).width);
     expect(node(2)?.data.size).toEqual({
       width: codeCardSize(wide).width,
       height: NODE_HEIGHT + codeCardSize(wide).height,
@@ -365,11 +366,11 @@ describe("buildGraph", () => {
     const open = buildGraph(responses, [1], [], [2]);
     const node = (id: number) => open.nodes.find((candidate) => candidate.id === `fn-${id}`);
 
-    expect(node(2)?.width).toBe(CODE_WIDTH);
-    expect(node(2)?.height).toBe(NODE_HEIGHT + CODE_HEIGHT);
+    expect(node(2)?.data.size.width).toBe(CODE_WIDTH);
+    expect(node(2)?.data.size.height).toBe(NODE_HEIGHT + CODE_HEIGHT);
     expect(node(2)?.data.showCode).toBe(true);
     // Its neighbours are not: only the card that was asked for.
-    expect(node(3)?.width).toBe(functionCardWidth("fn3", "fn3"));
+    expect(node(3)?.data.size.width).toBe(functionCardWidth("fn3", "fn3"));
 
     expectNoOverlap(open.nodes);
 

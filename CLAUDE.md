@@ -142,7 +142,9 @@ Updated as Phase 3b progresses. `TASKLIST.md` is the chunk-level truth; this is 
   same, or it will look closed and swallow the next click. See `docs/UI_GUIDE.md` §2.
 - **Edge rendering has no automated test.** React Flow only draws an edge once both nodes are
   measured, and jsdom has no layout engine. `lib/graph.test.ts` covers exhaustively *what* the edges
-  are; whether they paint is a browser check. See `docs/CANVAS_DECISIONS.md` §4.
+  are; whether they paint is a browser check. See `docs/CANVAS_DECISIONS.md` §4 — which also records
+  why **nothing may set `node.width` / `node.height`**: React Flow then treats the node as measured,
+  never computes `handleBounds`, and drops every edge touching it in silence.
 - **`POST /api/repos` parses synchronously**, so a large repository holds the request open until
   `PARSE_TIMEOUT_MS`. Phase 4's queue replaces the spawn; marked with a `ponytail:` comment.
 - **`/auth/dev-login` exists outside production.** Phase 4 hardening deletes it.

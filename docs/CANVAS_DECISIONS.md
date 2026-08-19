@@ -135,24 +135,49 @@ the key behind a click works against that.
 
 ---
 
-## 4. Node dimensions are declared, not measured
+## 4. Node dimensions are computed, and React Flow measures them anyway
 
 **Decided:** during B5, after edges silently failed to render.
+**Corrected:** during B8, when the same symptom turned out to have the opposite cause.
 **Status:** built.
 
-React Flow will not draw an edge until both of its nodes have dimensions in its store, and it fills
-those in from a `ResizeObserver` after layout. Where that measurement never arrives the nodes still
-render and the edges silently do not — a graph that looks like a set of functions calling nothing,
-which is the one thing this canvas must never show.
+React Flow will not draw an edge until both of its nodes have been measured. Where that measurement
+never arrives the nodes still render and the edges silently do not — a graph that looks like a set of
+functions calling nothing, which is the one thing this canvas must never show.
 
-`lib/graph.ts` therefore states `NODE_WIDTH` and `NODE_HEIGHT` up front, and the node components are
-pinned to the same numbers (`h-11 w-52`). Changing one without the other misaligns every edge
-endpoint.
+The first reading of that was: *state the size up front so nothing has to be measured*. So every node
+carried `width` and `height`, and the components were pinned to the same numbers.
 
-This is also why edge rendering has no automated test: jsdom has no layout engine, and a
-`ResizeObserver` stub that reports a size drives `react-resizable-panels` into a re-layout loop that
-fails most of the suite. What decides *what* the edges are is covered exhaustively in
-`lib/graph.test.ts`; whether they paint is checked in a browser.
+**That was backwards, and it caused the very failure it was meant to prevent.** Those fields are
+React Flow's *outputs*, not its inputs. A node that arrives with `width` already set is one it
+considers measured, so it never runs the pass that also computes `handleBounds` — and an edge whose
+endpoints have no handle bounds is skipped without a word. Landing on a function from the ⌘K palette
+drew five cards and nothing joining them. React Flow's own store told the story: four edges present,
+five nodes sized, `handleBounds` undefined on every one.
+
+It went unnoticed for three chunks because it is *intermittent*. A node React Flow happens to
+re-measure — after a resize, or a slow mount — gets its handle bounds and its edges appear, so most
+maps looked right and the palette's did not.
+
+Sizes are still computed up front, because the layout cannot space a graph around boxes it does not
+know. They live in `data.size`, the component renders itself at exactly that, and React Flow measures
+the result. Nothing writes `node.width`.
+
+**What this costs.** Edge rendering now depends on a `ResizeObserver`, so it cannot be asserted in
+jsdom — `lib/graph.test.ts` covers exhaustively *what* the edges are, and whether they paint is a
+browser check. It also made React Flow start calling `DOMMatrixReadOnly`, which jsdom lacks; the stub
+is in `test-setup.ts` with the reason.
+
+**And one more thing the same bug was hiding.** The draw-in animated `pathLength`, which Framer
+implements by writing `stroke-dasharray` into the element's inline style — so the confidence pattern
+had to wait for the animation to finish before it could be applied. It never finished: the map
+re-lays out constantly, every re-render interrupted the tween, and every edge sat frozen at a dash of
+`0.645678px 1px`. Solid, dashed and dotted were one pattern in three colours, which is most of what
+`PRD.md` §8 promises, quietly gone. Edges now carry their tier's pattern from the first frame and
+arrive with a fade instead.
+
+Verified in a browser: exact is `dash=none` in teal, `name_match` is `6px 4px` in amber, unresolved is
+`1px 5px` in slate, and the file card's "declared in" edge is a plain grey line.
 
 ---
 

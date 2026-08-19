@@ -30,18 +30,20 @@ import type { Edge, Node } from "reactflow";
  */
 
 /**
- * Declared, not measured.
+ * Sizes are computed here and rendered from `data.size` -- and deliberately
+ * *not* written to `node.width` / `node.height`.
  *
- * React Flow will not draw an edge until both of its nodes have dimensions in
- * its store, and it fills those in from a ResizeObserver after layout. When
- * that measurement does not arrive the nodes still render and the edges
- * silently do not -- a graph that looks like a set of functions calling
- * nothing, which is the one thing this canvas must never show.
+ * This file used to set both, on the reasoning that React Flow needs
+ * dimensions before it will draw an edge. It does, but they are its outputs,
+ * not its inputs: a node that arrives with `width` already set is one React
+ * Flow treats as measured, so it never runs the pass that also computes
+ * `handleBounds` -- and an edge with no handle bounds is skipped in silence.
+ * Landing on a function from the palette drew five cards and nothing joining
+ * them, which is the one picture this canvas must never show (PRD §8).
  *
- * So every node states its size here and the components are pinned to the same
- * numbers. A card that opens its source is a different size, not an unknown
- * one: the layout below reads these and spaces the graph accordingly, which is
- * what keeps an opened card from landing on its neighbours.
+ * The layout still needs a size up front, so it keeps one: `data.size`, which
+ * the component renders itself at. React Flow measures the result and fills in
+ * its own numbers.
  */
 export const NODE_WIDTH = 208;
 export const NODE_HEIGHT = 44;
@@ -580,8 +582,6 @@ function toFunctionNode(
     id: functionId(fn.id),
     type: FUNCTION_NODE,
     position: { x: 0, y: 0 },
-    width: size.width,
-    height: size.height,
     data: {
       kind: "function",
       label: fn.name,
@@ -612,8 +612,6 @@ function toGhostNode(ghost: Ghost, depth: number): Node<GraphNodeData> {
     id: ghostId(ghost.name),
     type: GHOST_NODE,
     position: { x: 0, y: 0 },
-    width,
-    height: NODE_HEIGHT,
     data: {
       kind: "ghost",
       label: ghost.name,
@@ -662,7 +660,7 @@ function layOut(nodes: Node<GraphNodeData>[]): Node<GraphNodeData>[] {
 
   for (const depth of depths) {
     const layer = byDepth.get(depth) ?? [];
-    const heights = layer.map((node) => node.height ?? NODE_HEIGHT);
+    const heights = layer.map((node) => node.data.size.height);
     const stack = sum(heights) + GAP_Y * (layer.length - 1);
 
     // Centred on the axis, so a tall layer does not hang below the one above.
@@ -672,7 +670,7 @@ function layOut(nodes: Node<GraphNodeData>[]): Node<GraphNodeData>[] {
       y += (heights[index] ?? NODE_HEIGHT) + GAP_Y;
     });
 
-    x += Math.max(...layer.map((node) => node.width ?? NODE_WIDTH)) + GAP_X;
+    x += Math.max(...layer.map((node) => node.data.size.width)) + GAP_X;
   }
 
   return nodes;

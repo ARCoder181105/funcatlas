@@ -6,6 +6,7 @@ import ReactFlow, {
   MiniMap,
   Panel,
   useReactFlow,
+  useUpdateNodeInternals,
   type Node,
 } from "reactflow";
 import { AlertTriangle } from "lucide-react";
@@ -79,6 +80,7 @@ export function MindMap() {
   const expansions = useExpansions(expandedFunctionIds);
   const palette = PALETTE[mode];
   const flow = useReactFlow();
+  const updateNodeInternals = useUpdateNodeInternals();
   /** The pane's own size, for deciding whether a card is already on screen. */
   const paneRef = useRef<HTMLDivElement | null>(null);
 
@@ -240,8 +242,8 @@ export function MindMap() {
       .map((node) => ({
         x: node.position.x,
         y: node.position.y,
-        width: node.width ?? NODE_WIDTH,
-        height: node.height ?? NODE_HEIGHT,
+        width: node.data?.size?.width ?? NODE_WIDTH,
+        height: node.data?.size?.height ?? NODE_HEIGHT,
       }));
 
     const box = boundingBox(family);
@@ -273,6 +275,23 @@ export function MindMap() {
    * instead, which says the same thing without taking anything away.
    */
   const gliding = useAnimatedNodes(withFile.nodes);
+
+  /**
+   * Make React Flow re-measure the handles whenever the node set changes.
+   *
+   * It draws an edge only once both endpoints have handle bounds in its store,
+   * and it fills those from a ResizeObserver on mount. Replacing the whole set
+   * at once -- which is what landing on a function from the palette does, file
+   * card and all -- lands nodes it never measures, and every edge is then
+   * skipped in silence. The map showed five cards and nothing joining them,
+   * which is the one picture this canvas must never draw (PRD §8).
+   */
+  const nodeIds = withFile.nodes.map((node) => node.id).join("|");
+  useEffect(() => {
+    if (nodeIds === "") return;
+    const frame = requestAnimationFrame(() => updateNodeInternals(nodeIds.split("|")));
+    return () => cancelAnimationFrame(frame);
+  }, [nodeIds, updateNodeInternals]);
 
   // Only the very first load is a blank canvas. Expanding keeps what is
   // already drawn on screen while the new branch arrives, because taking the

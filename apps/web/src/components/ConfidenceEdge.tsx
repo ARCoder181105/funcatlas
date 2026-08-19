@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { motion } from "framer-motion";
 import type { ResolutionConfidence } from "@funcatlas/shared";
 import { BaseEdge, getBezierPath, type EdgeProps } from "reactflow";
@@ -37,10 +36,6 @@ export function ConfidenceEdge({
 }: EdgeProps<ConfidenceEdgeData>) {
   const mode = useTheme((state) => state.mode);
   const animated = useMotionEnabled();
-  // The dash pattern and the draw-in both want stroke-dasharray, so they
-  // cannot run at once: the line draws with no pattern, then takes its own on
-  // arrival. Without this a dotted edge animates as a crawl of dots.
-  const [drawn, setDrawn] = useState(!animated);
 
   const [path] = getBezierPath({
     sourceX,
@@ -67,15 +62,25 @@ export function ConfidenceEdge({
         stroke={color}
         strokeWidth={1.75}
         strokeLinecap="round"
-        strokeDasharray={drawn ? presentation.strokeDasharray : undefined}
-        initial={animated ? { pathLength: 0, opacity: 0 } : false}
-        animate={{ pathLength: 1, opacity: 1 }}
+        // The tier's pattern, always, and never handed to the animation.
+        //
+        // This used to draw itself in with `pathLength`, which Framer
+        // implements by writing `stroke-dasharray` into the element's inline
+        // style -- so the pattern had to wait for the animation to finish. It
+        // never finished: the map re-lays out constantly and every re-render
+        // interrupted the tween, leaving every edge frozen at a dash of
+        // `0.645678px 1px`. Solid, dashed and dotted were one pattern in three
+        // colours, which is most of what PRD §8 promises, quietly gone.
+        //
+        // The arrival is a fade now. Less to look at, and true.
+        strokeDasharray={presentation.strokeDasharray}
+        initial={animated ? { opacity: 0 } : false}
+        animate={{ opacity: 1 }}
         transition={{
           duration: DURATION.panel,
           delay: (data?.depth ?? 0) * STAGGER,
           ease: "easeOut",
         }}
-        onAnimationComplete={() => setDrawn(true)}
         // The edge is decoration for a screen reader: the node labels and the
         // legend already say what it means.
         aria-hidden
