@@ -473,7 +473,28 @@ lands on that function with its source shown. The debounce hook has its own test
 
 ---
 
-## B8 — States, docs, and the exit gate  `[ ]`
+## B8 — States, docs, and the exit gate  `[~]`
+
+**Progress.** Steps 1-4 are done and the gate has been part-run; steps 5-7 are open.
+
+- **States audited.** Every surface handles pending, error and empty. Spinners survive in exactly two
+  places, both where no shape is knowable in advance: the palette while searching, and the repository
+  dialog while a clone and parse run. An empty file card was found sized as though it held one row
+  and cutting its own explanation in half; it has its own measurement now.
+- **Design drift check passes.** `grep -rE '#[0-9a-fA-F]{3,8}' apps/web/src --include='*.tsx'` outside
+  `lib/tokens.ts` returns nothing.
+- **Reduced motion.** Every Framer animation is behind `animated`, every CSS transition behind
+  `motion-safe:` — one ungated fade in `CodeBlock` was found and closed. The runtime check still
+  needs an OS-level toggle.
+- **Keyboard.** ⌘K opens the palette, focus lands in its input, Escape closes it and it leaves the
+  DOM. Tree rows, card rows and canvas cards are all real buttons with `focus-visible` rings.
+- **The gate found two real defects**, both now fixed: edges silently not rendering
+  (`docs/CANVAS_DECISIONS.md` §4) and all three confidence tiers drawing as one dash pattern. Both
+  came from running the gate rather than from reading the code, which is the argument for the gate.
+
+**Still open:** step 5 (design critique with screenshots, and the one element to cut), step 6 (`PLAN.md`
+result, `README.md`, `docs/RISKS.md`), step 7 (a clean end-to-end run of the exit test, recorded with
+numbers).
 
 **Why.** UI_GUIDE §3.3 calls the empty, loading and error states "the cool vs amateur line", and
 they are the easiest thing to leave half-done across six chunks. The docs are load-bearing for the
