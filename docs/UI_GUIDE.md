@@ -25,14 +25,20 @@ Every value lives in `apps/web/src/lib/tokens.ts`, once per theme. Nothing is ha
 component — `grep -rE '#[0-9a-fA-F]{6}' apps/web/src --include=*.tsx` returns nothing, and that grep
 is the check.
 
-**Dark — "Ember."** A warm graphite ground against a cool accent, which is the pairing the
-alternatives did not make.
+**Dark — "Ember."** A near-black ground against a cool accent, which is the pairing the alternatives
+did not make.
+
+**Revised in B8.** The ground was `#141210` on `#1d1a17` — a coffee undertone that read as brown
+rather than as dark, which is not what a reader means when they ask for dark mode. It is near-black
+now, with the warmth kept as a trace of hue and none of the saturation, so the apricot and the slate
+still belong to the ground they sit on. Everything expressive stays in the confidence colours, which
+is where the meaning is.
 
 | Role | Token | Value | Why |
 |---|---|---|---|
-| Ground | `surface` | `#141210` | Warm near-black with a coffee undertone, not a neutral grey. |
-| Raised | `surface.raised` | `#1d1a17` | Panels, cards, the sidebar. |
-| Rule | `surface.border` | `#2f2a25` | Hairlines and graticule. |
+| Ground | `surface` | `#0a0a0b` | Near-black. A trace of hue, no saturation to speak of. |
+| Raised | `surface.raised` | `#131315` | Panels, cards, the sidebar. |
+| Rule | `surface.border` | `#26262a` | Hairlines and card edges. |
 | Ink | `ink` | `#f3ede5` | Warm off-white, matched to the ground's temperature. |
 | Ink, quiet | `ink.muted` | `#9d9388` | Secondary labels, counts. |
 | `exact` | `confidence.exact` | `#4cc9f0` | Cool cyan against a warm ground — the strongest separation available. |
@@ -46,7 +52,7 @@ the single most common generated look there is (§7).
 |---|---|---|---|
 | Ground | `surface` | `#f2f5f7` | Cool paper. |
 | Raised | `surface.raised` | `#ffffff` | Panels, cards, the sidebar. |
-| Rule | `surface.border` | `#d9e1e8` | Hairlines and graticule. |
+| Rule | `surface.border` | `#d9e1e8` | Hairlines and card edges. |
 | Ink | `ink` | `#0f1a24` | Near-black with a blue cast, matched to the paper. |
 | Ink, quiet | `ink.muted` | `#566573` | Secondary labels, counts. |
 | `exact` | `confidence.exact` | `#0d7c6b` | Deep teal — the cool end of the same scale. |

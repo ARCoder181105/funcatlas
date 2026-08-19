@@ -35,15 +35,21 @@ export interface Palette {
 }
 
 /**
- * Dark — "Ember". A warm graphite ground against a cool accent, which is the
+ * Dark — "Ember". A near-black ground against a cool accent, which is the
  * pairing the alternatives did not make: certainty reads as temperature, from
  * cyan through apricot to a warm slate that is barely chromatic at all.
+ *
+ * The ground was warmer — `#141210` on `#1d1a17` — and read as brown rather
+ * than as dark. It is near-black now, with the warmth kept as a trace (the
+ * hue is still there, the saturation is not) so the apricot and the slate
+ * still belong to it. Everything expressive stays in the confidence colours,
+ * which is where the meaning is.
  */
 const EMBER: Palette = {
   surface: {
-    DEFAULT: "#141210",
-    raised: "#1d1a17",
-    border: "#2f2a25",
+    DEFAULT: "#0a0a0b",
+    raised: "#131315",
+    border: "#26262a",
   },
   ink: {
     DEFAULT: "#f3ede5",
