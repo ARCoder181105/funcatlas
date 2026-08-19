@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SearchResult } from "@funcatlas/shared";
 import { ApiError } from "../lib/api";
-import { useSearch } from "../lib/search";
+import { SEARCH_LIMIT, useSearch } from "../lib/search";
 import { useDebounced } from "../lib/useDebounced";
 import { useUiStore } from "../store/ui";
 import {
@@ -65,6 +65,13 @@ export function CommandPalette() {
       onOpenChange={setPaletteOpen}
       title="Find a function"
       description="Search every function in this repository by name."
+      // Wider than a command menu of one-word actions: every row carries a
+      // name, its qualified name and the path it lives at.
+      //
+      // And centred. The component ships at `top-1/3 translate-y-0`, which
+      // suits a short list of commands; with a list this tall it sat 130px
+      // below centre with its bottom edge against the viewport.
+      className="top-1/2 -translate-y-1/2 sm:max-w-xl"
     >
       {/* The server ranked these with the whole index in front of it -- prefix
           matches above substring matches. cmdk filters by default, which would
@@ -76,7 +83,11 @@ export function CommandPalette() {
           onValueChange={setTyped}
           autoFocus
         />
-        <CommandList>
+        {/* The component ships at max-h-72, which is about six rows -- so a
+            search with fifty matches showed six of them and gave no sign the
+            rest existed. Scrolling is fine here in a way it is not on the
+            canvas: a dialog has no competing wheel gesture behind it. */}
+        <CommandList className="max-h-[min(60vh,34rem)] [scrollbar-width:thin]">
           <Results
             repoId={selectedRepoId}
             typed={typed}
@@ -154,7 +165,16 @@ function Results({
   }
 
   return (
-    <CommandGroup heading={`${results.length} ${results.length === 1 ? "match" : "matches"}`}>
+    // A full page of results is a ceiling, not a total. Saying "50 matches"
+    // when the server stopped counting at 50 is the same quiet lie as a canvas
+    // that stops drawing without saying so.
+    <CommandGroup
+      heading={
+        results.length === SEARCH_LIMIT
+          ? `First ${SEARCH_LIMIT} matches — keep typing to narrow it`
+          : `${results.length} ${results.length === 1 ? "match" : "matches"}`
+      }
+    >
       {results.map((result) => (
         <CommandItem
           key={result.id}
