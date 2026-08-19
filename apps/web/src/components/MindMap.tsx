@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
 import ReactFlow, {
-  Background,
-  BackgroundVariant,
   Controls,
   MiniMap,
   Panel,
@@ -48,9 +46,6 @@ const NODE_TYPES = {
   [GHOST_NODE]: GhostNode,
 };
 const EDGE_TYPES = { confidence: ConfidenceEdge };
-
-const GRID_FINE = 26;
-const GRID_COARSE = 130;
 
 /**
  * The mind-map: one function, and what it reaches.
@@ -329,21 +324,6 @@ export function MindMap() {
       nodesDraggable
       nodesConnectable={false}
     >
-      <Background
-        id="fine"
-        variant={BackgroundVariant.Lines}
-        gap={GRID_FINE}
-        color={palette.surface.border}
-        lineWidth={0.5}
-      />
-      <Background
-        id="coarse"
-        variant={BackgroundVariant.Lines}
-        gap={GRID_COARSE}
-        color={palette.surface.border}
-        lineWidth={1}
-      />
-
       {graph.truncated > 0 ? (
         <Panel position="top-left">
           {/* Stopping early without saying so is the same lie as hiding an

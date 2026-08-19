@@ -179,6 +179,11 @@ brochure.
   branches out (edge-draw animation) → click function → Shiki-highlighted code block.
 - **Edges by confidence:** solid (`exact`) / dashed (`name_match`) / dotted (`unresolved`), coloured
   per §1.1. This is the product; see `PRD.md` §8.
+- ~~**The graticule.**~~ **Cut in B8.** The ruled background was signature 1 — the thing that made the
+  surface read as a chart rather than a diagram tool. It was also a field of thin lines behind a
+  drawing made of thin lines, and it won: the reader could not tell solid from dotted against it, and
+  reported the edges as missing when they were there all along. The ground is plain now. When two
+  elements use the same visual language and only one of them carries meaning, the other one goes.
 - **Minimap:** overview always available. There is no focus mode — dimming everything outside the
   selection greyed out most of the map the reader had just built, and it fired on every click,
   including opening a card's source. The selected card marks itself with a ring instead

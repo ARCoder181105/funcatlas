@@ -492,9 +492,13 @@ lands on that function with its source shown. The debounce hook has its own test
   (`docs/CANVAS_DECISIONS.md` §4) and all three confidence tiers drawing as one dash pattern. Both
   came from running the gate rather than from reading the code, which is the argument for the gate.
 
-**Still open:** step 5 (design critique with screenshots, and the one element to cut), step 6 (`PLAN.md`
-result, `README.md`, `docs/RISKS.md`), step 7 (a clean end-to-end run of the exit test, recorded with
-numbers).
+- **Step 5's cut, made.** Chanel's rule asked for the element carrying the least meaning. It was the
+  graticule — a field of thin lines behind a drawing made of thin lines, which made solid,
+  dashed and dotted indistinguishable and had the reader reporting missing edges that were rendering
+  correctly. The ground is plain now (`docs/CANVAS_DECISIONS.md` §4i, `docs/UI_GUIDE.md` §3.2).
+
+**Still open:** step 6 (`PLAN.md` result, `README.md`, `docs/RISKS.md`), step 7 (a clean end-to-end
+run of the exit test, recorded with numbers).
 
 **Why.** UI_GUIDE §3.3 calls the empty, loading and error states "the cool vs amateur line", and
 they are the easiest thing to leave half-done across six chunks. The docs are load-bearing for the

@@ -390,6 +390,26 @@ rendered DOM, and both are wrong the moment the type scale changes.
 
 ---
 
+## 4i. The ground is plain
+
+**Decided:** during B8, by the reader, after the edge bugs were fixed.
+**Status:** built.
+
+The canvas carried a two-level ruled grid — a fine 26px graticule under a coarse 130px one — as
+signature 1 of `UI_GUIDE.md` §3.2: the thing that made the surface read as a chart rather than as a
+diagram tool.
+
+It is gone, and the reason is worth keeping. A field of thin lines sat behind a drawing made of thin
+lines, and the background won. Solid, dashed and dotted are the product's whole claim (`PRD.md` §8)
+and they were competing with a decoration that meant nothing. The reader reported the edges as
+missing while they were rendering correctly — the notation was there and unreadable, which for this
+canvas is the same as absent.
+
+Chanel's rule, which B8 asks for by name: the element carrying the least meaning goes. Here it was
+also the element doing the most damage.
+
+---
+
 ## 5. A provider per surface
 
 **Decided:** during B5. **Superseded by 4b.**
