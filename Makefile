@@ -1,13 +1,49 @@
 # funcatlas — common developer tasks
 # Run `make <target>`. Most targets shell out to pnpm/turbo or docker.
+# `make start` is the one that brings the whole thing up; `make help` lists all.
 
-.PHONY: install dev build lint typecheck test migrate up down health \
+.PHONY: start stop wait-infra migrate-test install dev build lint typecheck test \
+        migrate up down health \
         go-build go-build-bin go-test go-vet go-run go-tidy go-lint clean
+
+# Loads .env into a recipe's shell. Sourced rather than `include`d: Make would
+# read a `#` inside a value as a comment and try to expand a `$`. Recipes that
+# need a variable from it write `$$DATABASE_URL`, not `$(DATABASE_URL)`.
+ENV := set -a && . ./.env && set +a
+
+start: ## Bring up EVERYTHING: Postgres, Redis, migrations, parser binary, API, web
+	@test -f .env || { echo "No .env — copy .env.example to .env first."; exit 1; }
+	$(MAKE) up
+	$(MAKE) wait-infra
+	$(MAKE) migrate
+	$(MAKE) go-build-bin
+	@echo ""
+	@echo "  API  http://localhost:3000"
+	@echo "  Web  http://localhost:5173   <- open this"
+	@echo ""
+	@echo "  Sign in with 'Continue as a local dev user'. Ctrl-C stops API and web;"
+	@echo "  Postgres and Redis keep running until 'make stop'."
+	@echo ""
+	$(MAKE) dev
+
+stop: ## Stop Postgres and Redis (data survives; they are on named volumes)
+	docker compose stop postgres redis
+
+wait-infra: ## Block until Postgres and Redis both accept connections
+	@echo "waiting for postgres..."
+	@until docker compose exec -T postgres pg_isready -U funcatlas >/dev/null 2>&1; do sleep 1; done
+	@echo "postgres ready"
+	# Redis too, not just Postgres: sessions live here, so an API that starts
+	# first answers every sign-in with a 500 from ioredis rather than anything
+	# that points at Redis being down.
+	@echo "waiting for redis..."
+	@until [ "$$(docker compose exec -T redis redis-cli ping 2>/dev/null | tr -d '\r')" = "PONG" ]; do sleep 1; done
+	@echo "redis ready"
 
 install: ## Install all workspace dependencies
 	pnpm install
 
-dev: ## Run api + web + parser in dev mode (hot reload)
+dev: ## Run api + web in dev mode (hot reload). Assumes infra is already up.
 	pnpm dev
 
 build: ## Build all packages
@@ -23,11 +59,14 @@ test: ## Run all tests (TS + Go)
 	pnpm test
 	cd services/parser && go test ./...
 
-migrate: ## Apply database migrations (requires DATABASE_URL in .env)
-	migrate -path services/parser/migrations -database "$(DATABASE_URL)" up
+migrate: ## Apply database migrations to DATABASE_URL
+	$(ENV) && migrate -path services/parser/migrations -database "$$DATABASE_URL" up
+
+migrate-test: ## Apply migrations to TEST_DATABASE_URL (the database `make test` truncates)
+	$(ENV) && migrate -path services/parser/migrations -database "$$TEST_DATABASE_URL" up
 
 down: ## Roll back the last database migration
-	migrate -path services/parser/migrations -database "$(DATABASE_URL)" down 1
+	$(ENV) && migrate -path services/parser/migrations -database "$$DATABASE_URL" down 1
 
 up: ## Start Postgres + Redis via docker compose
 	docker compose up -d postgres redis

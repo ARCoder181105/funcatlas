@@ -45,7 +45,8 @@ the granular decisions that were gaps (ORM, monorepo tooling, frameworks, valida
 | Shared types package | **`packages/shared`** | One source for Drizzle types + Zod schemas consumed by both `apps/api` and `apps/web` — kills the function/file/edge ID-mismatch risk called out in `TECH_STACK.md`. |
 | Frontend bundler | **Vite + React + TS** (SPA) | Canvas-heavy SPA needs no SSR; Vite is the fastest dev/build for React. |
 | Frontend state | **Zustand** (UI) + **TanStack Query** (server) | Zustand for canvas UI state; TanStack Query for graph fetches, caching, invalidation on re-parse. |
-| Styling | **Tailwind CSS** + **shadcn/ui** | Rapid, consistent modern UI; shadcn gives polished, accessible primitives to build on. |
+| Styling | **Tailwind CSS v4** (`@tailwindcss/vite`) | No `postcss.config.js` and no autoprefixer — v4 does both. The theme stays in `tailwind.config.ts`, loaded by `@config` from `index.css`: `src/lib/tokens.ts` is the single source for every colour, and React Flow needs those same values as raw SVG strokes, which a class name cannot supply. |
+| UI primitives | **Radix**, hand-styled — **not** the shadcn CLI | shadcn's theme layer would duplicate the tokens in `UI_GUIDE.md` §1.1. Its patterns are the reference; anything whose hard part is accessibility takes its behaviour from the Radix primitive underneath. See `UI_GUIDE.md` §2. |
 | Animation | **Framer Motion** | Declarative, production-grade UI motion (page transitions, card spring-in, edge-draw). |
 | Landing page | **React + Tailwind + Framer Motion** (same app, `/` route) | One app serves the marketing landing + the authenticated canvas; no separate deploy. |
 | Canvas | **React Flow** | Draggable/zoomable node-link canvas for the graph explorer. |

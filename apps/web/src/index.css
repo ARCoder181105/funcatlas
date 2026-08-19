@@ -1,9 +1,133 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
+@custom-variant dark (&:is(.dark *));
+
+/* v4 does not pick up tailwind.config.ts on its own. Loaded explicitly so the
+   theme keeps its single source in TypeScript: src/lib/tokens.ts holds every
+   colour once per theme, and the config exposes both palettes -- which is what
+   lets the canvas stroke an SVG edge with the same value a utility class uses. */
+@config "../tailwind.config.ts";
+
+/* Light -- "Vellum". Both blocks read theme("palette.<mode>....") rather than
+   restating a hex, so src/lib/tokens.ts stays the only file a colour is written
+   in and the two themes cannot drift apart. */
 :root {
+  color-scheme: light;
+
+  --surface: theme("palette.light.surface.DEFAULT");
+  --surface-raised: theme("palette.light.surface.raised");
+  --surface-border: theme("palette.light.surface.border");
+  --ink: theme("palette.light.ink.DEFAULT");
+  --ink-muted: theme("palette.light.ink.muted");
+  --confidence-exact: theme("palette.light.confidence.exact");
+  --confidence-name: theme("palette.light.confidence.name");
+  --confidence-unresolved: theme("palette.light.confidence.unresolved");
+  --on-accent: theme("palette.light.onAccent");
+
+  /* A genuinely destructive action is red. Deliberately not the unresolved
+     tier, which is a neutral slate because an unresolved call is an honest
+     admission rather than an error -- PRD §8. */
+  --destructive: oklch(0.55 0.2 27);
+}
+
+/* Dark -- "Ember". */
+.dark {
   color-scheme: dark;
+
+  --surface: theme("palette.dark.surface.DEFAULT");
+  --surface-raised: theme("palette.dark.surface.raised");
+  --surface-border: theme("palette.dark.surface.border");
+  --ink: theme("palette.dark.ink.DEFAULT");
+  --ink-muted: theme("palette.dark.ink.muted");
+  --confidence-exact: theme("palette.dark.confidence.exact");
+  --confidence-name: theme("palette.dark.confidence.name");
+  --confidence-unresolved: theme("palette.dark.confidence.unresolved");
+  --on-accent: theme("palette.dark.onAccent");
+
+  --destructive: oklch(0.68 0.19 25);
+}
+
+/* shadcn's own variable names, aliased onto ours, so every component the CLI
+   generates lands on this palette without being restyled. Written once and
+   inherited by both themes: each is defined in terms of a variable that has
+   already switched. */
+:root {
+  --background: var(--surface);
+  --foreground: var(--ink);
+  --card: var(--surface-raised);
+  --card-foreground: var(--ink);
+  --popover: var(--surface-raised);
+  --popover-foreground: var(--ink);
+
+  /* The hue that means "known" on the canvas does double duty as the accent,
+     so the interface has one accent rather than two competing ones. */
+  --primary: var(--confidence-exact);
+  --primary-foreground: var(--on-accent);
+  --ring: var(--confidence-exact);
+
+  /* shadcn's --accent is the wash behind a hovered menu row, not the brand
+     colour. Putting the accent hue here would light up every dropdown. */
+  --accent: var(--surface-border);
+  --accent-foreground: var(--ink);
+  --secondary: var(--surface-raised);
+  --secondary-foreground: var(--ink);
+  --muted: var(--surface-raised);
+  --muted-foreground: var(--ink-muted);
+
+  --border: var(--surface-border);
+  --input: var(--surface-border);
+
+  /* Same value as rounded-token in tailwind.config.ts, so a shadcn component
+     and a hand-written panel round identically. */
+  --radius: 0.75rem;
+
+  --sidebar: var(--surface-raised);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--confidence-exact);
+  --sidebar-primary-foreground: var(--on-accent);
+  --sidebar-accent: var(--surface-border);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--surface-border);
+  --sidebar-ring: var(--confidence-exact);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 html,
@@ -12,9 +136,63 @@ body,
   height: 100%;
 }
 
-body {
-  margin: 0;
-  background: theme("colors.surface.DEFAULT");
-  color: #e6e8ee;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+/* Shiki writes both themes onto every token as CSS variables (lib/highlight.ts),
+   so the toggle switches the code block without re-highlighting it. Only the
+   colour is taken -- the panel keeps its own surface, or the block would sit on
+   Vitesse's near-white ground in the middle of Ember. */
+.code-block .shiki,
+.code-block .shiki span {
+  color: var(--shiki-light);
+}
+
+.dark .code-block .shiki,
+.dark .code-block .shiki span {
+  color: var(--shiki-dark);
+}
+
+/* The counter starts at the function's real startLine, set inline by
+   CodeBlock. A block numbered from 1 for a function at line 400 is worse than
+   no numbers at all. */
+.code-block .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  /* Four digits, so a function crossing 999 to 1000 does not shift the code
+     under it by a character. */
+  width: 4ch;
+  margin-right: 1.25rem;
+  text-align: right;
+  color: var(--ink-muted);
+  user-select: none;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Switching themes should read as a change of light, not a flicker. Scoped to
+     the chrome so it cannot fight a Framer transition on the canvas. */
+  body,
+  header,
+  aside {
+    transition:
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body,
+    header,
+    aside {
+      transition: none;
+    }
+  }
 }

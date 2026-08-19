@@ -88,7 +88,9 @@ export function registerAuth(app: FastifyInstance) {
     }
 
     setSessionCookie(reply, sessionId);
-    return reply.redirect(env.APP_PUBLIC_URL);
+    // The web app, not this one. Redirecting to the API's own origin lands a
+    // freshly signed-in user on a JSON endpoint.
+    return reply.redirect(env.WEB_APP_URL);
   });
 
   // POST, not GET: with SameSite=Lax a cross-site GET navigation still carries

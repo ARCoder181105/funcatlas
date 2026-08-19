@@ -45,3 +45,16 @@ Thumbs.db
 .vercel/
 out.json
 extract_actual.json
+
+# --- Vendored agent skills (npx skills add) ---
+# ~11 MB of third-party markdown, duplicated across six directories, plus a
+# postToolUse hook that runs node on every edit. Kept local: installed per
+# machine with `npx skills add`, not carried in the repo.
+/.claude/
+/.agents/
+/.codex/
+/.github/agents/
+/.github/hooks/
+/.github/skills/
+/skills-lock.json
+/.impeccable/

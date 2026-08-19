@@ -19,7 +19,7 @@ The old working name "CodeCanvas" is retired; do not reintroduce it.
 - [x] Phase 1 — Parser and isolation
 - [x] Phase 2 — Storage and resolution
 - [x] Phase 3a — API and auth
-- [ ] Phase 3b — Canvas and search ← next
+- [~] Phase 3b — Canvas and search ← in progress (B0–B7 done, B8 left)
 - [ ] Phase 4 — Webhooks, queue, hardening
 - [ ] Phase 5 — Go, Rust, Python (extraction only; per-language resolution stays cut)
 
@@ -43,6 +43,12 @@ You implement, phase by phase, with tests. The user reviews at each phase gate.
 
 ### Code style the user has asked for
 
+- **Install the component, do not write it.** Reach for an existing component from a real provider —
+  shadcn first (`npx shadcn@latest add <name>`), then the libraries in the locked stack — before
+  writing markup by hand. Hand-rolling a dialog, a command palette, a tree row or a button is the
+  wrong default: it is more code to review, more to maintain, and worse on accessibility than the
+  thing already published. Check whether it exists before deciding it does not. Write a component
+  only when nothing in the registry does the job, and say which one you looked for.
 - **Comments are brief and to the point.** One line where one line does. Long comments invite
   confusion and go stale. Explain *why*, never restate *what* the code plainly says.
 - **Never duplicate code.** The second occurrence of anything gets extracted into a shared helper in
@@ -75,7 +81,10 @@ You implement, phase by phase, with tests. The user reviews at each phase gate.
 ## Locked stack — do not re-decide without an explicit reason
 
 - **Monorepo:** pnpm + Turborepo. Shared TypeScript types only in `packages/shared` (Drizzle + Zod).
-- **Frontend:** Vite + React + TS, Tailwind + shadcn/ui, Framer Motion, React Flow, Shiki, cmdk,
+- **Frontend:** Vite + React + TS, Tailwind **v4** (via `@tailwindcss/vite`, no `postcss.config.js`;
+  the theme stays in `tailwind.config.ts`, loaded by `@config` in `index.css`, because
+  `src/lib/tokens.ts` is the single source and the canvas needs the same values as raw SVG strokes),
+  Framer Motion, React Flow, Shiki, cmdk,
   lucide-react, Zustand + TanStack Query.
 - **API:** Fastify + Drizzle + postgres.js + Zod, arctic/oslo for GitHub OAuth, Redis sessions,
   `@fastify/rate-limit`.
@@ -121,12 +130,21 @@ files over 1 MB skipped.
   declaration still matches, and every call inside is dropped. Any new language needs a fixture that
   pins the **calls** inside its hardest construct, not just the function names.
 
-## Known gaps carried into Phase 3b
+## Known gaps
 
-Phase 3a closed the auth stub, the five 501 endpoints and the missing session gate. What is left:
+Updated as Phase 3b progresses. `TASKLIST.md` is the chunk-level truth; this is what outlives it.
 
-- **The web app is a 114-line shell.** Canvas, FunctionCard and CodeBlock are placeholders, and
-  `apps/web/src/lib/api.ts` still types every response as `unknown`. That is 3b's job.
+- **`FunctionCard.tsx` is a placeholder that nothing imports.** The file card ended up as a React
+  Flow node (`FileCard.tsx`), so this one has no job left. Delete it in B8 unless a use appears.
+- **A Base UI popup will not unmount on its own.** It keeps `data-closed`, stays on screen and goes
+  on taking clicks, because it waits for an exit animation it never observes finishing. Both
+  dialogs render their content only while open. Any new `Dialog`, `Popover` or `Sheet` needs the
+  same, or it will look closed and swallow the next click. See `docs/UI_GUIDE.md` §2.
+- **Edge rendering has no automated test.** React Flow only draws an edge once both nodes are
+  measured, and jsdom has no layout engine. `lib/graph.test.ts` covers exhaustively *what* the edges
+  are; whether they paint is a browser check. See `docs/CANVAS_DECISIONS.md` §4 — which also records
+  why **nothing may set `node.width` / `node.height`**: React Flow then treats the node as measured,
+  never computes `handleBounds`, and drops every edge touching it in silence.
 - **`POST /api/repos` parses synchronously**, so a large repository holds the request open until
   `PARSE_TIMEOUT_MS`. Phase 4's queue replaces the spawn; marked with a `ponytail:` comment.
 - **`/auth/dev-login` exists outside production.** Phase 4 hardening deletes it.
@@ -144,13 +162,20 @@ Run these instead of reading source to find out where things stand. Commands can
 prose can — if one contradicts this document, the command is right and this document needs fixing.
 
 ```bash
-make up && make migrate                               # infra + schema
-cd services/parser && go test ./... && go vet ./...   # is the parser green?
-go run ./cmd/parser --repo ./testdata/resolve --format summary  # what does it emit, and how confident?
-go run ./cmd/parser --repo ./testdata/resolve --write --repo-url x --commit y  # full pipeline
-pnpm -r build && pnpm -r test                         # TypeScript side
-git log --oneline -5                                  # what happened last
-grep -c '\[x\]' TASKLIST.md                           # how far into the current phase
+make start                     # infra, migrations, parser binary, API, web -- then open :5173
+make test                      # TypeScript AND Go. `pnpm -r test` silently skips the parser
+make lint && make typecheck
+make go-vet                    # not part of `make test`
+git log --oneline -5           # what happened last
+grep -c '\[x\]' TASKLIST.md    # how far into the current phase
+gh run list --branch $(git branch --show-current) --limit 2   # is CI green?
+```
+
+Parser on its own, when the question is about extraction rather than the app:
+
+```bash
+make go-run REPO=./services/parser/testdata/resolve
+cd services/parser && go run ./cmd/parser --repo ./testdata/resolve --format summary
 ```
 
 Read whole documents only when you need the *reasoning* behind a decision. For current state, the
@@ -168,3 +193,4 @@ commands are cheaper and more honest.
 | How does extraction and resolution work? | `docs/PARSING_STRATEGY.md` |
 | What's still undecided? | `docs/RISKS.md` |
 | Why this stack? | `docs/TECH_STACK.md` |
+| Why does the canvas behave like that? | `docs/CANVAS_DECISIONS.md` |

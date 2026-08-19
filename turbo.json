@@ -5,7 +5,11 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": ["dist/**", "build/**"]
+      "outputs": ["dist/**", "build/**"],
+      // Vite substitutes DEV at build time to strip development-only UI, such
+      // as the dev-login button. Declared so a production build is not cached
+      // as if it were a development one.
+      "env": ["DEV", "VITE_API_URL"]
     },
     "lint": {
       "dependsOn": ["^lint"]

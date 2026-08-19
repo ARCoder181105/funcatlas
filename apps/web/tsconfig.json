@@ -5,7 +5,12 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    // shadcn generates components that import from "@/...". The alias has to
+    // exist in vite.config.ts and vitest.config.ts too, or it resolves at
+    // typecheck and then fails at build and in tests.
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "vitest.config.ts"]
 }

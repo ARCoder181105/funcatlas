@@ -15,7 +15,10 @@ jobs:
       # There is no .env in CI, and env.ts fails fast on a missing key. These
       # are placeholders -- no test reaches GitHub.
       NODE_ENV: test
-      APP_PUBLIC_URL: http://localhost:5173
+      # Every key without a default in apps/api/src/env.ts has to be here, or
+      # the whole API suite fails at import rather than at a test.
+      # `apps/api/src/env.test.ts` is what keeps this list honest.
+      WEB_APP_URL: http://localhost:5173
       CORS_ORIGIN: http://localhost:5173
       REDIS_URL: redis://localhost:6379
       QUEUE_NAME: funcatlas-parse

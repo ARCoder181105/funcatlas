@@ -101,6 +101,18 @@ beforeAll(async () => {
         sourceBlobRef: "function getXuser() {}",
       },
       {
+        // Declared inside a callback, so its scope cannot be pointed at. Real,
+        // findable, and ranked below the definitions -- one test file can hold
+        // sixty of these.
+        fileId: id.file,
+        packagePath: "src",
+        name: "getSession",
+        qualifiedName: "<anonymous>.getSession",
+        startLine: 40,
+        endLine: 41,
+        sourceBlobRef: "() => {}",
+      },
+      {
         fileId: id.otherFile,
         packagePath: "src",
         name: "getUser",
@@ -145,9 +157,9 @@ describe("GET /api/repos", () => {
 
     expect(res.statusCode).toBe(200);
     const read = listed.find((r) => r.id === id.repo);
-    // Two files, four functions -- not eight, which is what the join yields
+    // Two files, five functions -- not ten, which is what the join yields
     // without a DISTINCT on the file count.
-    expect(read).toMatchObject({ fileCount: 2, functionCount: 4 });
+    expect(read).toMatchObject({ fileCount: 2, functionCount: 5 });
   });
 });
 
@@ -161,7 +173,7 @@ describe("GET /api/repos/:repoId/tree", () => {
     expect(res.statusCode).toBe(200);
     expect(tree.map((f) => f.path)).toEqual(["src/empty.ts", "src/user.ts"]);
     // A file with no functions is still a file.
-    expect(tree.map((f) => f.functionCount)).toEqual([0, 4]);
+    expect(tree.map((f) => f.functionCount)).toEqual([0, 5]);
   });
 
   it("does not leak another repository's files", async () => {
@@ -195,6 +207,7 @@ describe("GET /api/files/:fileId/functions", () => {
       "getUser",
       "get_user_raw",
       "getXuser",
+      "getSession",
     ]);
     // Shipping every body to render a list of names is the thing this avoids.
     expect(res.body).not.toContain("return db.user");
@@ -249,13 +262,28 @@ describe("GET /api/repos/:repoId/search", () => {
     const { results } = res.json() as { results: { name: string }[] };
 
     expect(res.statusCode).toBe(200);
-    // Both contain "get"; only getUser starts with it.
+    // Both contain "get"; only getUser starts with it. getSession is a prefix
+    // match too, but it lives in an anonymous scope, so it sorts below every
+    // function whose scope can be pointed at -- including forgetPassword,
+    // which only matches as a substring.
     expect(results.map((r) => r.name)).toEqual([
       "getUser",
       "getXuser",
       "get_user_raw",
       "forgetPassword",
+      "getSession",
     ]);
+  });
+
+  it("ranks a function declared in an anonymous scope below the definitions", async () => {
+    // They stay findable -- hiding them would be the same dishonesty as
+    // dropping an unresolved edge -- but a repository's test file can hold
+    // sixty callbacks called `fetch`, and burying every real definition under
+    // them makes search useless on exactly the repositories that need it.
+    const res = await get(`/api/repos/${id.repo}/search?query=getS`);
+    const { results } = res.json() as { results: { name: string }[] };
+
+    expect(results.map((r) => r.name)).toEqual(["getSession"]);
   });
 
   it("searches case-insensitively and carries the file path", async () => {
