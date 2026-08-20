@@ -9,6 +9,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+
+	"github.com/ARCoder181105/funcatlas/parser/internal/security"
 )
 
 var sha = regexp.MustCompile(`^[0-9a-f]{40}$`)
@@ -60,6 +63,22 @@ func TestHeadBranchOnDetachedHead(t *testing.T) {
 
 	assert.Empty(t, HeadBranch(dir))
 	assert.Regexp(t, sha, HeadCommit(dir), "a detached head still has a commit")
+}
+
+// GitHub 404s a private or missing repo to an anonymous client, and git answers
+// that by asking for a username. Unprompted it would sit there until
+// PARSE_TIMEOUT_MS killed it; the clone environment has to refuse the prompt.
+func TestPrepareRefusesCredentialPrompt(t *testing.T) {
+	if exec.Command("git", "ls-remote", "https://github.com/git/git", "HEAD").Run() != nil {
+		t.Skip("no network access to github.com")
+	}
+
+	c := New(zap.NewNop(), security.Config{})
+	_, err := c.Prepare("https://github.com/ARCoder181105/funcatlas-no-such-repo")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "terminal prompts disabled",
+		"git must fail on the missing credential rather than wait for one")
 }
 
 // A local path being parsed need not be a repository. Absence is "unknown",
