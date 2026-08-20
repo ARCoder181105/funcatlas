@@ -14,7 +14,11 @@ vi.mock("../lib/api", async (importOriginal) => {
 
 const mocked = vi.mocked(api);
 
-function hit(id: number, name: string, path = "source/core/Ky.ts"): SearchResult {
+function hit(
+  id: number,
+  name: string,
+  path = "source/core/Ky.ts",
+): SearchResult {
   return {
     id,
     name,
@@ -29,7 +33,9 @@ function hit(id: number, name: string, path = "source/core/Ky.ts"): SearchResult
 }
 
 function renderPalette() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       <CommandPalette />
@@ -86,7 +92,9 @@ describe("CommandPalette", () => {
     useUiStore.getState().setPaletteOpen(true);
     renderPalette();
 
-    expect(await screen.findByText("Type part of a function name.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Type part of a function name."),
+    ).toBeInTheDocument();
     // An empty box is not a query: asking for "" returns the first N functions
     // in the repository, which looks like a result and is not one.
     expect(mocked.search).not.toHaveBeenCalled();
@@ -98,19 +106,27 @@ describe("CommandPalette", () => {
     mocked.search.mockResolvedValue({
       repoId: 1,
       query: "user",
-      results: [hit(1, "getUser"), hit(2, "createUserSession", "source/core/session.ts")],
+      results: [
+        hit(1, "getUser"),
+        hit(2, "createUserSession", "source/core/session.ts"),
+      ],
     });
     const user = userEvent.setup();
     useUiStore.getState().selectRepo(1);
     useUiStore.getState().setPaletteOpen(true);
     renderPalette();
 
-    await user.type(await screen.findByPlaceholderText("Find a function…"), "user");
+    await user.type(
+      await screen.findByPlaceholderText("Find a function…"),
+      "user",
+    );
 
     expect(await screen.findByText("getUser")).toBeInTheDocument();
     expect(screen.getByText("createUserSession")).toBeInTheDocument();
 
-    const shown = screen.getAllByRole("option").map((option) => option.textContent);
+    const shown = screen
+      .getAllByRole("option")
+      .map((option) => option.textContent);
     expect(shown[0]).toContain("getUser");
     expect(shown[1]).toContain("createUserSession");
   });
@@ -122,19 +138,29 @@ describe("CommandPalette", () => {
     useUiStore.getState().setPaletteOpen(true);
     renderPalette();
 
-    await user.type(await screen.findByPlaceholderText("Find a function…"), "zzz");
+    await user.type(
+      await screen.findByPlaceholderText("Find a function…"),
+      "zzz",
+    );
 
     expect(await screen.findByText(/No function matches/)).toBeInTheDocument();
   });
 
   it("lands on the function, and on the file it lives in", async () => {
-    mocked.search.mockResolvedValue({ repoId: 1, query: "getUser", results: [hit(1, "getUser")] });
+    mocked.search.mockResolvedValue({
+      repoId: 1,
+      query: "getUser",
+      results: [hit(1, "getUser")],
+    });
     const user = userEvent.setup();
     useUiStore.getState().selectRepo(1);
     useUiStore.getState().setPaletteOpen(true);
     renderPalette();
 
-    await user.type(await screen.findByPlaceholderText("Find a function…"), "getUser");
+    await user.type(
+      await screen.findByPlaceholderText("Find a function…"),
+      "getUser",
+    );
     await user.click(await screen.findByText("getUser"));
 
     // The file card, the mind-map and the source all follow from these two.
@@ -150,7 +176,38 @@ describe("CommandPalette", () => {
     // that had already moved, and Escape could not shift it either. Asserting
     // the store alone missed that entirely.
     await waitFor(() => {
-      expect(screen.queryByPlaceholderText("Find a function…")).not.toBeInTheDocument();
+      expect(
+        screen.queryByPlaceholderText("Find a function…"),
+      ).not.toBeInTheDocument();
     });
+  });
+
+  it("reopens empty, not on the last search", async () => {
+    // The component survives its own close -- only the dialog subtree
+    // unmounts -- so the query outlived it and the next ⌘K appended to it.
+    mocked.search.mockResolvedValue({
+      repoId: 1,
+      query: "getUser",
+      results: [hit(1, "getUser")],
+    });
+    const user = userEvent.setup();
+    useUiStore.getState().selectRepo(1);
+    useUiStore.getState().setPaletteOpen(true);
+    renderPalette();
+
+    await user.type(
+      await screen.findByPlaceholderText("Find a function…"),
+      "getUser",
+    );
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(useUiStore.getState().paletteOpen).toBe(false);
+    });
+
+    useUiStore.getState().setPaletteOpen(true);
+
+    expect(await screen.findByPlaceholderText("Find a function…")).toHaveValue(
+      "",
+    );
   });
 });
