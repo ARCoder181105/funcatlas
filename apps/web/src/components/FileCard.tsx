@@ -4,7 +4,7 @@ import { ChevronDown, FileCode2 } from "lucide-react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { cn } from "../lib/cn";
 import { useFileFunctions } from "../lib/files";
-import { FILE_PREVIEW_ROWS } from "../lib/graph";
+import { FILE_PREVIEW_ROWS, sameNodeData } from "../lib/graph";
 import { DURATION, useMotionEnabled, useMotionTransition } from "../lib/motion";
 import { useUiStore } from "../store/ui";
 import { ExpandIndicator, expandLabel } from "./ExpandIndicator";
@@ -12,7 +12,13 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Empty, EmptyDescription, EmptyTitle } from "./ui/empty";
-import { Item, ItemActions, ItemContent, ItemGroup, ItemTitle } from "./ui/item";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemGroup,
+  ItemTitle,
+} from "./ui/item";
 import { Skeleton } from "./ui/skeleton";
 
 /** What the canvas puts in `node.data` for this node type. */
@@ -44,7 +50,11 @@ const LIST: Variants = {
 
 const ROW: Variants = {
   hidden: { opacity: 0, x: -6 },
-  shown: { opacity: 1, x: 0, transition: { duration: DURATION.micro, ease: "easeOut" } },
+  shown: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: DURATION.micro, ease: "easeOut" },
+  },
 };
 
 /**
@@ -58,7 +68,9 @@ function File({ data }: NodeProps<FileCardData>) {
   const functions = useFileFunctions(data.fileId);
   const selectedFunctionId = useUiStore((state) => state.selectedFunctionId);
   const rootFunctionIds = useUiStore((state) => state.rootFunctionIds);
-  const collapsedFunctionIds = useUiStore((state) => state.collapsedFunctionIds);
+  const collapsedFunctionIds = useUiStore(
+    (state) => state.collapsedFunctionIds,
+  );
   const toggleRoot = useUiStore((state) => state.toggleRoot);
   const toggleFileList = useUiStore((state) => state.toggleFileList);
   const transition = useMotionTransition("spring");
@@ -73,11 +85,23 @@ function File({ data }: NodeProps<FileCardData>) {
       {/* Only a source handle: a file card is where a traversal starts, so
           nothing points into it. React Flow still needs one to anchor the
           edge geometry B5 draws. */}
-      <Handle type="source" position={Position.Right} className="!bg-surface-border" />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!bg-surface-border"
+      />
 
       {/* Sized to what is in it, both ways: a dozen functions used to sit
-          behind a 256px scrollbar on a card fixed at 288px wide. */}
-      <Card size="sm" style={data.size} className="flex flex-col gap-0 shadow-lg">
+          behind a 256px scrollbar on a card fixed at 288px wide.
+
+          The size change is eased in CSS, not with Framer's `layout`: `layout`
+          measures against the viewport, and inside React Flow's panned and
+          zoomed transform those deltas are wrong. */}
+      <Card
+        size="sm"
+        style={data.size}
+        className="flex flex-col gap-0 shadow-lg motion-safe:transition-[width,height] motion-safe:duration-panel motion-safe:ease-out"
+      >
         <CardHeader className="flex-row items-start gap-2 border-b pb-(--card-spacing)">
           <FileCode2
             strokeWidth={1.5}
@@ -87,8 +111,12 @@ function File({ data }: NodeProps<FileCardData>) {
           <div className="min-w-0 flex-1">
             {/* The full path, wrapped rather than truncated: a path is an
                 identifier, and the tail is what disambiguates it. */}
-            <CardTitle className="font-mono text-xs leading-snug break-all">{data.path}</CardTitle>
-            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{data.language}</p>
+            <CardTitle className="font-mono text-xs leading-snug break-all">
+              {data.path}
+            </CardTitle>
+            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+              {data.language}
+            </p>
           </div>
         </CardHeader>
 
@@ -96,7 +124,9 @@ function File({ data }: NodeProps<FileCardData>) {
           <FunctionList
             query={functions}
             selectedFunctionId={selectedFunctionId}
-            openIds={rootFunctionIds.filter((id) => !collapsedFunctionIds.includes(id))}
+            openIds={rootFunctionIds.filter(
+              (id) => !collapsedFunctionIds.includes(id),
+            )}
             onSelect={toggleRoot}
             showAll={data.showAll}
             onShowAll={toggleFileList}
@@ -115,7 +145,10 @@ function File({ data }: NodeProps<FileCardData>) {
  * each node its coordinates as props, so without this the card and all its rows
  * re-rendered on every frame of every animation -- for a card that never moves.
  */
-export const FileCard = memo(File, (a, b) => a.data === b.data && a.selected === b.selected);
+export const FileCard = memo(
+  File,
+  (a, b) => sameNodeData(a.data, b.data) && a.selected === b.selected,
+);
 
 function FunctionList({
   query,
@@ -160,7 +193,8 @@ function FunctionList({
       <Empty className="gap-1 px-2 py-5">
         <EmptyTitle className="text-sm">No functions here</EmptyTitle>
         <EmptyDescription className="text-xs">
-          The parser read this file and found nothing it recognises as a function.
+          The parser read this file and found nothing it recognises as a
+          function.
         </EmptyDescription>
       </Empty>
     );
@@ -179,7 +213,11 @@ function FunctionList({
       {/* The list arrives as one gesture rather than as N separate fades: the
           container drives the stagger, so the rows cannot drift out of step
           with each other (UI_GUIDE §4). */}
-      <motion.div variants={LIST} initial={animated ? "hidden" : false} animate="shown">
+      <motion.div
+        variants={LIST}
+        initial={animated ? "hidden" : false}
+        animate="shown"
+      >
         <ItemGroup>
           {shown.map((fn) => {
             const active = fn.id === selectedFunctionId;
@@ -198,7 +236,9 @@ function FunctionList({
                   // and made the row taller than the card was measured for.
                   // The card is sized to the longest name instead.
                   "nodrag cursor-pointer flex-nowrap text-left",
-                  active ? "bg-accent text-accent-foreground" : "hover:bg-muted",
+                  active
+                    ? "bg-accent text-accent-foreground"
+                    : "hover:bg-muted",
                 )}
                 render={
                   <motion.button
@@ -211,16 +251,24 @@ function FunctionList({
                 }
               >
                 <ItemContent>
-                  <ItemTitle className="truncate font-mono text-xs">{fn.name}</ItemTitle>
+                  <ItemTitle className="truncate font-mono text-xs">
+                    {fn.name}
+                  </ItemTitle>
                 </ItemContent>
                 <ItemActions>
-                  <Badge variant="outline" className="font-mono text-[10px] tabular-nums">
+                  <Badge
+                    variant="outline"
+                    className="font-mono text-[10px] tabular-nums"
+                  >
                     {fn.startLine}
                   </Badge>
                   {/* The same control the cards on the canvas use. A tick that
                       appeared only once a branch was open said nothing about
                       closing it, so the row looked one-way. */}
-                  <ExpandIndicator open={open} className={open ? "text-primary" : undefined} />
+                  <ExpandIndicator
+                    open={open}
+                    className={open ? "text-primary" : undefined}
+                  />
                 </ItemActions>
               </Item>
             );
@@ -238,7 +286,10 @@ function FunctionList({
         >
           <ChevronDown
             strokeWidth={1.5}
-            className={cn("size-3.5 transition-transform duration-micro", showAll && "rotate-180")}
+            className={cn(
+              "size-3.5 transition-transform duration-micro",
+              showAll && "rotate-180",
+            )}
             aria-hidden
           />
           {showAll ? "Show fewer" : `${rest} more`}
