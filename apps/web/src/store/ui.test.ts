@@ -1,9 +1,55 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useUiStore } from "./ui";
+import { UI_STORAGE_KEY, useUiStore } from "./ui";
 
 function state() {
   return useUiStore.getState();
 }
+
+function persisted() {
+  return JSON.parse(localStorage.getItem(UI_STORAGE_KEY) as string).state;
+}
+
+describe("what survives a reload", () => {
+  beforeEach(() => {
+    state().clearSelection();
+  });
+
+  // Reloading onto "Nothing charted" after building a map reads as the app
+  // having forgotten, and there is no URL to go back to.
+  it("keeps the repository, the file and every open branch", () => {
+    state().selectRepo(7);
+    state().selectFile(10);
+    state().toggleRoot(100);
+    state().toggleCode(100);
+
+    expect(persisted()).toMatchObject({
+      selectedRepoId: 7,
+      selectedFileId: 10,
+      rootFunctionIds: [100],
+      expandedFunctionIds: [100],
+      codeFunctionIds: [100],
+    });
+  });
+
+  // Reloading into an open search box is a state the reader never asked for.
+  it("does not reopen the palette", () => {
+    state().setPaletteOpen(true);
+
+    expect(persisted()).not.toHaveProperty("paletteOpen");
+  });
+
+  it("forgets everything on sign-out", () => {
+    state().selectRepo(7);
+    state().selectFile(10);
+    state().clearSelection();
+
+    expect(persisted()).toMatchObject({
+      selectedRepoId: null,
+      selectedFileId: null,
+      rootFunctionIds: [],
+    });
+  });
+});
 
 describe("selection", () => {
   beforeEach(() => {

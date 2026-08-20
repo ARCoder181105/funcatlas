@@ -22,6 +22,7 @@ import {
   GHOST_NODE,
   NODE_CEILING,
   NODE_HEIGHT,
+  sameNodeData,
   type GraphNodeData,
 } from "./graph";
 
@@ -32,14 +33,36 @@ function fn(
   confidence: ResolutionConfidence | null,
   name = `fn${id}`,
 ): ReachableFunction {
-  return { id, name, qualifiedName: name, fileId: 1, depth, confidence, viaFunctionId };
+  return {
+    id,
+    name,
+    qualifiedName: name,
+    fileId: 1,
+    depth,
+    confidence,
+    viaFunctionId,
+  };
 }
 
-function call(id: number, calleeName: string, callLine: number | null): CallEdge {
-  return { id, calleeFunctionId: null, calleeName, callLine, confidence: "unresolved" };
+function call(
+  id: number,
+  calleeName: string,
+  callLine: number | null,
+): CallEdge {
+  return {
+    id,
+    calleeFunctionId: null,
+    calleeName,
+    callLine,
+    confidence: "unresolved",
+  };
 }
 
-function resolved(id: number, calleeFunctionId: number, calleeName: string): CallEdge {
+function resolved(
+  id: number,
+  calleeFunctionId: number,
+  calleeName: string,
+): CallEdge {
   return { id, calleeFunctionId, calleeName, callLine: 1, confidence: "exact" };
 }
 
@@ -78,7 +101,10 @@ function expectNoOverlap(nodes: Node<GraphNodeData>[]): void {
       if (a.id === b.id) continue;
       const [one, two] = [box(a), box(b)];
       const overlaps =
-        one.left < two.right && two.left < one.right && one.top < two.bottom && two.top < one.bottom;
+        one.left < two.right &&
+        two.left < one.right &&
+        one.top < two.bottom &&
+        two.top < one.bottom;
       expect(overlaps, `${a.id} overlaps ${b.id}`).toBe(false);
     }
   }
@@ -113,14 +139,18 @@ describe("buildGraph", () => {
       "name_match",
       "unresolved",
     ]);
-    expect(new Set(edges.map((edge) => edge.type))).toEqual(new Set(["confidence"]));
+    expect(new Set(edges.map((edge) => edge.type))).toEqual(
+      new Set(["confidence"]),
+    );
   });
 
   it("turns an unresolved call into a ghost node rather than dropping it", () => {
     // The failure this whole chunk exists to prevent: an unresolved edge
     // reaches no function row, so a mapper built only from `reachable` shows a
     // function calling nothing. PRD §8.
-    const { nodes, edges } = buildGraph(response([ROOT], [call(10, "logger.debug", 42)]));
+    const { nodes, edges } = buildGraph(
+      response([ROOT], [call(10, "logger.debug", 42)]),
+    );
 
     const ghost = nodes.find((node) => node.type === GHOST_NODE);
     expect(ghost).toBeDefined();
@@ -150,7 +180,10 @@ describe("buildGraph", () => {
     // parser saw, and two calls saw one name; the lines record that there
     // were two sites without claiming they reach the same definition.
     const { nodes, edges } = buildGraph(
-      response([ROOT], [call(10, "logger.debug", 40), call(11, "logger.debug", 12)]),
+      response(
+        [ROOT],
+        [call(10, "logger.debug", 40), call(11, "logger.debug", 12)],
+      ),
     );
 
     const ghosts = nodes.filter((node) => node.type === GHOST_NODE);
@@ -162,7 +195,10 @@ describe("buildGraph", () => {
 
   it("keeps different callee names as different ghosts", () => {
     const { nodes } = buildGraph(
-      response([ROOT], [call(10, "logger.debug", 1), call(11, "logger.warn", 2)]),
+      response(
+        [ROOT],
+        [call(10, "logger.debug", 1), call(11, "logger.warn", 2)],
+      ),
     );
 
     expect(nodes.filter((node) => node.type === GHOST_NODE)).toHaveLength(2);
@@ -170,7 +206,10 @@ describe("buildGraph", () => {
 
   it("puts a ghost one column past the function that made the call", () => {
     const { nodes } = buildGraph(
-      response([ROOT, fn(2, 1, 1, "exact"), fn(3, 2, 2, "exact")], [call(10, "logger.debug", 1)]),
+      response(
+        [ROOT, fn(2, 1, 1, "exact"), fn(3, 2, 2, "exact")],
+        [call(10, "logger.debug", 1)],
+      ),
     );
 
     const ghost = nodes.find((node) => node.type === GHOST_NODE);
@@ -189,8 +228,15 @@ describe("buildGraph", () => {
       ...response([fn(2, 0, null, null), fn(3, 1, 2, "exact")], [], 2),
     ]);
 
-    expect(built.nodes.map((node) => node.id).sort()).toEqual(["fn-1", "fn-2", "fn-3"]);
-    expect(built.edges.map((edge) => edge.id).sort()).toEqual(["e-1-2", "e-2-3"]);
+    expect(built.nodes.map((node) => node.id).sort()).toEqual([
+      "fn-1",
+      "fn-2",
+      "fn-3",
+    ]);
+    expect(built.edges.map((edge) => edge.id).sort()).toEqual([
+      "e-1-2",
+      "e-2-3",
+    ]);
   });
 
   it("measures depth from the root across expansions, not per response", () => {
@@ -201,7 +247,8 @@ describe("buildGraph", () => {
       ...response([fn(2, 0, null, null), fn(3, 1, 2, "exact")], [], 2),
     ]);
 
-    const depth = (id: string) => built.nodes.find((n) => n.id === id)?.data.depth;
+    const depth = (id: string) =>
+      built.nodes.find((n) => n.id === id)?.data.depth;
     expect(depth("fn-1")).toBe(0);
     expect(depth("fn-2")).toBe(1);
     expect(depth("fn-3")).toBe(2);
@@ -217,9 +264,11 @@ describe("buildGraph", () => {
 
     const ghost = built.nodes.find((node) => node.type === GHOST_NODE);
     expect(ghost?.data.depth).toBe(2);
-    expect(built.edges.some((edge) => edge.source === "fn-2" && edge.target === ghost?.id)).toBe(
-      true,
-    );
+    expect(
+      built.edges.some(
+        (edge) => edge.source === "fn-2" && edge.target === ghost?.id,
+      ),
+    ).toBe(true);
   });
 
   it("never places two nodes on top of each other", () => {
@@ -227,8 +276,15 @@ describe("buildGraph", () => {
     // centring its own column on the same axis -- so a ghost and a function
     // at the same depth landed in exactly the same place.
     const built = buildGraph([
-      ...response([ROOT, fn(2, 1, 1, "exact"), fn(3, 1, 1, "exact")], [call(10, "logger.debug", 1)]),
-      ...response([fn(2, 0, null, null), fn(4, 1, 2, "exact")], [call(11, "fetch", 2)], 2),
+      ...response(
+        [ROOT, fn(2, 1, 1, "exact"), fn(3, 1, 1, "exact")],
+        [call(10, "logger.debug", 1)],
+      ),
+      ...response(
+        [fn(2, 0, null, null), fn(4, 1, 2, "exact")],
+        [call(11, "fetch", 2)],
+        2,
+      ),
     ]);
 
     expectNoOverlap(built.nodes);
@@ -241,15 +297,20 @@ describe("buildGraph", () => {
     // Taller with more functions, wider with longer names. The list used to sit
     // in a 256px scroll area on a card fixed at 288 wide, so a dozen functions
     // were mostly hidden and a long name wrapped inside its own row.
-    expect(fileCardSize(many, "a.ts").height).toBeGreaterThan(fileCardSize(few, "a.ts").height);
-    expect(fileCardSize(["cloneSearchParametersForInitHook"], "a.ts").width).toBeGreaterThan(
-      fileCardSize(few, "a.ts").width,
+    expect(fileCardSize(many, "a.ts").height).toBeGreaterThan(
+      fileCardSize(few, "a.ts").height,
     );
+    expect(
+      fileCardSize(["cloneSearchParametersForInitHook"], "a.ts").width,
+    ).toBeGreaterThan(fileCardSize(few, "a.ts").width);
 
     // A wrapped path makes the header taller, because the path is an
     // identifier and wraps rather than truncating.
-    const deep = "source/core/internal/really/quite/deeply/nested/module-name.ts";
-    expect(fileCardSize(few, deep).height).toBeGreaterThan(fileCardSize(few, "a.ts").height);
+    const deep =
+      "source/core/internal/really/quite/deeply/nested/module-name.ts";
+    expect(fileCardSize(few, deep).height).toBeGreaterThan(
+      fileCardSize(few, "a.ts").height,
+    );
 
     // No ceiling, a floor only: the card is as wide as its longest name.
     const huge = Array.from({ length: 300 }, () => "x".repeat(80));
@@ -268,7 +329,9 @@ describe("buildGraph", () => {
 
     // And an answer that has not arrived is a third body again: four skeleton
     // rows, not a sentence.
-    expect(fileCardSize([], "a.ts", false, true).height).toBeGreaterThan(empty.height);
+    expect(fileCardSize([], "a.ts", false, true).height).toBeGreaterThan(
+      empty.height,
+    );
   });
 
   it("shows a screenful of functions and grows to the rest on request", () => {
@@ -282,7 +345,9 @@ describe("buildGraph", () => {
 
     // The preview is a fixed number of rows plus the row that offers the rest,
     // however many functions the file has.
-    expect(preview.height).toBe(fileCardSize(many.slice(0, FILE_PREVIEW_ROWS + 1), "a.ts").height);
+    expect(preview.height).toBe(
+      fileCardSize(many.slice(0, FILE_PREVIEW_ROWS + 1), "a.ts").height,
+    );
     expect(full.height).toBeGreaterThan(preview.height * 3);
 
     // A file that fits gets no "more" row at all.
@@ -304,7 +369,10 @@ describe("buildGraph", () => {
   it("sizes a card to the source it is showing", () => {
     const short = ["function a() {", "  return 1;", "}"].join("\n");
     const wide = `const x = ${"y".repeat(200)};`;
-    const long = Array.from({ length: 400 }, (_, index) => `line ${index}`).join("\n");
+    const long = Array.from(
+      { length: 400 },
+      (_, index) => `line ${index}`,
+    ).join("\n");
 
     // A three-line helper does not need the box a 400-line function needs, and
     // a wide line has to be reachable rather than clipped at a fixed width.
@@ -321,13 +389,22 @@ describe("buildGraph", () => {
     const full = codeCardSize(long, true);
     expect(preview.height).toBeLessThan(full.height / 5);
     // The preview is the same height whatever the file's length past it.
-    const longer = Array.from({ length: 900 }, (_, index) => `line ${index}`).join("\n");
+    const longer = Array.from(
+      { length: 900 },
+      (_, index) => `line ${index}`,
+    ).join("\n");
     expect(codeCardSize(longer).height).toBe(preview.height);
     expect(preview.height).toBeGreaterThan(CODE_PREVIEW_LINES * 19);
 
     // Nothing to measure yet, or nothing stored at all: the default box.
-    expect(codeCardSize(undefined)).toEqual({ width: CODE_WIDTH, height: CODE_HEIGHT });
-    expect(codeCardSize(null)).toEqual({ width: CODE_WIDTH, height: CODE_HEIGHT });
+    expect(codeCardSize(undefined)).toEqual({
+      width: CODE_WIDTH,
+      height: CODE_HEIGHT,
+    });
+    expect(codeCardSize(null)).toEqual({
+      width: CODE_WIDTH,
+      height: CODE_HEIGHT,
+    });
   });
 
   it("lays the graph out around the size each card actually needs", () => {
@@ -338,7 +415,8 @@ describe("buildGraph", () => {
     ];
 
     const built = buildGraph(responses, [1], [], [2], new Map([[2, wide]]));
-    const node = (id: number) => built.nodes.find((candidate) => candidate.id === `fn-${id}`);
+    const node = (id: number) =>
+      built.nodes.find((candidate) => candidate.id === `fn-${id}`);
 
     expect(node(2)?.data.size.width).toBe(codeCardSize(wide).width);
     expect(node(2)?.data.size).toEqual({
@@ -359,12 +437,16 @@ describe("buildGraph", () => {
     // card in a 300-wide column lands on the column beside it, and a 324-tall
     // one lands on its own neighbour below.
     const responses = [
-      ...response([ROOT, fn(2, 1, 1, "exact"), fn(3, 1, 1, "exact")], [call(10, "logger.debug", 1)]),
+      ...response(
+        [ROOT, fn(2, 1, 1, "exact"), fn(3, 1, 1, "exact")],
+        [call(10, "logger.debug", 1)],
+      ),
       ...response([fn(2, 0, null, null), fn(4, 1, 2, "exact")], [], 2),
     ];
 
     const open = buildGraph(responses, [1], [], [2]);
-    const node = (id: number) => open.nodes.find((candidate) => candidate.id === `fn-${id}`);
+    const node = (id: number) =>
+      open.nodes.find((candidate) => candidate.id === `fn-${id}`);
 
     expect(node(2)?.data.size.width).toBe(CODE_WIDTH);
     expect(node(2)?.data.size.height).toBe(NODE_HEIGHT + CODE_HEIGHT);
@@ -378,7 +460,8 @@ describe("buildGraph", () => {
     // growing over it.
     const shut = buildGraph(responses, [1], [], []);
     const xOf = (built: typeof open, id: number) =>
-      built.nodes.find((candidate) => candidate.id === `fn-${id}`)?.position.x ?? 0;
+      built.nodes.find((candidate) => candidate.id === `fn-${id}`)?.position
+        .x ?? 0;
     expect(xOf(open, 4)).toBeGreaterThan(xOf(shut, 4));
   });
 
@@ -392,10 +475,18 @@ describe("buildGraph", () => {
     ];
 
     const built = buildGraph(outOfOrder, [1]);
-    expect(built.nodes.map((node) => node.id).sort()).toEqual(["fn-1", "fn-2", "fn-3"]);
+    expect(built.nodes.map((node) => node.id).sort()).toEqual([
+      "fn-1",
+      "fn-2",
+      "fn-3",
+    ]);
 
     // Without the explicit anchor it would keep only fn-2's subtree.
-    expect(buildGraph(outOfOrder).nodes.map((node) => node.id).sort()).toEqual(["fn-2", "fn-3"]);
+    expect(
+      buildGraph(outOfOrder)
+        .nodes.map((node) => node.id)
+        .sort(),
+    ).toEqual(["fn-2", "fn-3"]);
   });
 
   it("hides a collapsed branch's descendants but keeps the branch itself", () => {
@@ -403,18 +494,29 @@ describe("buildGraph", () => {
     // below it has to disappear -- including its ghosts.
     const responses = [
       ...response([ROOT, fn(2, 1, 1, "exact")]),
-      ...response([fn(2, 0, null, null), fn(3, 1, 2, "exact")], [call(9, "logger.debug", 4)], 2),
+      ...response(
+        [fn(2, 0, null, null), fn(3, 1, 2, "exact")],
+        [call(9, "logger.debug", 4)],
+        2,
+      ),
     ];
 
     const open = buildGraph(responses, [1], []);
-    expect(open.nodes.map((n) => n.id).sort()).toEqual(["fn-1", "fn-2", "fn-3", "ghost-logger.debug"]);
+    expect(open.nodes.map((n) => n.id).sort()).toEqual([
+      "fn-1",
+      "fn-2",
+      "fn-3",
+      "ghost-logger.debug",
+    ]);
 
     const shut = buildGraph(responses, [1], [2]);
     expect(shut.nodes.map((n) => n.id).sort()).toEqual(["fn-1", "fn-2"]);
     // And the same responses reopen to exactly what was there before.
-    expect(buildGraph(responses, [1], []).nodes.map((n) => n.id).sort()).toEqual(
-      open.nodes.map((n) => n.id).sort(),
-    );
+    expect(
+      buildGraph(responses, [1], [])
+        .nodes.map((n) => n.id)
+        .sort(),
+    ).toEqual(open.nodes.map((n) => n.id).sort());
   });
 
   it("takes a closed branch off the canvas entirely, and brings it back whole", () => {
@@ -424,7 +526,11 @@ describe("buildGraph", () => {
     // it was.
     const responses = [
       ...response([ROOT, fn(2, 1, 1, "exact")]),
-      ...response([fn(50, 0, null, null), fn(51, 1, 50, "exact")], [call(9, "fetch", 4)], 50),
+      ...response(
+        [fn(50, 0, null, null), fn(51, 1, 50, "exact")],
+        [call(9, "fetch", 4)],
+        50,
+      ),
     ];
 
     const both = buildGraph(responses, [1, 50], []);
@@ -441,9 +547,11 @@ describe("buildGraph", () => {
     const shut = buildGraph(responses, [1, 50], [50]);
     expect(shut.nodes.map((n) => n.id).sort()).toEqual(["fn-1", "fn-2"]);
 
-    expect(buildGraph(responses, [1, 50], []).nodes.map((n) => n.id).sort()).toEqual(
-      both.nodes.map((n) => n.id).sort(),
-    );
+    expect(
+      buildGraph(responses, [1, 50], [])
+        .nodes.map((n) => n.id)
+        .sort(),
+    ).toEqual(both.nodes.map((n) => n.id).sort());
   });
 
   it("draws several branches from one file, each from its own root", () => {
@@ -455,9 +563,15 @@ describe("buildGraph", () => {
       [1, 50],
     );
 
-    expect(built.nodes.map((n) => n.id).sort()).toEqual(["fn-1", "fn-2", "fn-50", "fn-51"]);
+    expect(built.nodes.map((n) => n.id).sort()).toEqual([
+      "fn-1",
+      "fn-2",
+      "fn-50",
+      "fn-51",
+    ]);
     // Both roots sit in the first column.
-    const depth = (id: string) => built.nodes.find((n) => n.id === id)?.data.depth;
+    const depth = (id: string) =>
+      built.nodes.find((n) => n.id === id)?.data.depth;
     expect(depth("fn-1")).toBe(0);
     expect(depth("fn-50")).toBe(0);
   });
@@ -482,10 +596,16 @@ describe("buildGraph", () => {
 
   it("turns depth into columns and spreads a layer across rows", () => {
     const { nodes } = buildGraph(
-      response([ROOT, fn(2, 1, 1, "exact"), fn(3, 1, 1, "exact"), fn(4, 2, 2, "exact")]),
+      response([
+        ROOT,
+        fn(2, 1, 1, "exact"),
+        fn(3, 1, 1, "exact"),
+        fn(4, 2, 2, "exact"),
+      ]),
     );
 
-    const at = (id: number) => nodes.find((node) => node.id === `fn-${id}`)?.position;
+    const at = (id: number) =>
+      nodes.find((node) => node.id === `fn-${id}`)?.position;
 
     expect(at(1)?.x).toBe(0);
     expect(at(2)?.x).toBe(at(3)?.x);
@@ -496,7 +616,9 @@ describe("buildGraph", () => {
   });
 
   it("centres a layer rather than hanging it below the one above", () => {
-    const { nodes } = buildGraph(response([ROOT, fn(2, 1, 1, "exact"), fn(3, 1, 1, "exact")]));
+    const { nodes } = buildGraph(
+      response([ROOT, fn(2, 1, 1, "exact"), fn(3, 1, 1, "exact")]),
+    );
 
     // Centres, not top-left corners: cards differ in height now, so the layer
     // is centred on the middle of its stack rather than on its first row.
@@ -513,7 +635,11 @@ describe("buildGraph", () => {
     // once. Keying by id here means a change to that query cannot quietly
     // start duplicating nodes.
     const { nodes } = buildGraph(
-      response([ROOT, fn(2, 1, 1, "exact"), fn(1, 2, 2, "exact", "generateText")]),
+      response([
+        ROOT,
+        fn(2, 1, 1, "exact"),
+        fn(1, 2, 2, "exact", "generateText"),
+      ]),
     );
 
     expect(nodes.filter((node) => node.id === "fn-1")).toHaveLength(1);
@@ -521,7 +647,12 @@ describe("buildGraph", () => {
   });
 
   it("truncates at the ceiling and says how much it cut", () => {
-    const many = [ROOT, ...Array.from({ length: NODE_CEILING + 50 }, (_, i) => fn(i + 2, 1, 1, "exact"))];
+    const many = [
+      ROOT,
+      ...Array.from({ length: NODE_CEILING + 50 }, (_, i) =>
+        fn(i + 2, 1, 1, "exact"),
+      ),
+    ];
     const built = buildGraph(response(many));
 
     // Freezing the tab is not an option, and neither is stopping early
@@ -533,7 +664,9 @@ describe("buildGraph", () => {
   it("keeps the shallowest layers when it truncates", () => {
     const many = [
       ROOT,
-      ...Array.from({ length: NODE_CEILING, }, (_, i) => fn(i + 2, 1, 1, "exact")),
+      ...Array.from({ length: NODE_CEILING }, (_, i) =>
+        fn(i + 2, 1, 1, "exact"),
+      ),
       fn(99999, 9, 1, "exact", "deepest"),
     ];
     const built = buildGraph(response(many));
@@ -549,7 +682,9 @@ describe("buildGraph", () => {
     // renders as a line to the origin.
     const many = [
       ROOT,
-      ...Array.from({ length: NODE_CEILING - 1 }, (_, i) => fn(i + 2, 1, 1, "exact")),
+      ...Array.from({ length: NODE_CEILING - 1 }, (_, i) =>
+        fn(i + 2, 1, 1, "exact"),
+      ),
       fn(90000, 2, 88888, "exact"),
     ];
     const built = buildGraph(response(many));
@@ -570,7 +705,9 @@ describe("buildGraph", () => {
   });
 
   it("carries depth on the edge so the draw-in can be staggered by layer", () => {
-    const { edges } = buildGraph(response([ROOT, fn(2, 1, 1, "exact"), fn(3, 2, 2, "exact")]));
+    const { edges } = buildGraph(
+      response([ROOT, fn(2, 1, 1, "exact"), fn(3, 2, 2, "exact")]),
+    );
 
     expect(edges.find((edge) => edge.target === "fn-2")?.data.depth).toBe(1);
     expect(edges.find((edge) => edge.target === "fn-3")?.data.depth).toBe(2);
@@ -587,7 +724,9 @@ describe("buildGraph", () => {
     expect(new Set(nodes.map((n) => n.id)).size).toBe(nodes.length);
     expect(new Set(edges.map((e) => e.id)).size).toBe(edges.length);
     // A ghost named after a number must not collide with a function id.
-    expect(nodes.every((n) => n.id.startsWith("fn-") || n.id.startsWith("ghost-"))).toBe(true);
+    expect(
+      nodes.every((n) => n.id.startsWith("fn-") || n.id.startsWith("ghost-")),
+    ).toBe(true);
   });
 
   it("handles a function with no calls at all", () => {
@@ -596,5 +735,54 @@ describe("buildGraph", () => {
     expect(built.nodes).toHaveLength(1);
     expect(built.edges).toHaveLength(0);
     expect(built.truncated).toBe(0);
+  });
+});
+
+describe("sameNodeData", () => {
+  const card = (over: Partial<GraphNodeData> = {}): GraphNodeData => ({
+    kind: "function",
+    label: "getUser",
+    functionId: 1,
+    qualifiedName: "getUser",
+    fileId: 7,
+    depth: 0,
+    isRoot: true,
+    callLines: [],
+    expanded: true,
+    isLeaf: false,
+    showCode: false,
+    showAllSource: false,
+    size: { width: 200, height: NODE_HEIGHT },
+    ...over,
+  });
+
+  // The one that matters: `buildGraph` rebuilds every node's data whenever
+  // anything on the map changes, so reference equality re-rendered every card
+  // -- and a card showing source re-ran its highlighted block and blinked.
+  it("sees two rebuilt-but-identical objects as the same card", () => {
+    expect(sameNodeData(card(), card())).toBe(true);
+  });
+
+  it("looks inside the size, which is a fresh object every rebuild", () => {
+    expect(
+      sameNodeData(card(), card({ size: { width: 200, height: NODE_HEIGHT } })),
+    ).toBe(true);
+    expect(
+      sameNodeData(card(), card({ size: { width: 320, height: NODE_HEIGHT } })),
+    ).toBe(false);
+  });
+
+  it("looks inside the call lines", () => {
+    expect(
+      sameNodeData(card({ callLines: [3, 9] }), card({ callLines: [3, 9] })),
+    ).toBe(true);
+    expect(
+      sameNodeData(card({ callLines: [3, 9] }), card({ callLines: [3] })),
+    ).toBe(false);
+  });
+
+  it("still notices a real change", () => {
+    expect(sameNodeData(card(), card({ showCode: true }))).toBe(false);
+    expect(sameNodeData(card(), card({ label: "getUsers" }))).toBe(false);
   });
 });

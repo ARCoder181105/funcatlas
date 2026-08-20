@@ -79,10 +79,10 @@ endpoints are still 501 and none are session-gated, and the web app is a shell. 
 
 ---
 
-## Phase 3 — API, auth, canvas and search · 3a done, 3b next
+## Phase 3 — API, auth, canvas and search · done
 
 Split into two PRs: **3a** api and auth (curl-testable, no UI) — **done**; **3b** canvas and
-search — next.
+search — **done**.
 
 The first phase a human can actually use.
 
@@ -97,8 +97,21 @@ from the checkout), walk tree to functions to a 3-hop traversal to source, and s
 one of the seven `/api` routes answers 401 without the cookie, and again after logout. All three
 confidence tiers present in `edges` with non-zero counts.
 
-**3b exit test:** a logged-in user explores a real repository end to end through the UI and finds a
-function by name.
+**3b exit test — passed**, in real Chrome against `honojs/hono`: sign in, register (355 files, 1,460
+functions, 5,906 edges — exact 1,106 / name_match 150 / unresolved 4,650), walk tree to card to
+mind-map, read all three edge styles with unresolved ghosts at the boundary, open the source at the
+right line numbers, and land on a function by name with ⌘K. `pnpm -r build`, `test` and `lint` clean.
+The full run, with the six defects it surfaced, is recorded in [`TASKLIST.md`](TASKLIST.md) §B8.
+
+**What running it changed.** The gate is worth more than the chunks it closes: across 3b it caught
+edges that silently never rendered, three confidence tiers flattened into one dash pattern, a clone
+that waited on credentials that could not arrive, a failure dialog printing the parser's stack trace,
+a selection that did not survive a reload, and one card's change re-rendering every other card. None
+of those were visible from reading the code.
+
+**Known carry-over into Phase 4** — registration still parses inline (R27), `/auth/dev-login` still
+exists (R30), a request touching a downed Redis still hangs (R31), and restored canvas state is not
+re-validated against a re-parse (R34).
 
 ---
 

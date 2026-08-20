@@ -1,6 +1,6 @@
 import type { FileNode } from "@funcatlas/shared";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, api } from "../lib/api";
@@ -13,7 +13,12 @@ vi.mock("../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/api")>();
   return {
     ...actual,
-    api: { ...actual.api, listRepos: vi.fn(), tree: vi.fn(), registerRepo: vi.fn() },
+    api: {
+      ...actual.api,
+      listRepos: vi.fn(),
+      tree: vi.fn(),
+      registerRepo: vi.fn(),
+    },
   };
 });
 
@@ -25,7 +30,9 @@ function file(path: string, functionCount = 1): FileNode {
 }
 
 function renderSidebar() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -67,11 +74,15 @@ describe("Sidebar", () => {
 
   it("names the reason when the tree fails to load", async () => {
     useUiStore.getState().selectRepo(7);
-    mocked.tree.mockRejectedValue(new ApiError(500, "internal", "the parser is not reachable"));
+    mocked.tree.mockRejectedValue(
+      new ApiError(500, "internal", "the parser is not reachable"),
+    );
 
     renderSidebar();
 
-    expect(await screen.findByText("The file tree did not load")).toBeInTheDocument();
+    expect(
+      await screen.findByText("The file tree did not load"),
+    ).toBeInTheDocument();
     expect(screen.getByText(/the parser is not reachable/)).toBeInTheDocument();
   });
 
@@ -79,7 +90,11 @@ describe("Sidebar", () => {
     useUiStore.getState().selectRepo(7);
     mocked.tree.mockResolvedValue({
       repoId: 7,
-      files: [file("src/lib/parse.ts", 4), file("src/index.ts", 2), file("README.md", 0)],
+      files: [
+        file("src/lib/parse.ts", 4),
+        file("src/index.ts", 2),
+        file("README.md", 0),
+      ],
     });
 
     renderSidebar();
@@ -129,6 +144,30 @@ describe("Sidebar", () => {
     expect(state.selectedFunctionId).toBeNull();
   });
 
+  it("brings a file selected from somewhere else into view", async () => {
+    // ⌘K can land on a file hundreds of rows down a tree the reader never
+    // scrolled: the card appeared and the index did not move, so the two
+    // disagreed about where the reader was.
+    const scrollIntoView = vi.fn();
+    vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(
+      scrollIntoView,
+    );
+
+    useUiStore.getState().selectRepo(7);
+    const target = file("src/index.ts", 2);
+    mocked.tree.mockResolvedValue({ repoId: 7, files: [target] });
+
+    renderSidebar();
+    await screen.findByText("index.ts");
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    useUiStore.getState().selectFile(target.id);
+
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+    });
+  });
+
   it("shows no count badge for a file with no functions", async () => {
     useUiStore.getState().selectRepo(7);
     mocked.tree.mockResolvedValue({ repoId: 7, files: [file("README.md", 0)] });
@@ -143,7 +182,9 @@ describe("Sidebar", () => {
     const user = userEvent.setup();
     renderSidebar();
 
-    await user.click(await screen.findByRole("button", { name: /find a function/i }));
+    await user.click(
+      await screen.findByRole("button", { name: /find a function/i }),
+    );
     expect(useUiStore.getState().paletteOpen).toBe(true);
   });
 });

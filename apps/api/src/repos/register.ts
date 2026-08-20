@@ -56,7 +56,15 @@ export async function runParser(
   try {
     await run(
       bin,
-      ["--repo", githubUrl, "--repo-url", githubUrl, "--write", "--format", "summary"],
+      [
+        "--repo",
+        githubUrl,
+        "--repo-url",
+        githubUrl,
+        "--write",
+        "--format",
+        "summary",
+      ],
       { timeout },
     );
   } catch (err) {
@@ -74,5 +82,28 @@ function stderrTail(err: unknown): string {
   if (typeof stderr !== "string") {
     return "";
   }
-  return stderr.split("\n").filter(Boolean).slice(-STDERR_TAIL_LINES).join("\n");
+  const lines = stderr.split("\n").filter(Boolean);
+  return failureReason(lines) ?? lines.slice(-STDERR_TAIL_LINES).join("\n");
+}
+
+/**
+ * The reason out of the parser's zap JSON, rather than the log itself.
+ *
+ * Every line is a JSON object; the last one carrying an `error` is the failure.
+ * Its last line is the one that says why -- git leads with "Cloning into
+ * '/tmp/…'" and puts the actual "fatal: …" underneath.
+ */
+function failureReason(lines: readonly string[]): string | undefined {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let reason: unknown;
+    try {
+      reason = (JSON.parse(lines[i]!) as { error?: unknown }).error;
+    } catch {
+      continue; // not a log line
+    }
+    if (typeof reason === "string" && reason.trim() !== "") {
+      return reason.split("\n").filter(Boolean).at(-1);
+    }
+  }
+  return undefined;
 }

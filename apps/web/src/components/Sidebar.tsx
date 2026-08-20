@@ -1,5 +1,12 @@
-import { useMemo, useState } from "react";
-import { ChevronRight, FileCode2, Folder, FolderOpen, Map, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChevronRight,
+  FileCode2,
+  Folder,
+  FolderOpen,
+  Map,
+  Search,
+} from "lucide-react";
 import { ApiError } from "../lib/api";
 import { cn } from "../lib/cn";
 import { useRepoTree } from "../lib/repos";
@@ -7,8 +14,18 @@ import { buildTree, directoryPaths, type TreeEntry } from "../lib/tree";
 import { useUiStore } from "../store/ui";
 import { RepoPicker } from "./RepoPicker";
 import { Button } from "./ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "./ui/collapsible";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "./ui/empty";
 import { Kbd } from "./ui/kbd";
 import {
   Sidebar as SidebarShell,
@@ -52,7 +69,8 @@ export function Sidebar() {
         <RepoPicker />
       </SidebarHeader>
 
-      <SidebarContent>
+      {/* Eases the programmatic jump above; a wheel is unaffected by it. */}
+      <SidebarContent className="motion-safe:scroll-smooth">
         <SidebarGroup>
           <SidebarGroupContent>
             <TreeBody repoId={selectedRepoId} query={tree} entries={entries} />
@@ -141,8 +159,8 @@ function TreeBody({
         <EmptyHeader>
           <EmptyTitle>No files to chart</EmptyTitle>
           <EmptyDescription>
-            The parser found nothing it can read here. TypeScript is the only language it extracts
-            today.
+            The parser found nothing it can read here. TypeScript is the only
+            language it extracts today.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -156,7 +174,8 @@ function Tree({ entries }: { entries: TreeEntry[] }) {
   // Top-level directories start open: a tree that is entirely collapsed on
   // arrival makes the reader click before it has told them anything.
   const [open, setOpen] = useState<Set<string>>(
-    () => new Set(directoryPaths(entries).filter((path) => !path.includes("/"))),
+    () =>
+      new Set(directoryPaths(entries).filter((path) => !path.includes("/"))),
   );
 
   const toggle = (path: string) =>
@@ -175,6 +194,11 @@ function Tree({ entries }: { entries: TreeEntry[] }) {
   );
 }
 
+/** Selection on a tree row lands as a colour change, and an instant one reads
+ *  as a repaint rather than a response. Shared so the two row kinds cannot
+ *  drift apart. */
+const ROW_MOTION = "motion-safe:transition-colors motion-safe:duration-micro";
+
 function Node({
   entry,
   open,
@@ -187,13 +211,25 @@ function Node({
   const selectedFileId = useUiStore((state) => state.selectedFileId);
   const toggleFile = useUiStore((state) => state.toggleFile);
 
-  if (entry.kind === "file") {
-    const active = entry.file.id === selectedFileId;
+  const active = entry.kind === "file" && entry.file.id === selectedFileId;
 
+  // ⌘K can land on a file hundreds of rows down a tree the reader never
+  // scrolled. The card appeared and the tree did not move, so the index and the
+  // canvas disagreed about where the reader was. `block: "nearest"` leaves a
+  // row alone when it is already on screen; the container eases the travel.
+  const row = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (active) {
+      row.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [active]);
+
+  if (entry.kind === "file") {
     return (
-      <SidebarMenuItem>
+      <SidebarMenuItem ref={row}>
         <SidebarMenuButton
           isActive={active}
+          className={ROW_MOTION}
           // Clicking the open file again closes its card and clears the
           // canvas, the same way every card on the canvas closes itself.
           onClick={() => toggleFile(entry.file.id)}
@@ -204,7 +240,9 @@ function Node({
         </SidebarMenuButton>
         {/* Nothing to count is worth no ink. */}
         {entry.file.functionCount > 0 ? (
-          <SidebarMenuBadge className="tabular-nums">{entry.file.functionCount}</SidebarMenuBadge>
+          <SidebarMenuBadge className="tabular-nums">
+            {entry.file.functionCount}
+          </SidebarMenuBadge>
         ) : null}
       </SidebarMenuItem>
     );
@@ -217,7 +255,7 @@ function Node({
       <Collapsible open={isOpen} onOpenChange={() => toggle(entry.path)}>
         <CollapsibleTrigger
           render={
-            <SidebarMenuButton className="group/dir">
+            <SidebarMenuButton className={cn("group/dir", ROW_MOTION)}>
               <ChevronRight
                 strokeWidth={1.5}
                 className={cn(
@@ -247,7 +285,12 @@ function Node({
               <li>, which is invalid and which browsers repair unpredictably. */}
           <SidebarMenuSub>
             {entry.children.map((child) => (
-              <Node key={child.path} entry={child} open={open} toggle={toggle} />
+              <Node
+                key={child.path}
+                entry={child}
+                open={open}
+                toggle={toggle}
+              />
             ))}
           </SidebarMenuSub>
         </CollapsibleContent>

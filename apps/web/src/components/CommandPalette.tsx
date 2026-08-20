@@ -31,21 +31,26 @@ export function CommandPalette() {
   const selectFile = useUiStore((state) => state.selectFile);
   const toggleRoot = useUiStore((state) => state.toggleRoot);
 
-  // Local, and gone with the component when it closes -- a palette that
-  // reopens on its last search is answering a question the reader stopped
-  // asking.
+  // A palette that reopens on its last search is answering a question the
+  // reader stopped asking. This component stays mounted while closed -- only
+  // its tree goes -- so the query has to be cleared on the way out.
   const [typed, setTyped] = useState("");
   const query = useDebounced(typed);
   const search = useSearch(selectedRepoId, query);
 
   useHotkey(() => setPaletteOpen(true));
 
+  const close = () => {
+    setTyped("");
+    setPaletteOpen(false);
+  };
+
   const choose = (result: SearchResult) => {
     // File first: `selectFile` clears the map, so setting the function before
     // it would immediately throw the selection away.
     selectFile(result.fileId);
     toggleRoot(result.id);
-    setPaletteOpen(false);
+    close();
   };
 
   // Rendered only while open, rather than left mounted with `open={false}`.
@@ -62,7 +67,7 @@ export function CommandPalette() {
   return (
     <CommandDialog
       open
-      onOpenChange={setPaletteOpen}
+      onOpenChange={(next) => (next ? setPaletteOpen(true) : close())}
       title="Find a function"
       description="Search every function in this repository by name."
       // Wider than a command menu of one-word actions: every row carries a
@@ -105,7 +110,11 @@ export function CommandPalette() {
  *  `Command.Empty`, which only renders once its own input has a value -- so
  *  "type something" would be the one state it could never show. */
 function Message({ children }: { children: React.ReactNode }) {
-  return <div className="py-6 text-center text-sm text-muted-foreground">{children}</div>;
+  return (
+    <div className="py-6 text-center text-sm text-muted-foreground">
+      {children}
+    </div>
+  );
 }
 
 /**
@@ -128,7 +137,11 @@ function Results({
   onChoose: (result: SearchResult) => void;
 }) {
   if (repoId === null) {
-    return <Message>Choose a repository first — search looks inside one at a time.</Message>;
+    return (
+      <Message>
+        Choose a repository first — search looks inside one at a time.
+      </Message>
+    );
   }
 
   if (typed.trim() === "") {
@@ -192,15 +205,22 @@ function Results({
           className="gap-3 data-selected:bg-accent data-selected:ring-1 data-selected:ring-primary/40"
         >
           <span className="min-w-0 flex-1">
-            <span className="block truncate font-mono text-xs text-foreground">{result.name}</span>
+            <span className="block truncate font-mono text-xs text-foreground">
+              {result.name}
+            </span>
             {/* The path always, the qualified name only when it says more than
                 the name does -- `Repo.sync` earns it, `getUser` does not. */}
             <span className="block truncate font-mono text-[10px] text-muted-foreground">
-              {result.qualifiedName !== result.name ? `${result.qualifiedName} · ` : ""}
+              {result.qualifiedName !== result.name
+                ? `${result.qualifiedName} · `
+                : ""}
               {result.path}
             </span>
           </span>
-          <Badge variant="outline" className="shrink-0 font-mono text-[10px] tabular-nums">
+          <Badge
+            variant="outline"
+            className="shrink-0 font-mono text-[10px] tabular-nums"
+          >
             {result.startLine}
           </Badge>
         </CommandItem>

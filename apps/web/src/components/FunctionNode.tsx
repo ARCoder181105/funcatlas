@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Code2, CircleDashed } from "lucide-react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { cn } from "../lib/cn";
-import { NODE_HEIGHT, type GraphNodeData } from "../lib/graph";
+import { NODE_HEIGHT, sameNodeData, type GraphNodeData } from "../lib/graph";
 import { DURATION, useMotionEnabled, useMotionTransition } from "../lib/motion";
 import { useUiStore } from "../store/ui";
 import { CodeBlock } from "./CodeBlock";
@@ -24,8 +24,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 function Anchors() {
   return (
     <>
-      <Handle type="target" position={Position.Left} className="!size-1.5 !border-0 !bg-border" />
-      <Handle type="source" position={Position.Right} className="!size-1.5 !border-0 !bg-border" />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!size-1.5 !border-0 !bg-border"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!size-1.5 !border-0 !bg-border"
+      />
     </>
   );
 }
@@ -47,7 +55,8 @@ function FunctionCard({ data }: NodeProps<GraphNodeData>) {
   const transition = useMotionTransition("spring");
   const animated = useMotionEnabled();
 
-  const active = data.functionId !== null && data.functionId === selectedFunctionId;
+  const active =
+    data.functionId !== null && data.functionId === selectedFunctionId;
 
   return (
     <motion.div
@@ -77,13 +86,18 @@ function FunctionCard({ data }: NodeProps<GraphNodeData>) {
     >
       <Anchors />
 
-      <div className="flex shrink-0 items-center gap-1 pr-1.5" style={{ height: NODE_HEIGHT }}>
+      <div
+        className="flex shrink-0 items-center gap-1 pr-1.5"
+        style={{ height: NODE_HEIGHT }}
+      >
         <button
           type="button"
           // Grows the map rather than replacing it, and closes again on a
           // second click. Several functions stay open at once; the map is
           // their union.
-          onClick={() => data.functionId !== null && toggleFunction(data.functionId)}
+          onClick={() =>
+            data.functionId !== null && toggleFunction(data.functionId)
+          }
           aria-expanded={data.isLeaf ? undefined : data.expanded}
           aria-label={expandLabel(data.label, data.expanded, data.isLeaf)}
           className={cn(
@@ -94,10 +108,13 @@ function FunctionCard({ data }: NodeProps<GraphNodeData>) {
           )}
         >
           <span className="min-w-0 flex-1">
-            <span className="block truncate font-mono text-xs text-foreground">{data.label}</span>
+            <span className="block truncate font-mono text-xs text-foreground">
+              {data.label}
+            </span>
             {/* The qualified name only when it says more than the name does --
                 `Repo.sync` earns a second line, `getUser` does not. */}
-            {data.qualifiedName !== null && data.qualifiedName !== data.label ? (
+            {data.qualifiedName !== null &&
+            data.qualifiedName !== data.label ? (
               <span className="block truncate font-mono text-[10px] text-muted-foreground">
                 {data.qualifiedName}
               </span>
@@ -121,10 +138,14 @@ function FunctionCard({ data }: NodeProps<GraphNodeData>) {
             render={
               <button
                 type="button"
-                onClick={() => data.functionId !== null && toggleCode(data.functionId)}
+                onClick={() =>
+                  data.functionId !== null && toggleCode(data.functionId)
+                }
                 aria-expanded={data.showCode}
                 aria-label={
-                  data.showCode ? `${data.label} — hide its source` : `${data.label} — show its source`
+                  data.showCode
+                    ? `${data.label} — hide its source`
+                    : `${data.label} — show its source`
                 }
                 className={cn(
                   "nodrag flex size-7 shrink-0 items-center justify-center rounded-md",
@@ -137,7 +158,9 @@ function FunctionCard({ data }: NodeProps<GraphNodeData>) {
               </button>
             }
           />
-          <TooltipContent side="top">{data.showCode ? "Hide source" : "Show source"}</TooltipContent>
+          <TooltipContent side="top">
+            {data.showCode ? "Hide source" : "Show source"}
+          </TooltipContent>
         </Tooltip>
       </div>
 
@@ -153,7 +176,10 @@ function FunctionCard({ data }: NodeProps<GraphNodeData>) {
           transition={{ duration: DURATION.panel, ease: "easeOut" }}
           className="min-h-0 flex-1 border-t border-border"
         >
-          <CodeBlock functionId={data.functionId} showAll={data.showAllSource} />
+          <CodeBlock
+            functionId={data.functionId}
+            showAll={data.showAllSource}
+          />
         </motion.div>
       ) : null}
     </motion.div>
@@ -206,7 +232,9 @@ function Ghost({ data }: NodeProps<GraphNodeData>) {
               <span className="block truncate font-mono text-xs text-confidence-unresolved">
                 {data.label}
               </span>
-              <span className="block text-[10px] text-confidence-unresolved/80">unresolved</span>
+              <span className="block text-[10px] text-confidence-unresolved/80">
+                unresolved
+              </span>
             </span>
           </motion.div>
         }
@@ -214,7 +242,8 @@ function Ghost({ data }: NodeProps<GraphNodeData>) {
       <TooltipContent side="top">
         <p className="font-mono text-xs">{data.label}</p>
         <p className="text-xs">
-          The call is real, but which function it reaches could not be determined — {sites}.
+          The call is real, but which function it reaches could not be
+          determined — {sites}.
         </p>
       </TooltipContent>
     </Tooltip>
@@ -232,7 +261,7 @@ function Ghost({ data }: NodeProps<GraphNodeData>) {
  * card inside it stays put.
  */
 const sameCard = (a: NodeProps<GraphNodeData>, b: NodeProps<GraphNodeData>) =>
-  a.data === b.data && a.selected === b.selected;
+  sameNodeData(a.data, b.data) && a.selected === b.selected;
 
 export const FunctionNode = memo(FunctionCard, sameCard);
 export const GhostNode = memo(Ghost, sameCard);

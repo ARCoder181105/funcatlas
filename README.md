@@ -7,9 +7,10 @@ click the card to get a mind-map of its functions, click a function to read its 
 Built for one problem: large codebases don't fit in your head, and grep or go-to-definition only
 ever shows you one file at a time — never the shape of the whole thing.
 
-**Status:** in development. The backend works end to end — you can log in, register a repository,
-and walk its call graph over HTTP. There is no UI yet, so it is not usable end-to-end *as a
-product*.
+**Status:** in development, and usable. Log in, point it at a public TypeScript repository, and
+explore the call graph on the canvas — file tree to card to function mind-map to highlighted source,
+with ⌘K to find a function by name. Phase 4 makes it self-updating; until then a repository is
+charted once, when you register it.
 
 ## Progress
 
@@ -19,7 +20,7 @@ product*.
 | 1 | Go + tree-sitter parser, sandbox hardening | done |
 | 2 | Postgres persistence, call resolution | done |
 | 3a | GitHub OAuth, Redis sessions, the graph API | done |
-| 3b | React Flow canvas, search UI | next |
+| 3b | React Flow canvas, search UI | done |
 | 4 | Webhooks, job queue, security hardening | not started |
 | 5 | Go, Rust and Python — extraction only | not started |
 
@@ -80,7 +81,15 @@ Parse a fixture without touching the API:
 make go-run REPO=./services/parser/testdata/sample   # emits out.json
 ```
 
-Or drive the whole thing over HTTP. `/auth/dev-login` exists outside production so this works
+Or bring the whole thing up and use it — infra, migrations, parser binary, API and web in one:
+
+```bash
+make start                                           # then open http://localhost:5173
+```
+
+Sign in with **Continue as a local dev user**, chart a public repository, and explore it.
+
+Or drive it over HTTP instead. `/auth/dev-login` exists outside production so this works
 without a GitHub OAuth app:
 
 ```bash

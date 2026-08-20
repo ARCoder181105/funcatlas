@@ -211,8 +211,10 @@ function RegisterDialog() {
             </FieldDescription>
           </Field>
 
+          {/* break-words: a reason can carry a path with no break opportunity,
+              and it ran off the dialog and off the viewport. */}
           {register.isError ? (
-            <p className="text-sm text-destructive">
+            <p className="text-sm break-words text-destructive">
               {shortName(url.trim()) || "That repository"} was not charted.{" "}
               {messageFor(register.error)}
             </p>

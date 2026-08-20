@@ -20,8 +20,21 @@ afterEach(cleanup);
 // setTimeout, where no test can catch it -- it surfaces as an unhandled error
 // attributed to whichever test happened to be running. Nothing is animating
 // here, so an empty list is the honest answer.
-if (typeof Element !== "undefined" && Element.prototype.getAnimations === undefined) {
+if (
+  typeof Element !== "undefined" &&
+  Element.prototype.getAnimations === undefined
+) {
   Element.prototype.getAnimations = () => [];
+}
+
+// jsdom has no scrolling, so it ships no `scrollIntoView`. The sidebar calls it
+// to bring a ⌘K-selected file into view. A no-op that exists is enough: there
+// is no viewport here to assert a position against, only that it was asked.
+if (
+  typeof Element !== "undefined" &&
+  Element.prototype.scrollIntoView === undefined
+) {
+  Element.prototype.scrollIntoView = () => {};
 }
 
 // Also absent from jsdom, and both react-resizable-panels and React Flow
@@ -48,14 +61,18 @@ if (typeof globalThis.ResizeObserver === "undefined") {
 //
 // The identity matrix is the honest answer here: nothing in these tests pans or
 // zooms the canvas.
-if (typeof window !== "undefined" && (window as { DOMMatrixReadOnly?: unknown }).DOMMatrixReadOnly === undefined) {
+if (
+  typeof window !== "undefined" &&
+  (window as { DOMMatrixReadOnly?: unknown }).DOMMatrixReadOnly === undefined
+) {
   class IdentityMatrix {
     readonly m11 = 1;
     readonly m22 = 1;
     readonly m41 = 0;
     readonly m42 = 0;
   }
-  (window as unknown as { DOMMatrixReadOnly: unknown }).DOMMatrixReadOnly = IdentityMatrix;
+  (window as unknown as { DOMMatrixReadOnly: unknown }).DOMMatrixReadOnly =
+    IdentityMatrix;
 }
 
 if (typeof window !== "undefined" && window.matchMedia === undefined) {

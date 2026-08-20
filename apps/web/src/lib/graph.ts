@@ -79,7 +79,10 @@ export function functionCardWidth(
   qualifiedName: string | null,
   isRoot = false,
 ): number {
-  const sublabel = qualifiedName !== null && qualifiedName !== label ? qualifiedName.length : 0;
+  const sublabel =
+    qualifiedName !== null && qualifiedName !== label
+      ? qualifiedName.length
+      : 0;
   const text = Math.max(label.length * LABEL_CHAR, sublabel * SUBLABEL_CHAR);
   const chrome = CARD_CHROME + (isRoot ? ROOT_BADGE : 0);
 
@@ -154,17 +157,27 @@ export function codeCardSize(
   const lines = source.split("\n");
   // Tabs are what TypeScript in the wild is actually indented with, and one
   // counts as far more than one character on screen.
-  const longest = Math.max(...lines.map((line) => line.replace(/\t/g, "  ").length));
-  const shown = showAll ? lines.length : Math.min(lines.length, CODE_PREVIEW_LINES);
+  const longest = Math.max(
+    ...lines.map((line) => line.replace(/\t/g, "  ").length),
+  );
+  const shown = showAll
+    ? lines.length
+    : Math.min(lines.length, CODE_PREVIEW_LINES);
   const more = lines.length > shown ? MORE_ROW : 0;
 
   return {
     // No ceiling here either: a line the card cannot show is a line the reader
     // came to read.
-    width: Math.max(roomy(longest * CHAR_WIDTH + GUTTER + PADDING), CODE_MIN_WIDTH),
+    width: Math.max(
+      roomy(longest * CHAR_WIDTH + GUTTER + PADDING),
+      CODE_MIN_WIDTH,
+    ),
     // No ceiling once the reader has asked for the whole thing. That ceiling is
     // what the scrollbar used to hide behind.
-    height: Math.max(roomy(shown * LINE_HEIGHT + HEADER + PADDING) + more, CODE_MIN_HEIGHT),
+    height: Math.max(
+      roomy(shown * LINE_HEIGHT + HEADER + PADDING) + more,
+      CODE_MIN_HEIGHT,
+    ),
   };
 }
 
@@ -234,13 +247,24 @@ export function fileCardSize(
   /** No answer yet, which is a different body from an answer of "none". */
   pending = false,
 ): { width: number; height: number } {
-  const longest = names.reduce((widest, name) => Math.max(widest, name.length), 0);
-  const width = Math.max(longest * LABEL_CHAR + ROW_CHROME, FILE_CARD_MIN_WIDTH);
+  const longest = names.reduce(
+    (widest, name) => Math.max(widest, name.length),
+    0,
+  );
+  const width = Math.max(
+    longest * LABEL_CHAR + ROW_CHROME,
+    FILE_CARD_MIN_WIDTH,
+  );
 
   // The path wraps rather than truncating -- it is an identifier and the tail
   // is what disambiguates it -- so a long one makes the header taller.
-  const pathLines = Math.max(1, Math.ceil((path.length * LABEL_CHAR) / (width - 72)));
-  const rows = showAll ? names.length : Math.min(names.length, FILE_PREVIEW_ROWS);
+  const pathLines = Math.max(
+    1,
+    Math.ceil((path.length * LABEL_CHAR) / (width - 72)),
+  );
+  const rows = showAll
+    ? names.length
+    : Math.min(names.length, FILE_PREVIEW_ROWS);
   const more = names.length > rows ? MORE_ROW : 0;
   const body = pending
     ? PENDING_BODY
@@ -248,7 +272,10 @@ export function fileCardSize(
       ? EMPTY_BODY
       : rows * ROW_HEIGHT + more;
 
-  return { width, height: FILE_HEADER + pathLines * PATH_LINE + body + LIST_PADDING };
+  return {
+    width,
+    height: FILE_HEADER + pathLines * PATH_LINE + body + LIST_PADDING,
+  };
 }
 
 /** Where the file card sits: its own width clear of the first column, so
@@ -312,6 +339,52 @@ export interface GraphNodeData {
   size: { width: number; height: number };
 }
 
+/**
+ * Whether two node data objects say the same thing.
+ *
+ * `buildGraph` rebuilds every node's data whenever anything on the map changes,
+ * so a `memo` keyed on reference re-rendered every card when any one card
+ * changed -- and a card showing source re-ran its highlighted block, which is
+ * the blink the reader sees on the cards they did *not* touch.
+ *
+ * Compares by value, one level into the plain objects and arrays the data
+ * carries (`size`, `callLines`), rather than field by field: a list of fields
+ * goes stale the first time one is added and the staleness is invisible.
+ *
+ * Generic because the file card's data is a different shape with the same
+ * problem.
+ */
+export function sameNodeData<T extends object>(a: T, b: T): boolean {
+  if (a === b) return true;
+
+  const keys = Object.keys(a) as (keyof T)[];
+  if (keys.length !== Object.keys(b).length) return false;
+
+  return keys.every((key) => {
+    const left: unknown = a[key];
+    const right: unknown = b[key];
+    if (left === right) return true;
+
+    if (Array.isArray(left) && Array.isArray(right)) {
+      return (
+        left.length === right.length &&
+        left.every((item, i) => item === right[i])
+      );
+    }
+    if (isRecord(left) && isRecord(right)) {
+      const inner = Object.keys(left);
+      return (
+        inner.length === Object.keys(right).length &&
+        inner.every((name) => left[name] === right[name])
+      );
+    }
+    return false;
+  });
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 export interface BuiltGraph {
   nodes: Node<GraphNodeData>[];
   edges: Edge[];
@@ -356,7 +429,10 @@ export function buildGraph(
   // as their queries resolve and the pending ones are filtered out, so the
   // first element is whichever came back first, not what the reader opened --
   // measuring from the wrong one prunes the map to a subtree, silently.
-  const roots = rootIds.length > 0 ? rootIds : responses.slice(0, 1).map((r) => r.functionId);
+  const roots =
+    rootIds.length > 0
+      ? rootIds
+      : responses.slice(0, 1).map((r) => r.functionId);
   if (roots.length === 0) {
     return { nodes: [], edges: [], truncated: 0 };
   }
@@ -370,7 +446,10 @@ export function buildGraph(
   const expandedIds = new Set(responses.map((response) => response.functionId));
   const leafIds = new Set(
     responses
-      .filter((response) => response.reachable.length <= 1 && response.edges.length === 0)
+      .filter(
+        (response) =>
+          response.reachable.length <= 1 && response.edges.length === 0,
+      )
       .map((response) => response.functionId),
   );
 
@@ -397,7 +476,11 @@ export function buildGraph(
       }
       const key = `${fn.viaFunctionId}->${fn.id}`;
       if (!linked.has(key)) {
-        linked.set(key, { from: fn.viaFunctionId, to: fn.id, confidence: fn.confidence });
+        linked.set(key, {
+          from: fn.viaFunctionId,
+          to: fn.id,
+          confidence: fn.confidence,
+        });
       }
     }
   }
@@ -421,7 +504,10 @@ export function buildGraph(
   // would float, disconnected, as if they were roots of their own.
   const unique = [...byId.values()]
     .filter((fn) => depths.has(fn.id))
-    .sort((a, b) => (depths.get(a.id) ?? 0) - (depths.get(b.id) ?? 0) || a.id - b.id);
+    .sort(
+      (a, b) =>
+        (depths.get(a.id) ?? 0) - (depths.get(b.id) ?? 0) || a.id - b.id,
+    );
   const kept = unique.slice(0, NODE_CEILING);
   const truncated = unique.length - kept.length;
   const keptIds = new Set(kept.map((fn) => fn.id));
@@ -429,7 +515,10 @@ export function buildGraph(
   // One ghost group per expanded function, so an unresolved call hangs off the
   // function that actually made it.
   const ghostGroups = responses
-    .filter((response) => depths.has(response.functionId) && !collapsed.has(response.functionId))
+    .filter(
+      (response) =>
+        depths.has(response.functionId) && !collapsed.has(response.functionId),
+    )
     .map((response) => ({
       callerId: response.functionId,
       ghosts: collectGhosts(response.edges),
@@ -451,7 +540,9 @@ export function buildGraph(
       ),
     ),
     ...ghostGroups.flatMap(({ callerId, ghosts }) =>
-      ghosts.map((ghost) => toGhostNode(ghost, (depths.get(callerId) ?? 0) + 1)),
+      ghosts.map((ghost) =>
+        toGhostNode(ghost, (depths.get(callerId) ?? 0) + 1),
+      ),
     ),
   ]);
 
@@ -576,7 +667,10 @@ function toFunctionNode(
   const code = codeCardSize(source, showAllSource);
   const size = showCode
     ? { width: code.width, height: NODE_HEIGHT + code.height }
-    : { width: functionCardWidth(fn.name, fn.qualifiedName, depth === 0), height: NODE_HEIGHT };
+    : {
+        width: functionCardWidth(fn.name, fn.qualifiedName, depth === 0),
+        height: NODE_HEIGHT,
+      };
 
   return {
     id: functionId(fn.id),
@@ -676,7 +770,8 @@ function layOut(nodes: Node<GraphNodeData>[]): Node<GraphNodeData>[] {
   return nodes;
 }
 
-const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+const sum = (values: number[]) =>
+  values.reduce((total, value) => total + value, 0);
 
 /**
  * One edge per reached function, from the function it was reached through.

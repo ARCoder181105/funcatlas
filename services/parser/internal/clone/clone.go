@@ -32,6 +32,9 @@ func (c *Cloner) Prepare(repo string) (string, error) {
 		}
 		c.log.Info("cloning repo", zap.String("url", repo))
 		cmd := exec.Command("git", "clone", "--depth", "1", repo, dir)
+		// A private or missing repo makes git ask for credentials. On a host with a
+		// terminal that blocks until PARSE_TIMEOUT_MS; fail immediately instead.
+		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=", "SSH_ASKPASS=")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return "", &CloneError{Msg: string(out)}
 		}
