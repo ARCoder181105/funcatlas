@@ -19,8 +19,8 @@ The old working name "CodeCanvas" is retired; do not reintroduce it.
 - [x] Phase 1 — Parser and isolation
 - [x] Phase 2 — Storage and resolution
 - [x] Phase 3a — API and auth
-- [~] Phase 3b — Canvas and search ← in progress (B0–B7 done, B8 left)
-- [ ] Phase 4 — Webhooks, queue, hardening
+- [x] Phase 3b — Canvas and search
+- [ ] Phase 4 — Webhooks, queue, hardening ← next
 - [ ] Phase 5 — Go, Rust, Python (extraction only; per-language resolution stays cut)
 
 Active task list: `TASKLIST.md`.
@@ -132,10 +132,18 @@ files over 1 MB skipped.
 
 ## Known gaps
 
-Updated as Phase 3b progresses. `TASKLIST.md` is the chunk-level truth; this is what outlives it.
+Phase 3b is closed. `TASKLIST.md` is the chunk-level truth; this is what outlives it.
 
-- **`FunctionCard.tsx` is a placeholder that nothing imports.** The file card ended up as a React
-  Flow node (`FileCard.tsx`), so this one has no job left. Delete it in B8 unless a use appears.
+- **Node data is compared by value, not by reference.** `buildGraph` rebuilds every node's data on
+  any change, so a `memo` keyed on reference re-rendered every card whenever one changed — and each
+  card showing source re-ran its highlighted block, which the reader saw as untouched cards
+  blinking. `sameNodeData` in `lib/graph.ts` is what both node memos use; keep it that way.
+- **Canvas state is persisted but never re-validated.** `store/ui.ts` restores the repository, file
+  and open branches through `zustand/persist`. Phase 4's re-parse reinserts functions under new ids,
+  so a restored branch can point at rows that are gone. See R34.
+- **A React Flow node's box must not use Framer's `layout`.** `layout` measures against the
+  viewport, and inside the canvas's panned and zoomed transform those deltas are wrong. Card growth
+  is a CSS transition on `width,height` under `motion-safe:`.
 - **A Base UI popup will not unmount on its own.** It keeps `data-closed`, stays on screen and goes
   on taking clicks, because it waits for an exit animation it never observes finishing. Both
   dialogs render their content only while open. Any new `Dialog`, `Popover` or `Sheet` needs the

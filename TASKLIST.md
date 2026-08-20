@@ -473,9 +473,9 @@ lands on that function with its source shown. The debounce hook has its own test
 
 ---
 
-## B8 — States, docs, and the exit gate  `[~]`
+## B8 — States, docs, and the exit gate  `[x]`
 
-**Progress.** Steps 1-4 are done and the gate has been part-run; steps 5-7 are open.
+**Progress.** All seven steps done. The recorded gate run is at the end of this section.
 
 - **States audited.** Every surface handles pending, error and empty. Spinners survive in exactly two
   places, both where no shape is knowable in advance: the palette while searching, and the repository
@@ -497,8 +497,10 @@ lands on that function with its source shown. The debounce hook has its own test
   dashed and dotted indistinguishable and had the reader reporting missing edges that were rendering
   correctly. The ground is plain now (`docs/CANVAS_DECISIONS.md` §4i, `docs/UI_GUIDE.md` §3.2).
 
-**Still open:** step 6 (`PLAN.md` result, `README.md`, `docs/RISKS.md`), step 7 (a clean end-to-end
-run of the exit test, recorded with numbers).
+- **Step 6, done.** `PLAN.md` carries the 3b result, `README.md` the status, `docs/RISKS.md` R32-R34.
+  `docs/UI_GUIDE.md` and the gate below both said "three signatures" and named the graticule as the
+  first — after step 5 cut it, which would have made this gate unpassable by the phase's own
+  decision. Reconciled: two signatures, and nothing promoted to fill the gap.
 
 **Why.** UI_GUIDE §3.3 calls the empty, loading and error states "the cool vs amateur line", and
 they are the easiest thing to leave half-done across six chunks. The docs are load-bearing for the
@@ -530,8 +532,9 @@ next phase and go stale the moment a phase closes.
 - open a function's mind-map and see all three edge styles, with at least one unresolved ghost;
 - click a function and read its highlighted source at the correct line numbers;
 - ⌘K, type a function name, land on it;
-- the three signatures from UI_GUIDE §3.2 are all present and legible — graticule, chart legend,
-  ghosts at the boundary — and a screenshot of the canvas is worth looking at;
+- the signatures from UI_GUIDE §3.2 are present and legible — chart legend, ghosts at the boundary —
+  and a screenshot of the canvas is worth looking at. There were three; step 5 cut the graticule, so
+  asking for it here would make the gate unpassable by the phase's own decision;
 - `pnpm -r build`, `pnpm -r test` and `pnpm -r lint` all clean.
 
 **Watch for.**
@@ -541,3 +544,40 @@ next phase and go stale the moment a phase closes.
 - Docs claiming the phase did something it did not. The commands in `CLAUDE.md` are the arbiter.
 - Design drift across eight chunks. Colour invented in chunk seven does not match colour chosen in
   chunk one; the B1 hex grep is the check, and it runs again here.
+
+---
+
+### The gate run — 2026-08-21, real Chrome, `honojs/hono`
+
+`ARCoder181105/funcatlas` could not be the subject: it is private, and the parser clones anonymously
+over public HTTPS. `honojs/hono` replaced it and is the answer to R3 — TypeScript-first, 355 files,
+and dense in the barrel re-exports the resolver is weakest at.
+
+| Step | Result |
+|---|---|
+| Sign out, sign in | Both clean; sign-in card is wordmark, one line, legend, two buttons, nothing else |
+| Register and parse | 355 files, 1,460 functions, 5,906 edges |
+| Confidence spread | exact 1,106 · name_match 150 · unresolved 4,650 — all three non-zero |
+| Tree → file → card | `src/context.ts`, 10 functions, `res` at 403/414/745 proving `overload_index` |
+| Mind-map, three edge styles | `resolveCallback` in `src/utils/html.ts`: solid to `raw`, dashed to `c`, six dotted ghosts |
+| Source at the right lines | `src/utils/html.ts 142–182`, gutter starting at 142, matching the search hit |
+| ⌘K | Opens, focuses, 3 matches with path and line, Enter lands on the right one, leaves the DOM |
+| Signatures | Legend and boundary ghosts both legible against the plain ground |
+| `pnpm -r build` / `test` / `lint` | All clean — 143 web, 105 API, Go all `ok` |
+
+**Six defects came out of the run, five real.** All fixed in this branch, each with its test:
+
+1. **The clone waited for credentials that could not arrive.** A private or missing repository makes
+   git prompt; unprompted that blocks until `PARSE_TIMEOUT_MS`. R32.
+2. **The failure dialog printed the parser's zap JSON**, stack trace included, off the viewport.
+3. **The reader's selection did not survive a reload** — repository, file and every open branch gone.
+4. **The palette kept its last query**, so a second search appended to the first.
+5. **One card's change re-rendered every card.** Both node memos compared `data` by reference and
+   `buildGraph` rebuilds all of it, so opening one source re-ran every other card's highlighted
+   block. Confirmed by DOM mutation counts before and after: now only the toggled node mutates.
+6. **Not a defect:** a repository charted but not selected, seen once and not reproducible — the
+   auto-select at `RepoPicker.tsx` works. Recorded because it was reported here first.
+
+Motion was polished in the same pass at the reader's request: the file card now eases between sizes
+as the function card already did, tree rows transition on selection, and a file reached from ⌘K is
+scrolled into view.

@@ -162,7 +162,7 @@ Two things to know about generated files:
 
 A single centred card: wordmark, one line saying what the tool does, the confidence legend, and one
 **Sign in with GitHub** button. Nothing else. No hero, no feature grid, no footer, and no graticule
-— see §3.2 signature 1 for why the ruled surface stays on the canvas.
+— which is now true of the canvas too; see the graticule note in §3.2.
 
 The legend earns its place here where a background texture did not: it is the notation the canvas is
 about to use, and reading it once beats decoding it later.
@@ -199,20 +199,17 @@ brochure.
   hides its subtree without forgetting it. `docs/CANVAS_DECISIONS.md` §1 and §1b carry the model —
   read those before changing how the canvas grows.
 
-**The signature.** Three things, and nothing else in the UI competes with them:
+**The signature.** Two things, and nothing else in the UI competes with them:
 
-1. **The canvas is a ruled surface, not a dot grid.** A fine graticule at two scales, with depth
-   layers as faint ruled bands. The background says "measured", so nothing else has to.
-
-   **On the canvas and nowhere else.** A ruled grid behind a call graph encodes a measured plane; the
-   same grid behind a sign-in card encodes nothing, and §1.3 says to cut a decoration that does not.
-   It was on the sign-in screen for one commit and came off. It is drawn by React Flow's own
-   `Background` in SVG, so there is no CSS grid utility to reach for by accident.
-2. **A real chart legend**, bottom-left where a chart carries it, drawing the three line styles with
-   their names. An unexplained dotted line is noise; an explained one is the whole point.
-3. **Unresolved calls are drawn as uncharted territory** — ghost nodes at the map's edge, labelled
+1. **A real chart legend**, drawn where a chart carries it, showing the three line styles with their
+   names. An unexplained dotted line is noise; an explained one is the whole point.
+2. **Unresolved calls are drawn as uncharted territory** — ghost nodes at the map's edge, labelled
    with the callee name the parser saw, dotted and faded. Not hidden, not errors. The map shows its
    own boundary.
+
+There were three. **The ruled surface was signature 1 and was cut in B8** — see the graticule note
+above. Two signatures that survive contact with the drawing beat three where one of them fights it,
+and the count is not the point: nothing has been promoted to fill the gap, because nothing needed to.
 
 ### 3.3 States (the "cool vs amateur" line)
 - **Empty:** an invitation to act, in the interface's voice — "Chart a repository", not "No data".
@@ -288,6 +285,7 @@ Recorded so they are not re-proposed as if new, and not treated as mistakes.
   reasoning was sound — chart-makers built a formal notation for surveyed, reported and doubtful
   soundings, and our three tiers are the same three tiers. It was replaced on review: the palette
   read as muddy in practice, and the low-chroma bone-on-navy pairing did not carry the tier scale as
-  clearly as temperature does. The *idea* survives in the graticule and the legend (§3.2).
+  clearly as temperature does. The *idea* survives in the legend (§3.2) — it outlived the graticule,
+  which was cut in B8.
 - **Space Grotesk** as the display face. Dropped because it appears on every "reads as
   AI-generated" list, this document's §7 included.

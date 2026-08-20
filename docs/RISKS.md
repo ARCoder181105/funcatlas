@@ -31,6 +31,9 @@ it was.
 | **R16** | Grammar versions drift and break parsing silently. | Pinned in `go.mod`: `tree-sitter/go-tree-sitter` **v0.25.0**, `tree-sitter/tree-sitter-typescript` **v0.23.2**. The golden extraction tests fail loudly if a bump changes node kinds. |
 | **R17** | CI needs Docker for the integration tests and the migration check. | `ubuntu-latest` runners include Docker. `.github/workflows/go-ci.yml` runs a Postgres service container and a `migrate/migrate` container; the Go tests connect to it via `DATABASE_URL`. See R22. |
 | **R18** | UI direction was undefined, which is how products end up looking like scaffolding. | Decided in `docs/UI_GUIDE.md`: dark-mode-first, one signature accent, tokens in Tailwind config, Framer Motion used to explain rather than decorate. |
+| **R3** | **No benchmark repo had been named**, so "a ~300-file TypeScript project" in every NFR-1 target was not testable against anything real. | **`honojs/hono`.** Public, TypeScript-first, 355 files and 1,460 functions, and dense in exactly the barrel re-exports and default imports the resolver is weakest at — it produces all three tiers with non-zero counts (1,106 / 150 / 4,650). Chosen during the 3b gate because the obvious candidate, `ARCoder181105/funcatlas` itself, is private and the parser clones anonymously. The NFR-1 *timings* are still unmeasured; the repository they will be measured against is now fixed. |
+| **R32** | A private or missing repository made `git clone` ask for a username. Unprompted, that blocks until `PARSE_TIMEOUT_MS` and reports a timeout for what is really "no such repository". | The clone runs with `GIT_TERMINAL_PROMPT=0` and empty `GIT_ASKPASS` / `SSH_ASKPASS`, so git fails immediately with "terminal prompts disabled". Found by the 3b gate on its first action, against the project's own private repo. |
+| **R33** | The registration dialog rendered five lines of the parser's zap JSON, stack trace included, running off the dialog and off the viewport. `stderrTail` promised the caller "not enough to ship a log file" and did the opposite. | The reason is read out of the last log line carrying an `error`, and its last line is the one taken -- git leads with "Cloning into '/tmp/…'" and puts the real "fatal: …" underneath. Non-JSON stderr still falls back to the tail. |
 
 ---
 
@@ -44,7 +47,6 @@ Nothing outstanding -- R19 through R22 and R26 through R29 all closed; see Decid
 
 | | Risk | Notes |
 |---|---|---|
-| **R3** | **No benchmark repo has been named.** "A ~300-file TypeScript project" appears in every performance target and is not a real repository, so none of NFR-1 is actually testable. | Still open. Phase 2 closed against fixtures, which prove correctness but not the NFR-1 timings. Needs a public, TypeScript-first repo of roughly 300 files with enough re-exports and barrel files to exercise the resolver's weak spots. |
 | **R2** | Session strategy — Redis-backed or stateless JWT? | Default is Redis-backed: Redis is already running for the queue, and server-side sessions can be revoked. Confirm before writing the auth code. |
 | **R4** | The GitHub OAuth app does not exist yet. Manual setup: register it, record the client id and secret, set the redirect URI, generate a webhook secret. | Not code. Blocks all of Phase 3, so do it before starting, not during. |
 | **R15** | Canvas scale — even with expand-on-click, the first paint of a large repo's file tree needs virtualization. | State the node ceiling as a constant in code, not just in a document. Target is 2,000 visible nodes. |
@@ -60,6 +62,7 @@ Nothing outstanding -- R19 through R22 and R26 through R29 all closed; see Decid
 
 | | Risk | Notes |
 |---|---|---|
+| **R34** | **Restored canvas state is not re-validated.** The reader's repository, file and open branches now survive a reload (they were lost before, and rebuilding the map by hand every refresh was the complaint). Phase 4's re-parse deletes and reinserts functions under new ids, so a restored branch can point at rows that no longer exist. | Today the tree and graph queries answer 404 and the surfaces show their empty state, which is honest and does not crash. Phase 4 should drop persisted ids whose repository has been re-parsed since they were stored -- the re-parse already knows when it ran. |
 | **R31** | **A request that touches Redis hangs indefinitely when Redis is down.** ioredis retries forever, so `createSession` never settles: logging in leaves the button on "Signing in…" with no error, ever. Found in Phase 3b by stopping the container mid-session. | The API is the right place to fix it — a connect/command timeout so the request fails rather than hangs, and a 503 the UI can render. A client-side timeout would only paper over it. Belongs with Phase 4 hardening. |
 | **R5** | GitHub cannot reach `localhost`, so webhooks can't be tested locally without a tunnel. | `ngrok` or `smee.io`. Tooling, not code. |
 | **R12** | A webhook and a manual re-parse can fire on the same repo at once and corrupt the graph mid-transaction. | Needs a lock keyed by repo, held for the duration of the parse. |
