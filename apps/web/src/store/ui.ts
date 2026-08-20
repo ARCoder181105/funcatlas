@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 /**
  * What the reader has selected. Server state lives in TanStack Query; this is
@@ -87,7 +88,6 @@ interface UiState {
    *  breaks the moment the shortcut changes. */
   paletteOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
-
 }
 
 /**
@@ -107,83 +107,132 @@ const noMap = () => ({
   fullSourceIds: [] as number[],
 });
 
-const empty = () => ({ selectedRepoId: null, selectedFileId: null, ...noMap() });
+const empty = () => ({
+  selectedRepoId: null,
+  selectedFileId: null,
+  ...noMap(),
+});
 
-export const useUiStore = create<UiState>((set) => ({
-  ...empty(),
-  paletteOpen: false,
-  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+/** The whole selection survives a reload -- repository, file, and every branch
+ *  the reader opened. Rebuilding a map by hand after every refresh was the
+ *  complaint that put this here. */
+export const UI_STORAGE_KEY = "funcatlas-ui";
 
-  selectRepo: (selectedRepoId) => set({ ...empty(), selectedRepoId }),
+export const useUiStore = create<UiState>()(
+  persist(
+    (set) => ({
+      ...empty(),
+      paletteOpen: false,
+      setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
 
-  selectFile: (selectedFileId) => set({ ...noMap(), selectedFileId }),
+      selectRepo: (selectedRepoId) => set({ ...empty(), selectedRepoId }),
 
-  toggleFile: (id) =>
-    set((state) => ({ ...noMap(), selectedFileId: state.selectedFileId === id ? null : id })),
+      selectFile: (selectedFileId) => set({ ...noMap(), selectedFileId }),
 
-  selectFunction: (selectedFunctionId) =>
-    set(selectedFunctionId === null ? noMap() : { selectedFunctionId }),
+      toggleFile: (id) =>
+        set((state) => ({
+          ...noMap(),
+          selectedFileId: state.selectedFileId === id ? null : id,
+        })),
 
-  toggleRoot: (id) =>
-    set((state) => {
-      const isOpen = state.rootFunctionIds.includes(id) && !state.collapsedFunctionIds.includes(id);
+      selectFunction: (selectedFunctionId) =>
+        set(selectedFunctionId === null ? noMap() : { selectedFunctionId }),
 
-      if (isOpen) {
-        // Closing a branch collapses it rather than forgetting it, so
-        // reopening restores every generation the reader had explored.
-        return {
+      toggleRoot: (id) =>
+        set((state) => {
+          const isOpen =
+            state.rootFunctionIds.includes(id) &&
+            !state.collapsedFunctionIds.includes(id);
+
+          if (isOpen) {
+            // Closing a branch collapses it rather than forgetting it, so
+            // reopening restores every generation the reader had explored.
+            return {
+              selectedFunctionId: id,
+              collapsedFunctionIds: [...state.collapsedFunctionIds, id],
+            };
+          }
+
+          return {
+            selectedFunctionId: id,
+            rootFunctionIds: state.rootFunctionIds.includes(id)
+              ? state.rootFunctionIds
+              : [...state.rootFunctionIds, id],
+            expandedFunctionIds: state.expandedFunctionIds.includes(id)
+              ? state.expandedFunctionIds
+              : [...state.expandedFunctionIds, id],
+            collapsedFunctionIds: state.collapsedFunctionIds.filter(
+              (candidate) => candidate !== id,
+            ),
+          };
+        }),
+
+      toggleFunction: (id) =>
+        set((state) => {
+          const collapsed = state.collapsedFunctionIds.includes(id);
+          const opened = state.expandedFunctionIds.includes(id);
+
+          if (opened && !collapsed) {
+            // Collapse. Everything underneath stays in expandedFunctionIds and in
+            // the query cache, so reopening brings the whole subtree back in the
+            // state it was left in rather than one generation at a time.
+            return {
+              selectedFunctionId: id,
+              collapsedFunctionIds: [...state.collapsedFunctionIds, id],
+            };
+          }
+
+          return {
+            selectedFunctionId: id,
+            expandedFunctionIds: opened
+              ? state.expandedFunctionIds
+              : [...state.expandedFunctionIds, id],
+            collapsedFunctionIds: state.collapsedFunctionIds.filter(
+              (candidate) => candidate !== id,
+            ),
+          };
+        }),
+
+      toggleCode: (id) =>
+        set((state) => ({
           selectedFunctionId: id,
-          collapsedFunctionIds: [...state.collapsedFunctionIds, id],
-        };
-      }
+          codeFunctionIds: state.codeFunctionIds.includes(id)
+            ? state.codeFunctionIds.filter((candidate) => candidate !== id)
+            : [...state.codeFunctionIds, id],
+        })),
 
-      return {
-        selectedFunctionId: id,
-        rootFunctionIds: state.rootFunctionIds.includes(id)
-          ? state.rootFunctionIds
-          : [...state.rootFunctionIds, id],
-        expandedFunctionIds: state.expandedFunctionIds.includes(id)
-          ? state.expandedFunctionIds
-          : [...state.expandedFunctionIds, id],
-        collapsedFunctionIds: state.collapsedFunctionIds.filter((candidate) => candidate !== id),
-      };
+      toggleFileList: () =>
+        set((state) => ({ fileListExpanded: !state.fileListExpanded })),
+
+      toggleFullSource: (id) =>
+        set((state) => ({
+          fullSourceIds: state.fullSourceIds.includes(id)
+            ? state.fullSourceIds.filter((candidate) => candidate !== id)
+            : [...state.fullSourceIds, id],
+        })),
+
+      clearSelection: () => set({ ...empty() }),
     }),
-
-  toggleFunction: (id) =>
-    set((state) => {
-      const collapsed = state.collapsedFunctionIds.includes(id);
-      const opened = state.expandedFunctionIds.includes(id);
-
-      if (opened && !collapsed) {
-        // Collapse. Everything underneath stays in expandedFunctionIds and in
-        // the query cache, so reopening brings the whole subtree back in the
-        // state it was left in rather than one generation at a time.
-        return { selectedFunctionId: id, collapsedFunctionIds: [...state.collapsedFunctionIds, id] };
-      }
-
-      return {
-        selectedFunctionId: id,
-        expandedFunctionIds: opened ? state.expandedFunctionIds : [...state.expandedFunctionIds, id],
-        collapsedFunctionIds: state.collapsedFunctionIds.filter((candidate) => candidate !== id),
-      };
-    }),
-
-  toggleCode: (id) =>
-    set((state) => ({
-      selectedFunctionId: id,
-      codeFunctionIds: state.codeFunctionIds.includes(id)
-        ? state.codeFunctionIds.filter((candidate) => candidate !== id)
-        : [...state.codeFunctionIds, id],
-    })),
-
-  toggleFileList: () => set((state) => ({ fileListExpanded: !state.fileListExpanded })),
-
-  toggleFullSource: (id) =>
-    set((state) => ({
-      fullSourceIds: state.fullSourceIds.includes(id)
-        ? state.fullSourceIds.filter((candidate) => candidate !== id)
-        : [...state.fullSourceIds, id],
-    })),
-
-  clearSelection: () => set({ ...empty() }),
-}));
+    {
+      name: UI_STORAGE_KEY,
+      // Everything the reader built, except the palette -- reloading into an
+      // open search box is a state they never asked for.
+      //
+      // Restored ids are not re-validated. A re-parse reinserts functions under
+      // new ids (Phase 4), so a restored branch can point at rows that no
+      // longer exist; the tree and graph queries answer 404 and the surfaces
+      // show their empty state, which is the honest outcome and not a crash.
+      partialize: (state) => ({
+        selectedRepoId: state.selectedRepoId,
+        selectedFileId: state.selectedFileId,
+        selectedFunctionId: state.selectedFunctionId,
+        rootFunctionIds: state.rootFunctionIds,
+        expandedFunctionIds: state.expandedFunctionIds,
+        collapsedFunctionIds: state.collapsedFunctionIds,
+        codeFunctionIds: state.codeFunctionIds,
+        fileListExpanded: state.fileListExpanded,
+        fullSourceIds: state.fullSourceIds,
+      }),
+    },
+  ),
+);
