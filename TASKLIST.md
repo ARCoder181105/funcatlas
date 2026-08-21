@@ -198,7 +198,7 @@ close its own or vitest hangs — `auth/routes.test.ts` has the existing pattern
 
 ---
 
-## D3 — Registration enqueues, and the UI stops blocking  `[ ]`
+## D3 — Registration enqueues, and the UI stops blocking  `[x]`
 
 **Why.** The route returning only when parsing finishes *is* the ceiling. This also closes the dead
 end the 3b gate found: charting a repository left the sidebar on "Nothing charted", because nothing
@@ -222,7 +222,15 @@ selected it.
 
 **Done when.** Charting returns in well under a second, the dialog closes, the new repository is
 selected, and the tree fills in when the parse lands — with no reload. A repository that fails to
-clone shows one sentence naming it and why.
+clone shows one sentence naming it and why. — `routes/repos.test.ts`, fifteen tests, including one
+that asserts the row is written *before* the job is queued and one that asserts the request does not
+wait on a parse.
+
+**What it turned up.** The tree is cached with `staleTime: Infinity`, which was correct while the
+only way to re-parse was to register again. A webhook re-parse replaces the graph under a cache with
+no reason to suspect it, so the transition into `ready` now invalidates that repository's tree. And
+the tree query is disabled while a parse is queued or running: left enabled it returns an empty tree
+and the sidebar says the repository has no files, which is a different claim from "not yet".
 
 **Watch for.** `routes/graph.test.ts` keeps a `GATED` list of every `/api` route; keep it current.
 Do not let the poll run forever — `failed` is terminal, and a skeleton that never resolves is worse

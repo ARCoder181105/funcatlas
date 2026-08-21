@@ -47,6 +47,27 @@ export const SEARCH_QUERY_MAX_LENGTH = 200;
  */
 export const ANONYMOUS_SCOPE = "<anonymous>";
 
+/**
+ * Where a repository is in its parse. Mirrors the CHECK constraint added in
+ * migration 0004.
+ *
+ * `queued` and `parsing` are transient; `ready` and `failed` are terminal. The
+ * client polls while a repository is in the first pair and stops at the second
+ * -- a poll with no terminal state is a spinner that never resolves.
+ */
+export const PARSE_STATUSES = ["queued", "parsing", "ready", "failed"] as const;
+
+/** The statuses worth asking about again. */
+export const PARSE_STATUSES_PENDING: readonly string[] = ["queued", "parsing"];
+
+/** How often the client re-asks while any repository is still being parsed. */
+export const PARSE_POLL_INTERVAL_MS = 2000;
+
+/** Assumed until a clone reveals the real one. The parser reads the branch off
+ *  the checkout rather than trusting this -- see RISKS R29, where every
+ *  repository on master was recorded as being on main. */
+export const DEFAULT_BRANCH = "main";
+
 /** The host a stored repository URL is normalised to. */
 export const GITHUB_HOST = "github.com";
 

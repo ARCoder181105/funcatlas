@@ -1,8 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { repoUrlSchema } from "@funcatlas/shared";
 import { db } from "../db/index.js";
-import { listRepos, repoByUrl } from "../graph/queries.js";
-import { ParseError, normaliseRepoUrl, runParser } from "../repos/register.js";
+import { claimRepoForParse, listRepos } from "../graph/queries.js";
+import { enqueueParse } from "../queue/parse.js";
+import { normaliseRepoUrl } from "../repos/register.js";
 
 /** Repository registration. Registered inside the gated /api scope by
  *  routes/index.ts. */
@@ -19,29 +20,15 @@ export function registerRepoRoutes(api: FastifyInstance) {
 
     const githubUrl = normaliseRepoUrl(body.data.githubUrl);
 
-    try {
-      await runParser(githubUrl);
-    } catch (err) {
-      if (err instanceof ParseError) {
-        // Logged whole, returned in part: the client gets enough to act on,
-        // the log keeps everything.
-        req.log.error({ err, githubUrl }, "parse failed");
-        return reply
-          .code(err.timedOut ? 504 : 502)
-          .send({ error: err.message, detail: err.detail });
-      }
-      throw err;
-    }
+    // The row first, then the job. A worker that picks the job up before the
+    // row exists has nothing to mark as parsing.
+    const repo = await claimRepoForParse(db, githubUrl);
+    // A repository already in the graph is being re-parsed, so the write is
+    // scoped to what changed.
+    await enqueueParse({ githubUrl, incremental: repo.lastSyncedCommit !== null });
 
-    // The parser owns the insert, so this reads back what it wrote. A missing
-    // row means the parser exited 0 without writing, which is a failure the
-    // exit code did not report.
-    const repo = await repoByUrl(db, githubUrl);
-    if (repo === null) {
-      req.log.error({ githubUrl }, "parser succeeded but wrote no repo row");
-      return reply.code(502).send({ error: "parser wrote no repository" });
-    }
-
-    return reply.code(201).send(repo);
+    // 202, not 201: the repository exists, its graph does not yet. The client
+    // polls parseStatus rather than holding a request open for the parse.
+    return reply.code(202).send(repo);
   });
 }

@@ -9,7 +9,8 @@ import {
 } from "lucide-react";
 import { ApiError } from "../lib/api";
 import { cn } from "../lib/cn";
-import { useRepoTree } from "../lib/repos";
+import type { ParseStatus } from "@funcatlas/shared";
+import { useInvalidateParsedTrees, useRepoParseStatus, useRepoTree } from "../lib/repos";
 import { buildTree, directoryPaths, type TreeEntry } from "../lib/tree";
 import { useUiStore } from "../store/ui";
 import { RepoPicker } from "./RepoPicker";
@@ -54,6 +55,9 @@ export function Sidebar() {
   const selectedRepoId = useUiStore((state) => state.selectedRepoId);
   const setPaletteOpen = useUiStore((state) => state.setPaletteOpen);
   const tree = useRepoTree(selectedRepoId);
+  const parseStatus = useRepoParseStatus(selectedRepoId);
+  // A re-parse replaces the graph under a tree cached with staleTime: Infinity.
+  useInvalidateParsedTrees();
 
   const entries = useMemo(() => buildTree(tree.data?.files ?? []), [tree.data]);
 
@@ -73,7 +77,12 @@ export function Sidebar() {
       <SidebarContent className="motion-safe:scroll-smooth">
         <SidebarGroup>
           <SidebarGroupContent>
-            <TreeBody repoId={selectedRepoId} query={tree} entries={entries} />
+            <TreeBody
+              repoId={selectedRepoId}
+              query={tree}
+              entries={entries}
+              parseStatus={parseStatus}
+            />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
@@ -99,10 +108,12 @@ function TreeBody({
   repoId,
   query,
   entries,
+  parseStatus,
 }: {
   repoId: number | null;
   query: ReturnType<typeof useRepoTree>;
   entries: TreeEntry[];
+  parseStatus: ParseStatus | null;
 }) {
   if (repoId === null) {
     return (
@@ -120,8 +131,25 @@ function TreeBody({
     );
   }
 
+  // A failed parse has no tree to show, and "no files" would be the wrong
+  // answer to why. The reason lives on the repository, not on the request.
+  if (parseStatus === "failed") {
+    return (
+      <Empty className="px-2 py-8">
+        <EmptyHeader>
+          <EmptyTitle>This repository was not charted</EmptyTitle>
+          <EmptyDescription>
+            Chart it again from the picker above to retry.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  // Queued and parsing both land here: the query is disabled until the parse
+  // finishes, so it reads as pending, and skeletons are the shape that is
+  // coming (UI_GUIDE §3.3).
   if (query.isPending) {
-    // The shape that is coming, not a spinner (UI_GUIDE §3.3).
     return (
       <SidebarMenu>
         {Array.from({ length: 8 }, (_, index) => (

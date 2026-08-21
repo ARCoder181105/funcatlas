@@ -1,10 +1,11 @@
 import { sql } from "drizzle-orm";
-import { ANONYMOUS_SCOPE } from "@funcatlas/shared";
+import { ANONYMOUS_SCOPE, DEFAULT_BRANCH } from "@funcatlas/shared";
 import type {
   CallEdge,
   FileNode,
   FunctionSource,
   FunctionSummary,
+  ParseStatus,
   ReachableFunction,
   RegisteredRepo,
   RepoSummary,
@@ -132,30 +133,76 @@ export async function directEdges(db: Db, functionId: number): Promise<CallEdge[
   }));
 }
 
-/** The repo row for a canonical URL. The parser owns the insert, so
- *  registration reads back what it wrote rather than writing its own. */
+type RepoRow = {
+  id: number;
+  github_url: string;
+  default_branch: string;
+  last_synced_commit: string | null;
+  parse_status: ParseStatus;
+  parse_error: string | null;
+};
+
+const toRegisteredRepo = (row: RepoRow): RegisteredRepo => ({
+  id: Number(row.id),
+  githubUrl: row.github_url,
+  defaultBranch: row.default_branch,
+  lastSyncedCommit: row.last_synced_commit,
+  parseStatus: row.parse_status,
+  parseError: row.parse_error,
+});
+
+/** The repo row for a canonical URL. */
 export async function repoByUrl(db: Db, githubUrl: string): Promise<RegisteredRepo | null> {
-  const rows = await db.execute<{
-    id: number;
-    github_url: string;
-    default_branch: string;
-    last_synced_commit: string | null;
-  }>(sql`
-    SELECT id, github_url, default_branch, last_synced_commit
+  const rows = await db.execute<RepoRow>(sql`
+    SELECT id, github_url, default_branch, last_synced_commit, parse_status, parse_error
     FROM repos
     WHERE github_url = ${githubUrl}
   `);
 
   const row = rows[0];
-  if (row === undefined) {
-    return null;
-  }
-  return {
-    id: Number(row.id),
-    githubUrl: row.github_url,
-    defaultBranch: row.default_branch,
-    lastSyncedCommit: row.last_synced_commit,
-  };
+  return row === undefined ? null : toRegisteredRepo(row);
+}
+
+/**
+ * Claims a repository for parsing, returning the row either way.
+ *
+ * The parser used to own this insert, which made a repo row proof that a parse
+ * had finished. It is created here now, before the job runs, so the client has
+ * something to show while it waits.
+ *
+ * `default_branch` is NOT NULL and nothing knows the real one until the clone
+ * happens, so it starts at the usual default and the parser corrects it -- it
+ * reads the branch off the checkout rather than assuming (R29).
+ *
+ * Re-registering a repository re-queues it rather than erroring: the caller
+ * asked for it to be parsed, and it will be.
+ */
+export async function claimRepoForParse(db: Db, githubUrl: string): Promise<RegisteredRepo> {
+  const rows = await db.execute<RepoRow>(sql`
+    INSERT INTO repos (github_url, default_branch, parse_status)
+    VALUES (${githubUrl}, ${DEFAULT_BRANCH}, 'queued')
+    ON CONFLICT (github_url) DO UPDATE
+      SET parse_status = 'queued', parse_error = NULL
+    RETURNING id, github_url, default_branch, last_synced_commit, parse_status, parse_error
+  `);
+
+  // RETURNING on a conflicting upsert always yields the row.
+  return toRegisteredRepo(rows[0] as RepoRow);
+}
+
+/** Records where a parse got to. The error is cleared unless it failed, so a
+ *  repository that recovers does not keep explaining an outdated failure. */
+export async function setParseStatus(
+  db: Db,
+  githubUrl: string,
+  status: ParseStatus,
+  error: string | null = null,
+): Promise<void> {
+  await db.execute(sql`
+    UPDATE repos
+    SET parse_status = ${status}, parse_error = ${status === "failed" ? error : null}
+    WHERE github_url = ${githubUrl}
+  `);
 }
 
 /**
@@ -176,16 +223,11 @@ export async function exists(
 
 /** Every repository, with how much of each has been parsed. */
 export async function listRepos(db: Db): Promise<RepoSummary[]> {
-  const rows = await db.execute<{
-    id: number;
-    github_url: string;
-    default_branch: string;
-    last_synced_commit: string | null;
-    created_at: string;
-    file_count: number;
-    function_count: number;
-  }>(sql`
-    SELECT r.id, r.github_url, r.default_branch, r.last_synced_commit, r.created_at,
+  const rows = await db.execute<
+    RepoRow & { created_at: string; file_count: number; function_count: number }
+  >(sql`
+    SELECT r.id, r.github_url, r.default_branch, r.last_synced_commit,
+           r.parse_status, r.parse_error, r.created_at,
            -- DISTINCT because the second join multiplies each file row by its
            -- function count.
            count(DISTINCT fl.id) AS file_count,
@@ -198,10 +240,7 @@ export async function listRepos(db: Db): Promise<RepoSummary[]> {
   `);
 
   return rows.map((row) => ({
-    id: Number(row.id),
-    githubUrl: row.github_url,
-    defaultBranch: row.default_branch,
-    lastSyncedCommit: row.last_synced_commit,
+    ...toRegisteredRepo(row),
     createdAt: row.created_at,
     fileCount: Number(row.file_count),
     functionCount: Number(row.function_count),

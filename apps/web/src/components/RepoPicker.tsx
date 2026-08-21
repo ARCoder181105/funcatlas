@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Check, ChevronsUpDown, FolderGit2, Plus } from "lucide-react";
+import type { RepoSummary } from "@funcatlas/shared";
 import { ApiError } from "../lib/api";
 import { useRegisterRepo, useRepos } from "../lib/repos";
 import { useUiStore } from "../store/ui";
@@ -40,8 +41,8 @@ function shortName(githubUrl: string): string {
 /**
  * Which repository the canvas is showing, and how to add another.
  *
- * Registration parses inline and blocks for as long as that takes, so it gets
- * a dialog with a real pending state rather than a disabled button.
+ * Registration queues the parse and returns, so the dialog closes immediately
+ * and progress is reported on the row instead of behind a modal.
  *
  * A menu rather than a combobox. `combobox` is installed and would add
  * filtering, but it wants to own the anchor input, which fights a trigger that
@@ -111,9 +112,7 @@ export function RepoPicker() {
                     <span className="truncate font-mono text-xs">
                       {shortName(repo.githubUrl)}
                     </span>
-                    <span className="text-[11px] text-ink-muted tabular-nums">
-                      {repo.fileCount} files · {repo.functionCount} functions
-                    </span>
+                    <RepoLine repo={repo} />
                   </span>
                   {repo.id === selectedRepoId ? (
                     <Check
@@ -131,6 +130,39 @@ export function RepoPicker() {
 
       <RegisterDialog />
     </ButtonGroup>
+  );
+}
+
+/**
+ * The second line of a repository row: what it holds, or what it is doing.
+ *
+ * A repository being parsed has no counts worth showing -- reporting "0 files"
+ * while a clone runs is a wrong answer rather than a pending one. A failed one
+ * says why, because the reason is the only thing that tells the reader whether
+ * to fix the URL or try again.
+ */
+function RepoLine({ repo }: { repo: RepoSummary }) {
+  if (repo.parseStatus === "queued" || repo.parseStatus === "parsing") {
+    return (
+      <span className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+        <Spinner className="size-3" aria-hidden />
+        {repo.parseStatus === "queued" ? "Waiting to chart…" : "Charting…"}
+      </span>
+    );
+  }
+
+  if (repo.parseStatus === "failed") {
+    return (
+      <span className="text-[11px] break-words text-destructive">
+        {repo.parseError ?? "Charting failed."}
+      </span>
+    );
+  }
+
+  return (
+    <span className="text-[11px] text-ink-muted tabular-nums">
+      {repo.fileCount} files · {repo.functionCount} functions
+    </span>
   );
 }
 
@@ -160,8 +192,8 @@ function RegisterDialog() {
   return (
     <Dialog
       open={open}
-      // Not dismissable mid-parse: closing does not cancel the request, and a
-      // dialog that vanishes while the work continues reads as a failure.
+      // Still guarded, though the request is now short: closing mid-flight
+      // would drop the response that says which repository to select.
       onOpenChange={(next) => {
         if (!register.isPending) setOpen(next);
       }}
@@ -205,9 +237,8 @@ function RegisterDialog() {
               }}
             />
             <FieldDescription>
-              {register.isPending
-                ? "Cloning and parsing. Large repositories take a few minutes; this window stays open until it finishes."
-                : "Parsing runs while you wait — there is no queue yet."}
+              Charting starts in the background. The tree fills in as the
+              repository is parsed.
             </FieldDescription>
           </Field>
 
@@ -233,7 +264,7 @@ function RegisterDialog() {
               disabled={url.trim() === "" || register.isPending}
             >
               {register.isPending ? <Spinner aria-hidden /> : null}
-              {register.isPending ? "Charting…" : "Chart repository"}
+              {register.isPending ? "Queueing…" : "Chart repository"}
             </Button>
           </DialogFooter>
         </DialogContent>

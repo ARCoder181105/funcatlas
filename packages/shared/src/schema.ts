@@ -8,7 +8,7 @@ import {
   unique,
   index,
 } from "drizzle-orm/pg-core";
-import type { ResolutionConfidence } from "./types.js";
+import type { ParseStatus, ResolutionConfidence } from "./types.js";
 
 /**
  * Drizzle description of the schema in services/parser/migrations/, which is
@@ -26,6 +26,10 @@ export const repos = pgTable("repos", {
   defaultBranch: text("default_branch").notNull(),
   lastSyncedCommit: text("last_synced_commit"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Added in 0004, when the parse moved to a queue and a repo row stopped
+  // being proof that a parse had finished.
+  parseStatus: text("parse_status").$type<ParseStatus>().notNull().default("ready"),
+  parseError: text("parse_error"),
 });
 
 export const files = pgTable(
