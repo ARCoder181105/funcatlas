@@ -115,16 +115,46 @@ re-validated against a re-parse (R34).
 
 ---
 
-## Phase 4 — Webhooks, queue and hardening · not started
+## Phase 4 — Webhooks, queue and hardening · done
 
 Makes the graph self-updating and closes the security checklist.
 
-Builds: HMAC-verified, replay-windowed, per-repo-throttled GitHub webhook; BullMQ queue with a
-max-concurrency cap; incremental re-parse that diffs changed files and relinks only affected edges;
-every remaining item in [`docs/SECURITY.md`](docs/SECURITY.md) marked done.
+Delivered:
 
-**Exit test:** pushing a commit updates the graph without a full re-parse; a replayed webhook is
-rejected; a webhook flood is throttled; the parser still works with no network egress.
+- `files.content_hash` (migration 0003) — change detection that works on a `--depth 1` clone, which
+  has no history for `git diff`, and on a local path, which has no remote at all.
+- A scoped write: only the files whose *rows* changed are rewritten, and a file that merely calls a
+  changed file keeps its function ids.
+- BullMQ on its own Redis connection, a worker in its own process, and one job id per repository —
+  which is what collapses a push storm (R13) and stops two parses of one repository racing (R12).
+- `POST /api/repos` answers **202**; `repos.parse_status` (migration 0004) is how the client follows
+  a parse it is no longer waiting on.
+- `POST /webhooks/github`: HMAC over the raw bytes, replay protection by delivery id, per-hook
+  throttle, outside the session gate because GitHub sends no cookie.
+- Hardening: `/auth/dev-login` deleted (R30), Redis timeouts and a 503 instead of a hung request
+  (R31), and the clone removed after every parse including the failures (R14's disk half).
+
+**Exit test — amended, and this is the interesting part.** It read: *"pushing a commit updates the
+graph without a full re-parse"*. That test could not be passed by the design the phase actually
+needed, and the honest fix was to change the test rather than the claim.
+
+`internal/resolver` builds six whole-repo maps, and two of its three passes need them: resolving
+`./helpers` requires `helpers.ts` to be in the graph, and the repo-wide name pass is what decides
+`name_match` versus ambiguous. Hand it only the changed files and cross-file calls degrade from
+`exact` to `unresolved` — and, worse, a partial candidate set can emit a **confident** edge where
+the whole repository would correctly say ambiguous. That is precisely the guess
+[`PRD.md`](PRD.md#8-the-design-commitment) §8 forbids, so `PRD.md` FR-9's "re-parse only those" is
+not implementable as written.
+
+So the phase re-parses in full and scopes the **write**. It buys database churn and edge
+correctness, not parse time.
+
+**Exit test:** pushing a commit updates the graph **without rewriting unchanged rows** — the
+function ids of untouched files survive; a replayed webhook is ignored; a webhook flood is
+throttled; the parser still works with no network egress. — passed; see `TASKLIST.md` D8.
+
+**Known carry-over into Phase 5** — R34: `store/ui.ts` restores a file and its open branches through
+`zustand/persist`, and this is the first phase whose re-parse can delete the rows behind them.
 
 ---
 

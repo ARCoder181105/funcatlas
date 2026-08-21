@@ -3,7 +3,7 @@
 # `make start` is the one that brings the whole thing up; `make help` lists all.
 
 .PHONY: start stop wait-infra migrate-test install dev build lint typecheck test \
-        migrate up down health \
+        migrate up down health parser-isolated \
         go-build go-build-bin go-test go-vet go-run go-tidy go-lint clean
 
 # Loads .env into a recipe's shell. Sourced rather than `include`d: Make would
@@ -94,6 +94,16 @@ go-tidy: ## Tidy Go modules
 
 go-lint: ## Lint the Go parser
 	cd services/parser && golangci-lint run
+
+parser-isolated: ## Run the parser in its container with no network at all (docs/SECURITY.md L31)
+	@echo "Building the parser image..."
+	docker compose build parser
+	@echo ""
+	@echo "Parsing a local fixture with network_mode: none, read_only, cap_drop ALL."
+	@echo "A repository URL cannot work here -- that is the point."
+	docker compose run --rm --no-deps \
+	  -v "$(PWD)/services/parser/testdata/resolve:/fixture:ro" \
+	  parser --repo /fixture --format summary --out -
 
 go-run: ## Run the parser against a local repo (usage: make go-run REPO=./path)
 	cd services/parser && go run ./cmd/parser --repo "$(REPO)"

@@ -286,7 +286,7 @@ throws on mismatched lengths.
 
 ---
 
-## D5 — Hardening  `[ ]`
+## D5 — Hardening  `[x]`
 
 **Why.** R30, R31 and R14's disk half have each been deferred once already.
 
@@ -308,16 +308,23 @@ throws on mismatched lengths.
    checkout. `Prepare` returns a cleanup func — a no-op for a local path — and `main.go` defers it
    after the write. Not a `defer` inside `Prepare`: the directory has to outlive the call.
 
-**Done when.** `grep -r dev-login apps/` is empty and every API test still passes. Stopping Redis
+**Done when.** `grep -r dev-login apps/src` is empty and every API test still passes. Stopping Redis
 makes sign-in fail with a 503 within seconds instead of hanging. Two consecutive parses leave no
-`funcatlas-clone-*` directory behind.
+`funcatlas-clone-*` directory behind. — three tests in `internal/clone`, and the dev-login test
+inverted: it now asserts the route answers 404.
+
+**What it turned up.** `logger.Fatal` calls `os.Exit`, which skips every deferred call — so the
+cleanup would have run on success and never on failure, which is the path that repeats when a
+repository cannot be reached. `main` returns an error now. And `make dev` had to learn to start the
+worker: without it a registered repository sits at `queued` forever, which reads as a hung interface
+rather than a process nobody started.
 
 **Watch for.** `auth/routes.test.ts`'s `vi.stubEnv` + `vi.resetModules()` + re-import pattern — the
 rebuilt module graph carries its own Redis and must be quit or vitest hangs.
 
 ---
 
-## D6 — The tests this phase cannot close without  `[ ]`
+## D6 — The tests this phase cannot close without  `[x]`
 
 **Why.** Most of these are failure modes that stay invisible until production.
 
@@ -330,11 +337,17 @@ rebuilt module graph carries its own Redis and must be quit or vitest hangs.
 4. Webhook: valid, tampered, replayed, flooded.
 5. `jobId` collapsing: two enqueues ⇒ one run; enqueue-during-run ⇒ exactly one follow-up.
 6. The parser still runs with `--network none`. `docker-compose.yml` already runs it that way and
-   this phase must not quietly regress it.
+   this phase must not quietly regress it. — `make parser-isolated`, a new target that builds the
+   image and parses a fixture with no network, read-only rootfs and every capability dropped:
+   6 files, 13 functions, 14 edges, all three tiers.
+
+**Five of the six were already covered** by the chunk that introduced them — D1 for the write, D2 for
+the job ids, D4 for the webhook. Only the isolation check needed anything new, and it needed a
+Makefile target rather than a test, because what is being asserted is a container's configuration.
 
 ---
 
-## D7 — Docs  `[ ]`
+## D7 — Docs  `[x]`
 
 **Do.**
 
