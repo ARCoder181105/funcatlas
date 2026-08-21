@@ -369,7 +369,7 @@ Makefile target rather than a test, because what is being asserted is a containe
 
 ---
 
-## D8 — Exit gate  `[ ]`
+## D8 — Exit gate  `[x]`
 
 **Done when — the phase exit test.** Against a real repository:
 
@@ -381,5 +381,53 @@ Makefile target rather than a test, because what is being asserted is a containe
 - the parser still runs with no network egress;
 - `make test`, `make lint`, `make typecheck` and `make go-vet` all clean.
 
-**R5** — GitHub cannot reach localhost, so the live half needs `smee.io`. The four webhook unit
-tests cover correctness without a tunnel.
+**R5** — GitHub cannot reach localhost, so the live half needs `smee.io`. The deliveries below were
+signed and posted locally with `curl`, which exercises everything except GitHub's own transport.
+
+### The run — 2026-08-21
+
+Against `pmndrs/zustand` (fresh), `honojs/hono` (re-parse), and a purpose-built three-file fixture.
+
+**Registration returns before the parse.** `POST /api/repos` for `honojs/hono`: **202 in 26 ms**,
+`parseStatus: "queued"`. The same repository held the request for roughly thirty seconds at the 3b
+gate. The dialog closes immediately and the new repository is selected — the dead end 3b found, where
+charting left the sidebar on "Nothing charted", is gone.
+
+**The tree fills in.** `pmndrs/zustand` went `queued → parsing → ready` and landed at 34 files and
+187 functions, `.tsx` files carrying their counts, which is the JSX grammar path still working.
+
+**Unchanged rows are not rewritten.** A full webhook-driven re-parse of hono left the fingerprint of
+all 1,460 `(id, qualified_name)` pairs **byte-identical** (`200defe0…`), and the confidence
+distribution unchanged at 1,002 exact / 149 name_match / 4,141 unresolved.
+
+**An edited file rewrites itself and nothing else.** Through the real binary, on a fixture where
+`main.ts` calls into `helpers.ts`:
+
+| file | before | after | |
+|---|---|---|---|
+| `src/helpers.ts` — edited | 3444, 3445 | **3448, 3449** | rewritten |
+| `src/main.ts` — calls into it | 3446 | **3446** | id kept |
+| `src/other.ts` — unrelated | 3447 | **3447** | id kept |
+
+and `main.run → helpers.helper` survived as `exact`, repointed at the new id. That is the cascade
+trap not biting, end to end rather than in a unit test.
+
+**The webhook.** Valid push → 200, one job. Replayed delivery id → 200 `{replay:true}`, no job.
+Tampered body → **401**. Unregistered repository → 200, ignored. Non-push event → 200, ignored.
+Flood of 45 deliveries on one hook id → **30 through, 15 × 429**, exactly `WEBHOOK_RATE_MAX`; all of
+them collapsed onto a single parse.
+
+**No network egress.** `make parser-isolated` — the image, `network_mode: none`, read-only rootfs,
+every capability dropped: 6 files, 13 functions, 14 edges, all three tiers.
+
+**No clones left behind.** Every parse in this run left the temp directory empty. The one directory
+present predated the fix and was itself empty.
+
+`make test` (127 api / 143 web / Go), `make lint`, `make typecheck`, `make go-vet` — all clean.
+
+### What could not be checked here
+
+The status **poll** could not be watched live: the automated tab reports `visibilityState: hidden`,
+and TanStack pauses `refetchInterval` while a document is hidden — by design, and it catches up on
+refocus. The transitions were read from the API instead. Worth a human's eye on a real tab before
+this is called finished.
