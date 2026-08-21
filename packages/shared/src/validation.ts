@@ -1,6 +1,9 @@
 import { z } from "zod";
 import {
   GITHUB_HOSTS,
+  SEARCH_LIMIT,
+  SEARCH_MAX_LIMIT,
+  SEARCH_QUERY_MAX_LENGTH,
   TRAVERSAL_DEFAULT_DEPTH,
   TRAVERSAL_DIRECTIONS,
   TRAVERSAL_MAX_DEPTH,
@@ -47,8 +50,8 @@ export const repoUrlSchema = z.object({
 
 export const searchQuerySchema = z.object({
   repoId: z.coerce.number().int().positive(),
-  query: z.string().min(1).max(200),
-  limit: z.coerce.number().int().positive().max(200).default(50),
+  query: z.string().min(1).max(SEARCH_QUERY_MAX_LENGTH),
+  limit: z.coerce.number().int().positive().max(SEARCH_MAX_LIMIT).default(SEARCH_LIMIT),
 });
 
 export const oauthCallbackSchema = z.object({

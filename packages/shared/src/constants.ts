@@ -23,6 +23,20 @@ export const TRAVERSAL_MAX_DEPTH = 10;
 export const TRAVERSAL_ROOT_DEPTH = 0;
 
 /**
+ * How many search results one page holds.
+ *
+ * Shared because both sides act on it: the API defaults its `limit` to this,
+ * and the palette compares against it to say "the first 50" rather than
+ * presenting a truncated list as the whole answer. Written twice it drifts, and
+ * the drift is a heading that lies.
+ */
+export const SEARCH_LIMIT = 50;
+
+/** Ceilings on what a search may ask for. These bound the query, not the UI. */
+export const SEARCH_MAX_LIMIT = 200;
+export const SEARCH_QUERY_MAX_LENGTH = 200;
+
+/**
  * The scope the parser gives a function declared inside an anonymous one --
  * a callback, a test body, an IIFE. Mirrors `utils.Anonymous` in the Go
  * parser, which builds the qualified name.
