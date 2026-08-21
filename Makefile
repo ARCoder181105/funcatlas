@@ -57,7 +57,9 @@ typecheck: ## Type-check all packages
 
 test: ## Run all tests (TS + Go)
 	pnpm test
-	cd services/parser && go test ./...
+	# Sourced, or dbtest finds no DATABASE_URL and every integration test skips
+	# -- a green run that never touched Postgres.
+	$(ENV) && cd services/parser && go test ./...
 
 migrate: ## Apply database migrations to DATABASE_URL
 	$(ENV) && migrate -path services/parser/migrations -database "$$DATABASE_URL" up
