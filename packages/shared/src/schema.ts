@@ -37,6 +37,9 @@ export const files = pgTable(
       .notNull(),
     path: text("path").notNull(),
     language: text("language").notNull(),
+    // Nullable: rows written before migration 0003 have none, and a null reads
+    // as "changed" on the next parse.
+    contentHash: text("content_hash"),
   },
   (t) => ({
     unq: unique("files_repo_id_path_key").on(t.repoId, t.path),

@@ -146,15 +146,16 @@ func upsertFiles(ctx context.Context, tx pgx.Tx, repoID int64, files []ir.File) 
 		if outer != nil {
 			return
 		}
-		args := make([]any, 0, (end-start)*3)
+		args := make([]any, 0, (end-start)*4)
 		for _, f := range files[start:end] {
-			args = append(args, repoID, f.Path, f.Language)
+			args = append(args, repoID, f.Path, f.Language, nullIfEmpty(f.ContentHash))
 		}
 
 		rows, err := tx.Query(ctx, `
-			INSERT INTO files (repo_id, path, language)
-			VALUES `+placeholders(end-start, 3)+`
-			ON CONFLICT (repo_id, path) DO UPDATE SET language = EXCLUDED.language
+			INSERT INTO files (repo_id, path, language, content_hash)
+			VALUES `+placeholders(end-start, 4)+`
+			ON CONFLICT (repo_id, path) DO UPDATE
+				SET language = EXCLUDED.language, content_hash = EXCLUDED.content_hash
 			RETURNING id, path`, args...)
 		if err != nil {
 			outer = fmt.Errorf("insert files: %w", err)

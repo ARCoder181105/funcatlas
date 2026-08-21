@@ -5,3 +5,10 @@
 # --frozen-lockfile, which fails without it, and it is what makes an install
 # reproducible and auditable.
 pnpm-lock.yaml linguist-generated=true
+
+# The golden extraction fixtures are hashed (files.content_hash, migration
+# 0003), so their bytes have to survive a checkout unchanged. Without this, a
+# clone on a machine with core.autocrlf=true rewrites every line ending and
+# every golden hash stops matching, for a reason nothing in the diff explains.
+services/parser/testdata/** -text
+

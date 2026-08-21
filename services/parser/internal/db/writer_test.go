@@ -67,6 +67,54 @@ func TestWriteGraph(t *testing.T) {
 		count(t, pool, `SELECT count(*) FROM functions WHERE parsed_commit = 'abc123'`))
 }
 
+// hashes returns every stored content hash, keyed by path.
+func hashes(t *testing.T, pool *pgxpool.Pool) map[string]string {
+	t.Helper()
+	rows, err := pool.Query(context.Background(), `SELECT path, content_hash FROM files`)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	out := map[string]string{}
+	for rows.Next() {
+		var path string
+		var hash *string
+		require.NoError(t, rows.Scan(&path, &hash))
+		require.NotNil(t, hash, "%s was written without a hash", path)
+		out[path] = *hash
+	}
+	require.NoError(t, rows.Err())
+	return out
+}
+
+// The hash is what a re-parse diffs against to decide a file changed, so it has
+// to be stable for untouched content and move for exactly the file that was
+// edited -- nothing downstream can be right if this is wrong.
+func TestWriteGraph_ContentHashTracksEdits(t *testing.T) {
+	w, pool := newWriter(t)
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.ts"),
+		[]byte("import { helper } from './helpers'\nexport function run() { helper() }\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "helpers.ts"),
+		[]byte("export function helper() { return 1 }\n"), 0o644))
+
+	writeFixture(t, w, dir, "c1")
+	first := hashes(t, pool)
+	require.Len(t, first, 2)
+
+	// Same bytes, written again: nothing moves.
+	writeFixture(t, w, dir, "c1")
+	assert.Equal(t, first, hashes(t, pool), "identical content must hash identically")
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "helpers.ts"),
+		[]byte("export function helper() { return 2 }\n"), 0o644))
+	writeFixture(t, w, dir, "c2")
+
+	second := hashes(t, pool)
+	assert.Equal(t, first["main.ts"], second["main.ts"], "an untouched file keeps its hash")
+	assert.NotEqual(t, first["helpers.ts"], second["helpers.ts"], "an edited file gets a new hash")
+}
+
 // Re-running must not duplicate rows or trip the uniqueness constraint.
 func TestWriteGraph_IsIdempotent(t *testing.T) {
 	w, pool := newWriter(t)
