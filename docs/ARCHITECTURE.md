@@ -81,10 +81,22 @@ Job queue ──▶ diff changed files ──▶ re-parse only those ──▶ r
 - A freehand annotation layer is **deferred to post-MVP** (see `../PLAN.md`).
 
 ### 7. Job Queue
-- Redis + BullMQ sits between the webhook listener and the parser worker.
-- On a push: diff the changed files → enqueue only those for re-parsing → relink only the edges touching those functions, not a full repo re-parse.
-- Renames and deletions update every edge pointing at the old function, so no orphans remain.
-- A max-concurrent-parse cap and a per-repo throttle prevent a webhook flood from exhausting resources.
+- Redis + BullMQ sits between the webhook listener and the parse worker.
+- **The worker is a Node process that spawns the Go binary**, exactly as registration used to. The
+  parser gains no Redis dependency and stays a CLI that takes a path and writes to Postgres — which
+  is also what keeps `make go-run` and the container's `--network none` check working unchanged.
+  An earlier draft of this document said the worker "communicates only through the job queue and
+  Postgres"; it does not, and reimplementing BullMQ's job protocol in Go to make that true would
+  have bought nothing.
+- On a push: re-extract and re-resolve the whole repository, then **write only the rows that
+  changed**. Not "re-parse only the changed files" — resolution needs the whole repo's symbol table,
+  and a partial one emits confident edges that the full repository would call ambiguous. See
+  `RISKS.md` R35 and `PLAN.md` Phase 4.
+- The write set is the files whose content hash moved, plus every file whose edges pointed into one
+  of them — as the new graph sees it *and* as the database still does. Renames and deletions leave
+  no orphans, and a file that merely calls a changed file keeps its function ids.
+- One job id per repository is the concurrency cap and the throttle both: a duplicate add while a
+  parse is waiting or active is ignored, so a push storm collapses into one job.
 
 ## Why this shape
 

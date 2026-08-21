@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { SearchResponse } from "@funcatlas/shared";
+import { SEARCH_LIMIT, type SearchResponse } from "@funcatlas/shared";
 import { api } from "./api";
 
 /**
@@ -10,16 +10,6 @@ import { api } from "./api";
  * same reason, because a second opinion applied client-side quietly discards
  * the ranking the server did with the whole index in front of it.
  */
-
-/**
- * How many hits the palette asks for.
- *
- * The API caps at 200 and defaults to 50. Asking explicitly means the palette
- * knows what its own ceiling is, which is what lets it say "the first 50"
- * rather than presenting a truncated list as the whole answer -- the same rule
- * the canvas follows when the node ceiling cuts a graph short.
- */
-export const SEARCH_LIMIT = 50;
 
 export const searchKey = (repoId: number, query: string) =>
   ["repo", repoId, "search", query] as const;

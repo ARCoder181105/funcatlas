@@ -29,11 +29,11 @@ This project clones and reads arbitrary user-supplied repositories. That's a rea
 - [x] Clone/parse runs in an isolated container, not the host running the API
 - [x] No install/build scripts from the target repo are ever invoked
 - [x] Parser process has no outbound network access (`--network none`, read-only mount, dropped caps)
-- [ ] Symlink / path-traversal escapes are checked (path-validation only; full descriptor-based TOCTOU protection deferred)
+- [ ] Symlink / path-traversal escapes are checked — **path validation done; descriptor-based TOCTOU protection deferred again in Phase 4.** `Walk` hard-fails on any symlink and `ContainsRoot` bounds every path, so an escape needs a directory swapped between the check and the open. That is a real race and a narrow one: the parser reads a checkout it made itself, seconds earlier, in a container with no network and no capabilities. Revisit when it parses a tree someone else can write to.
 - [x] File-count, per-file size (>1MB), and depth caps are enforced; binary/`node_modules`/`.git` skipped
-- [ ] Webhook signatures are verified, replay-protected (timestamp window), and per-repo throttled
-- [ ] All graph endpoints are session-gated (no anonymous access)
-- [ ] Recursive N-hop CTE is depth-bounded and parameterized
-- [ ] OAuth tokens are scoped to the minimum GitHub permissions needed (repo read, not admin) and refreshed
-- [ ] Secrets (OAuth client secret, webhook secret) come from env vars via `.env.example`; never committed
-- [ ] Cloned repo data is cleaned up after parsing, not left indefinitely on disk
+- [x] Webhook signatures are verified, replay-protected, and per-repo throttled — HMAC-SHA256 over the **raw bytes** (`routes/webhook.ts`), delivery ids held in Redis with `SET NX`, and a per-hook rate limit. Replay protection is by delivery id rather than a timestamp window: GitHub sends no timestamp, and the id is what a retry repeats.
+- [x] All graph endpoints are session-gated — one `preHandler` on one encapsulated scope (`routes/index.ts`), asserted route by route in `routes/graph.test.ts`. Shipped in Phase 3a; the box was never ticked. The webhook is deliberately outside that gate and is authenticated by its signature instead.
+- [x] Recursive N-hop CTE is depth-bounded and parameterized — capped at `TRAVERSAL_MAX_DEPTH` by the Zod schema, and the only identifiers reaching `sql.raw` come from a closed map keyed by an already-narrowed union. Shipped in Phase 2; the box was never ticked.
+- [ ] OAuth tokens are minimally scoped and refreshed — **scope done, refresh deferred.** `read:user` and nothing more (R26): the only scope that reads private repositories is `repo`, which also grants write to every one of them. Refresh is deferred because nothing uses the token: the parser clones over public HTTPS and never sees a session. It becomes real work the moment a phase needs a private repository.
+- [x] Secrets come from env vars via `.env.example`, never committed — every one is a required key in `env.ts`, and `env.test.ts` reads that file as text to assert each non-defaulted key also appears in `.env.example` and in CI. Shipped in Phase 3a; the box was never ticked.
+- [x] Cloned repo data is cleaned up after parsing — `Prepare` returns a cleanup func the parser defers, covering the failure path too. `main` was restructured to return an error rather than call `logger.Fatal`, which calls `os.Exit` and skips every defer.

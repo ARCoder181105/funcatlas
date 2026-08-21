@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import type { ThemeMode } from "./tokens";
+export { THEME_STORAGE_KEY } from "./constants";
+import { THEME_STORAGE_KEY } from "./constants";
 
 /**
  * Which palette is active, and the one place that changes it.
@@ -10,10 +12,6 @@ import type { ThemeMode } from "./tokens";
  * therefore the source of truth at startup, and this store reads the class it
  * set rather than recomputing the preference and risking a different answer.
  */
-
-/** Shared with the inline script in `index.html`, which cannot import this
- *  module. `theme.test.ts` asserts the two agree. */
-export const THEME_STORAGE_KEY = "funcatlas-theme";
 
 /** What the document is actually painted as, not what we would have chosen. */
 function currentMode(): ThemeMode {

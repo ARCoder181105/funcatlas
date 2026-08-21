@@ -1,5 +1,6 @@
 import { GitHub } from "arctic";
 import { env } from "../env.js";
+import { GITHUB_USER_ENDPOINT } from "./constants.js";
 
 export const github = new GitHub(
   env.GITHUB_CLIENT_ID,
@@ -7,7 +8,6 @@ export const github = new GitHub(
   env.GITHUB_REDIRECT_URI,
 );
 
-const USER_ENDPOINT = "https://api.github.com/user";
 
 /** Only what a session needs. The rest of the profile is not ours to keep. */
 export interface GitHubUser {
@@ -18,7 +18,7 @@ export interface GitHubUser {
 /** Identifies the token holder. Throws on anything but a well-formed 200 --
  *  the caller turns that into a 400, never a 500. */
 export async function fetchGitHubUser(accessToken: string): Promise<GitHubUser> {
-  const res = await fetch(USER_ENDPOINT, {
+  const res = await fetch(GITHUB_USER_ENDPOINT, {
     headers: {
       authorization: `Bearer ${accessToken}`,
       accept: "application/vnd.github+json",

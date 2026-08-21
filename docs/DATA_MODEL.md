@@ -12,7 +12,12 @@ CREATE TABLE repos (
     github_url          TEXT NOT NULL UNIQUE,  -- the writer upserts on this
     default_branch      TEXT NOT NULL,
     last_synced_commit  TEXT,
-    created_at          TIMESTAMP NOT NULL DEFAULT now()
+    created_at          TIMESTAMP NOT NULL DEFAULT now(),
+    -- Migration 0004. A repo row used to be proof a parse had finished, because
+    -- the parser owned the insert. With the parse on a queue the API writes the
+    -- row first, so the client needs to be told which state it is in.
+    parse_status        TEXT NOT NULL DEFAULT 'ready',  -- queued|parsing|ready|failed
+    parse_error         TEXT                            -- one sentence; null unless failed
 );
 
 -- One row per file in the repo
@@ -21,6 +26,7 @@ CREATE TABLE files (
     repo_id     INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
     path        TEXT NOT NULL,       -- repo-relative, e.g. src/services/auth.ts
     language    TEXT NOT NULL,       -- 'typescript' (only language in the MVP)
+    content_hash TEXT,               -- sha256 of the bytes; null = "changed" (migration 0003)
     UNIQUE (repo_id, path)           -- constraint name: files_repo_id_path_key
 );
 
@@ -99,8 +105,22 @@ Function ids are obtained with chunked multi-row `INSERT ... RETURNING`, not `pg
 `CopyFrom`, where nothing comes back. Both map returned rows back **by key, not by row order**,
 which is not guaranteed — least of all with `ON CONFLICT`.
 
-Phase 2 rewrites the whole graph each run. Scoping this to only the files a push changed is Phase 4;
-see `PARSING_STRATEGY.md` for the case that makes it harder than it looks.
+Phase 2 rewrote the whole graph each run. **Phase 4 scopes the write** (`--incremental`), and the
+shape of that scoping is not the obvious one.
+
+`files.content_hash` is what a run diffs against — `git diff` cannot answer it, because a `--depth 1`
+clone holds one commit and no history, and a local path has no remote at all.
+
+Deleting a file's functions takes its edges through `ON DELETE CASCADE` **in both directions**,
+including edges *into* it from files nobody edited. So functions are deleted only for files whose
+contents actually moved, and **edges are deleted explicitly, by caller**. Doing it the other way
+round makes each affected caller pull in its own callers, and theirs: a transitive closure over most
+of the repository, for no benefit. The consequence worth knowing is that a file which merely *calls*
+a changed file keeps its function row ids.
+
+Note that `edges` has no uniqueness constraint. Duplicate protection is entirely the delete that
+precedes the insert — write edges for a file whose functions you did not delete and they silently
+double.
 
 ## Design notes
 

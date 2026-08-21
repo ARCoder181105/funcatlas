@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { ChevronDown, FileCode2 } from "lucide-react";
 import { useFunctionSource } from "../lib/functions";
-import { CODE_PREVIEW_LINES } from "../lib/graph";
+import { CODE_PREVIEW_LINES } from "../lib/graph-constants";
 import { DURATION, useMotionEnabled } from "../lib/motion";
 import { useUiStore } from "../store/ui";
 import { Button } from "./ui/button";

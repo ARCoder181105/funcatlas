@@ -1,7 +1,11 @@
 // Shared TS types. Row types are inferred from the Drizzle schema in
 // ./schema.ts, so they are not re-declared here.
 
-import type { RESOLUTION_CONFIDENCE, TRAVERSAL_DIRECTIONS } from "./constants.js";
+import type {
+  PARSE_STATUSES,
+  RESOLUTION_CONFIDENCE,
+  TRAVERSAL_DIRECTIONS,
+} from "./constants.js";
 
 export type ResolutionConfidence = (typeof RESOLUTION_CONFIDENCE)[number];
 export type TraversalDirection = (typeof TRAVERSAL_DIRECTIONS)[number];
@@ -29,6 +33,9 @@ export interface ReachableFunction {
  * the API keeps it.
  */
 
+/** Where a repository is in its parse. */
+export type ParseStatus = (typeof PARSE_STATUSES)[number];
+
 /** A repository, as returned by registration. */
 export interface RegisteredRepo {
   id: number;
@@ -36,6 +43,9 @@ export interface RegisteredRepo {
   defaultBranch: string;
   /** Null until a parse has recorded one. */
   lastSyncedCommit: string | null;
+  parseStatus: ParseStatus;
+  /** Why the last parse failed, in one sentence. Null unless failed. */
+  parseError: string | null;
 }
 
 /** A repository in the listing, with how much of it has been parsed. */

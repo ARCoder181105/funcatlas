@@ -4,6 +4,40 @@ import type {
   TraversalResponse,
 } from "@funcatlas/shared";
 import type { Edge, Node } from "reactflow";
+import {
+  CARD_CHROME,
+  CHAR_WIDTH,
+  CODE_HEIGHT,
+  CODE_MIN_HEIGHT,
+  CODE_MIN_WIDTH,
+  CODE_PREVIEW_LINES,
+  CODE_WIDTH,
+  EMPTY_BODY,
+  FILE_CARD_MIN_WIDTH,
+  FILE_HEADER,
+  FILE_PREVIEW_ROWS,
+  FUNCTION_NODE,
+  GAP_X,
+  GAP_Y,
+  GHOST_NODE,
+  GUTTER,
+  HEADER,
+  LABEL_CHAR,
+  LINE_HEIGHT,
+  LIST_PADDING,
+  MORE_ROW,
+  NODE_CEILING,
+  NODE_HEIGHT,
+  NODE_MIN_WIDTH,
+  NODE_WIDTH,
+  PADDING,
+  PATH_LINE,
+  PENDING_BODY,
+  ROOT_BADGE,
+  ROW_CHROME,
+  ROW_HEIGHT,
+  SUBLABEL_CHAR,
+} from "./graph-constants";
 
 /**
  * Turns the reader's expansions into React Flow nodes and edges.
@@ -30,35 +64,6 @@ import type { Edge, Node } from "reactflow";
  */
 
 /**
- * Sizes are computed here and rendered from `data.size` -- and deliberately
- * *not* written to `node.width` / `node.height`.
- *
- * This file used to set both, on the reasoning that React Flow needs
- * dimensions before it will draw an edge. It does, but they are its outputs,
- * not its inputs: a node that arrives with `width` already set is one React
- * Flow treats as measured, so it never runs the pass that also computes
- * `handleBounds` -- and an edge with no handle bounds is skipped in silence.
- * Landing on a function from the palette drew five cards and nothing joining
- * them, which is the one picture this canvas must never show (PRD §8).
- *
- * The layout still needs a size up front, so it keeps one: `data.size`, which
- * the component renders itself at. React Flow measures the result and fills in
- * its own numbers.
- */
-export const NODE_WIDTH = 208;
-export const NODE_HEIGHT = 44;
-
-/**
- * A closed card is as wide as its name, within reason.
- *
- * At a fixed 208px every card was the width of the longest name anyone might
- * have, and `Ky.prototype.parseJsonWithSchema` was truncated to nothing on the
- * same canvas as `get`. Names are what the reader navigates by, so the card is
- * measured from the name and the graph is spaced around the result.
- */
-export const NODE_MIN_WIDTH = 176;
-
-/**
  * Mono at 12px for the name, 10px for the qualified name under it, and then
  * everything that shares the row with them: the chevron, the code button, the
  * padding and the gaps -- plus the "start" badge on a branch root, which is
@@ -69,10 +74,6 @@ export const NODE_MIN_WIDTH = 176;
  * block: the block came out at 6.6 and using that here left every long name a
  * few pixels short of its row, which the row then wrapped.
  */
-const LABEL_CHAR = 7.2;
-const SUBLABEL_CHAR = 5.5;
-const CARD_CHROME = 118;
-const ROOT_BADGE = 50;
 
 export function functionCardWidth(
   label: string,
@@ -90,48 +91,6 @@ export function functionCardWidth(
   // its width just moves the truncation somewhere less obvious.
   return Math.max(text + chrome, NODE_MIN_WIDTH);
 }
-
-/**
- * A card showing its source, sized to the source it is showing.
- *
- * A fixed box made every function the same shape as the worst one: a
- * three-line helper got a scrollbar's worth of empty space and a wide function
- * got clipped at 420px with the ends of its lines out of reach. The card is
- * measured from the text instead -- longest line for the width, line count for
- * the height -- with a floor so a one-line function is still readable, and no
- * ceiling, because a ceiling is only ever reached by hiding something.
- *
- * These are the defaults, used until the source has arrived.
- */
-export const CODE_WIDTH = 460;
-export const CODE_HEIGHT = 260;
-
-export const CODE_MIN_WIDTH = 320;
-export const CODE_MIN_HEIGHT = 140;
-
-/**
- * How many lines a card shows before offering the rest.
- *
- * Same rule as the file card: nothing inside a node scrolls, because the wheel
- * over this canvas zooms the map. A long function is shown a screenful at a
- * time and grows when asked.
- */
-export const CODE_PREVIEW_LINES = 24;
-
-/**
- * Measured off the rendered block rather than guessed: JetBrains Mono at 12px
- * comes out at 6.6px a character, the 4ch gutter and its margin at 48, and the
- * card's padding and header at 26 and 33.
- *
- * They are estimates of a real measurement, which is the trade §4 makes on
- * purpose -- the alternative is measuring the card after it renders, and a
- * layout that depends on measurement is the one that leaves edges undrawn.
- */
-const CHAR_WIDTH = 6.6;
-const LINE_HEIGHT = 19.5;
-const GUTTER = 48;
-const PADDING = 26;
-const HEADER = 33;
 
 /**
  * Room around the code, not just room for it.
@@ -180,58 +139,6 @@ export function codeCardSize(
     ),
   };
 }
-
-/** Clear space between cards, whatever their size. */
-const GAP_X = 92;
-const GAP_Y = 48;
-
-/**
- * The file card is measured like every other card.
- *
- * It shipped at a fixed 288x(whatever fits), with its list of functions inside
- * a 256px scroll area -- so a file with a dozen functions hid most of them
- * behind a scrollbar, and a long name like
- * `cloneSearchParametersForInitHook` wrapped onto a second line inside a row
- * built for one. It grows in both directions instead, and the layout places it
- * against its own width so a wide card cannot reach the first column.
- */
-export const FILE_CARD_MIN_WIDTH = 288;
-
-/**
- * How many functions a card shows before offering the rest.
- *
- * Nothing on this canvas scrolls except the canvas. A scroll region inside a
- * node competes with the wheel that zooms the map -- the reader's gesture means
- * two things depending on where the pointer happens to be, which is the kind of
- * ambiguity that makes an interface feel broken rather than dense. So a card
- * that cannot show everything says how much is left and grows when asked.
- */
-export const FILE_PREVIEW_ROWS = 10;
-
-/**
- * Measured off the rendered card rather than estimated, because the difference
- * showed up as content overflowing a box that was supposed to fit it: a row is
- * 38px with an 8px gap under it, the line-number badge and chevron beside a
- * name take 92, the header is 56 plus a line of path, the list and the card
- * between them add 38 of padding, and the "show the rest" row is 38.
- */
-const ROW_HEIGHT = 46;
-const ROW_CHROME = 92;
-const FILE_HEADER = 56;
-const PATH_LINE = 17;
-const LIST_PADDING = 38;
-const MORE_ROW = 38;
-
-/**
- * The two bodies that are not a list of rows, and are not one row tall either.
- *
- * A file the parser found nothing in shows a title and a sentence explaining
- * that; a file still loading shows four skeleton rows. Sizing both as "one row"
- * clipped the explanation halfway through its second line -- the card said
- * there was nothing here and then cut off why.
- */
-const EMPTY_BODY = 104;
-const PENDING_BODY = 116;
 
 /**
  * Wide enough for the longest name, tall enough for every row it is showing.
@@ -293,7 +200,6 @@ export const COLUMN = NODE_WIDTH + GAP_X;
  * Truncation is reported rather than silent -- a map that quietly stops early
  * is the same lie as one that hides an unresolved call.
  */
-export const NODE_CEILING = 2000;
 
 export type GraphNodeKind = "function" | "ghost";
 
@@ -391,10 +297,6 @@ export interface BuiltGraph {
   /** How many functions the ceiling dropped. Zero when nothing was cut. */
   truncated: number;
 }
-
-export const FILE_CARD_NODE = "fileCard";
-export const FUNCTION_NODE = "functionNode";
-export const GHOST_NODE = "ghostNode";
 
 /** React Flow needs stable, unique ids. Prefixed so a ghost built from a name
  *  can never collide with a function built from an id. */

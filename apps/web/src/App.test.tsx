@@ -15,7 +15,6 @@ vi.mock("./lib/api", async (importOriginal) => {
       loginUrl: () => "http://api.test/auth/login",
       me: vi.fn(),
       logout: vi.fn(),
-      devLogin: vi.fn(),
     },
   };
 });

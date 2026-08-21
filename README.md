@@ -9,8 +9,9 @@ ever shows you one file at a time — never the shape of the whole thing.
 
 **Status:** in development, and usable. Log in, point it at a public TypeScript repository, and
 explore the call graph on the canvas — file tree to card to function mind-map to highlighted source,
-with ⌘K to find a function by name. Phase 4 makes it self-updating; until then a repository is
-charted once, when you register it.
+with ⌘K to find a function by name. Registering returns immediately and the parse runs on a queue;
+point a GitHub webhook at it and the graph follows your pushes, rewriting only the rows a commit
+actually changed.
 
 ## Progress
 
@@ -21,7 +22,7 @@ charted once, when you register it.
 | 2 | Postgres persistence, call resolution | done |
 | 3a | GitHub OAuth, Redis sessions, the graph API | done |
 | 3b | React Flow canvas, search UI | done |
-| 4 | Webhooks, job queue, security hardening | not started |
+| 4 | Webhooks, job queue, security hardening | done |
 | 5 | Go, Rust and Python — extraction only | not started |
 
 Phase-by-phase detail is in [`PLAN.md`](PLAN.md); the current chunk list is in

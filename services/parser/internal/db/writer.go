@@ -21,6 +21,9 @@ type Options struct {
 	RepoURL string
 	Branch  string
 	Commit  string
+	// Rewrite only the rows that changed since the last parse. Off means the
+	// whole repository is rewritten, which is what a first parse needs.
+	Incremental bool
 }
 
 // Stats reports what a write produced, for the caller to log or assert on.
@@ -74,21 +77,55 @@ func (w *Writer) WriteGraph(ctx context.Context, g ir.Graph, edges []ir.Edge, op
 		return stats, err
 	}
 
+	// Before upsertFiles, which overwrites the hashes the diff is against.
+	var stored map[string]storedFile
+	if opts.Incremental {
+		if stored, err = readFiles(ctx, tx, repoID); err != nil {
+			return stats, err
+		}
+	}
+
+	// Every file, incremental or not: a new file still needs its row and its id.
 	fileIDs, err := upsertFiles(ctx, tx, repoID, g.Files)
 	if err != nil {
 		return stats, err
 	}
 
-	if err := deleteFunctions(ctx, tx, fileIDs); err != nil {
+	plan := fullPlan(fileIDs)
+	if opts.Incremental {
+		if plan, err = planIncremental(ctx, tx, g, edges, fileIDs, stored); err != nil {
+			return stats, err
+		}
+	}
+
+	// Edges go first and explicitly, by caller. Leaving them to the cascade is
+	// what would force the write set to close transitively -- see writePlan.
+	if err := deleteEdges(ctx, tx, keys(plan.rewriteEdges)); err != nil {
 		return stats, err
 	}
 
-	funcIDs, err := insertFunctions(ctx, tx, fileIDs, g.Functions, opts.Commit)
+	if err := dropFiles(ctx, tx, plan.dropFiles); err != nil {
+		return stats, err
+	}
+
+	if err := deleteFunctions(ctx, tx, keys(plan.rewriteFuncs)); err != nil {
+		return stats, err
+	}
+
+	funcIDs, err := insertFunctions(ctx, tx, fileIDs, g.Functions, opts.Commit, plan.rewriteFuncs)
 	if err != nil {
 		return stats, err
 	}
 
-	edgeCount, err := insertEdges(ctx, tx, funcIDs, edges, opts.Commit)
+	// An edge may point into a file this write left alone, whose functions kept
+	// the ids they already had.
+	if opts.Incremental {
+		if err := hydrateFuncIDs(ctx, tx, repoID, fileIDs, g.Functions, funcIDs); err != nil {
+			return stats, err
+		}
+	}
+
+	edgeCount, err := insertEdges(ctx, tx, fileIDs, g.Functions, funcIDs, edges, opts.Commit, plan.rewriteEdges)
 	if err != nil {
 		return stats, err
 	}
@@ -146,15 +183,16 @@ func upsertFiles(ctx context.Context, tx pgx.Tx, repoID int64, files []ir.File) 
 		if outer != nil {
 			return
 		}
-		args := make([]any, 0, (end-start)*3)
+		args := make([]any, 0, (end-start)*4)
 		for _, f := range files[start:end] {
-			args = append(args, repoID, f.Path, f.Language)
+			args = append(args, repoID, f.Path, f.Language, nullIfEmpty(f.ContentHash))
 		}
 
 		rows, err := tx.Query(ctx, `
-			INSERT INTO files (repo_id, path, language)
-			VALUES `+placeholders(end-start, 3)+`
-			ON CONFLICT (repo_id, path) DO UPDATE SET language = EXCLUDED.language
+			INSERT INTO files (repo_id, path, language, content_hash)
+			VALUES `+placeholders(end-start, 4)+`
+			ON CONFLICT (repo_id, path) DO UPDATE
+				SET language = EXCLUDED.language, content_hash = EXCLUDED.content_hash
 			RETURNING id, path`, args...)
 		if err != nil {
 			outer = fmt.Errorf("insert files: %w", err)
@@ -179,8 +217,38 @@ func upsertFiles(ctx context.Context, tx pgx.Tx, repoID int64, files []ir.File) 
 	return ids, outer
 }
 
-// deleteFunctions clears the functions for every file being rewritten. Their
-// edges go with them via ON DELETE CASCADE.
+// deleteEdges clears the outgoing edges of every file being rewritten.
+//
+// Explicit rather than left to ON DELETE CASCADE, because the cascade fires in
+// both directions and would take edges belonging to files this write is not
+// allowed to touch. See writePlan.
+func deleteEdges(ctx context.Context, tx pgx.Tx, fileIDs []int64) error {
+	if len(fileIDs) == 0 {
+		return nil
+	}
+	_, err := tx.Exec(ctx, `
+		DELETE FROM edges
+		WHERE caller_function_id IN (SELECT id FROM functions WHERE file_id = ANY($1))`, fileIDs)
+	if err != nil {
+		return fmt.Errorf("delete edges: %w", err)
+	}
+	return nil
+}
+
+// dropFiles removes files that are gone from the walk, taking their functions
+// and edges with them. Nothing pruned them before, so a file deleted upstream
+// kept its rows forever.
+func dropFiles(ctx context.Context, tx pgx.Tx, fileIDs []int64) error {
+	if len(fileIDs) == 0 {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM files WHERE id = ANY($1)`, fileIDs); err != nil {
+		return fmt.Errorf("drop files: %w", err)
+	}
+	return nil
+}
+
+// deleteFunctions clears the functions for every file whose contents changed.
 func deleteFunctions(ctx context.Context, tx pgx.Tx, fileIDs []int64) error {
 	if len(fileIDs) == 0 {
 		return nil
@@ -196,21 +264,29 @@ func deleteFunctions(ctx context.Context, tx pgx.Tx, fileIDs []int64) error {
 //
 // Multi-row INSERT ... RETURNING rather than pgx.CopyFrom: CopyFrom cannot
 // RETURNING, and the generated ids are exactly what the edges need.
-func insertFunctions(ctx context.Context, tx pgx.Tx, fileIDs []int64, funcs []ir.Function, commit string) ([]int64, error) {
+func insertFunctions(ctx context.Context, tx pgx.Tx, fileIDs []int64, funcs []ir.Function, commit string, rewrite map[int64]bool) ([]int64, error) {
 	ids := make([]int64, len(funcs))
 	byKey := make(map[funcKey]int, len(funcs))
+	// The IR indices this write is inserting. Everything else keeps the row it
+	// already has, and hydrateFuncIDs looks its id up.
+	todo := make([]int, 0, len(funcs))
 	for i, fn := range funcs {
+		if !rewrite[fileIDs[fn.FileID]] {
+			continue
+		}
+		todo = append(todo, i)
 		byKey[funcKey{fileIDs[fn.FileID], fn.QualifiedName, fn.OverloadIndex}] = i
 	}
 
 	const width = 9
 	var outer error
-	utils.Chunk(len(funcs), utils.InsertChunkSize, func(start, end int) {
+	utils.Chunk(len(todo), utils.InsertChunkSize, func(start, end int) {
 		if outer != nil {
 			return
 		}
 		args := make([]any, 0, (end-start)*width)
-		for _, fn := range funcs[start:end] {
+		for _, i := range todo[start:end] {
+			fn := funcs[i]
 			args = append(args,
 				fileIDs[fn.FileID], fn.PackagePath, fn.Name, fn.QualifiedName,
 				fn.OverloadIndex, fn.StartLine, fn.EndLine,
@@ -247,13 +323,28 @@ func insertFunctions(ctx context.Context, tx pgx.Tx, fileIDs []int64, funcs []ir
 
 // insertEdges writes the resolved edges. CopyFrom is right here: no ids come
 // back, so the fastest path wins.
-func insertEdges(ctx context.Context, tx pgx.Tx, funcIDs []int64, edges []ir.Edge, commit string) (int, error) {
+func insertEdges(
+	ctx context.Context,
+	tx pgx.Tx,
+	fileIDs []int64,
+	funcs []ir.Function,
+	funcIDs []int64,
+	edges []ir.Edge,
+	commit string,
+	rewrite map[int64]bool,
+) (int, error) {
 	// An edge with neither endpoint in the repo describes nothing traversable.
 	rows := make([][]any, 0, len(edges))
 	for _, e := range edges {
 		caller := funcID(funcIDs, e.CallerFuncIdx)
 		if caller == nil {
 			continue // a call at module level has no calling function row
+		}
+		// An edge belongs to its caller's file, and only that file's edges were
+		// deleted. Writing one for any other file would duplicate it: edges has
+		// no uniqueness constraint to catch it.
+		if !rewrite[fileIDs[funcs[e.CallerFuncIdx].FileID]] {
+			continue
 		}
 		rows = append(rows, []any{
 			caller,
@@ -277,8 +368,12 @@ func insertEdges(ctx context.Context, tx pgx.Tx, funcIDs []int64, edges []ir.Edg
 }
 
 // funcID maps an IR function index to its row id, or nil for ir.NoFunc.
+//
+// A zero id means the row was neither inserted nor hydrated. Returning nil
+// rather than 0 turns that into a foreign-key or CHECK failure that rolls the
+// write back, instead of an edge pointing at a function that does not exist.
 func funcID(ids []int64, idx int) any {
-	if idx == utils.NoFunc || idx >= len(ids) {
+	if idx == utils.NoFunc || idx >= len(ids) || ids[idx] == 0 {
 		return nil
 	}
 	return ids[idx]

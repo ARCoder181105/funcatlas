@@ -56,18 +56,3 @@ export function useLogout() {
   });
 }
 
-/**
- * Signs in as a fixed local user, skipping GitHub entirely.
- *
- * The route behind this does not exist in production (`auth/routes.ts` gates
- * the registration, not the handler) and Phase 4 deletes it. `import.meta.env.DEV`
- * at the call site keeps the button out of a production bundle as well.
- */
-export function useDevLogin() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: () => api.devLogin(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: SESSION_KEY }),
-  });
-}

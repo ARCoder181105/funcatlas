@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import type { SearchResult } from "@funcatlas/shared";
+import { SEARCH_LIMIT, type SearchResult } from "@funcatlas/shared";
 import { ApiError } from "../lib/api";
-import { SEARCH_LIMIT, useSearch } from "../lib/search";
+import { useSearch } from "../lib/search";
 import { useDebounced } from "../lib/useDebounced";
 import { useUiStore } from "../store/ui";
 import {

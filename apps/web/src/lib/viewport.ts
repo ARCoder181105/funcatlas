@@ -13,6 +13,8 @@
  * brings this card fully into view, and is any pan needed at all?
  */
 
+import { REVEAL_MARGIN } from "./constants";
+
 export interface Box {
   x: number;
   y: number;
@@ -26,9 +28,6 @@ export interface Viewport {
   y: number;
   zoom: number;
 }
-
-/** Clear space kept between a revealed card and the edge it was closest to. */
-const MARGIN = 56;
 
 /**
  * The box around a card and whatever it just drew.
@@ -59,7 +58,7 @@ export function panToReveal(
   node: Box,
   viewport: Viewport,
   pane: { width: number; height: number },
-  margin = MARGIN,
+  margin = REVEAL_MARGIN,
 ): { x: number; y: number } | null {
   const left = viewport.x + node.x * viewport.zoom;
   const top = viewport.y + node.y * viewport.zoom;

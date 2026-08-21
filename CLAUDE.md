@@ -20,8 +20,8 @@ The old working name "CodeCanvas" is retired; do not reintroduce it.
 - [x] Phase 2 — Storage and resolution
 - [x] Phase 3a — API and auth
 - [x] Phase 3b — Canvas and search
-- [ ] Phase 4 — Webhooks, queue, hardening ← next
-- [ ] Phase 5 — Go, Rust, Python (extraction only; per-language resolution stays cut)
+- [x] Phase 4 — Webhooks, queue, hardening
+- [ ] Phase 5 — Go, Rust, Python (extraction only; per-language resolution stays cut) ← next
 
 Active task list: `TASKLIST.md`.
 
@@ -73,6 +73,9 @@ You implement, phase by phase, with tests. The user reviews at each phase gate.
 | Signed-cookie set/read/clear, shared by session and OAuth state | `apps/api/src/auth/cookies.ts` |
 | The single session gate over every `/api` route | `apps/api/src/routes/index.ts` |
 | Spawning the parser, and canonical repo URLs | `apps/api/src/repos/register.ts` |
+| The queue, its job ids, and the dirty-repository flag | `apps/api/src/queue/parse.ts` |
+| Incremental write planning — the write set and its cascade trap | `services/parser/internal/db/incremental.go` |
+| Per-module constants | `<module>/constants.ts` in api and web; `lib/graph-constants.ts` for canvas geometry |
 | Graph SQL, including the recursive CTE | `apps/api/src/graph/queries.ts` |
 | Browser API calls | `apps/web/src/lib/api.ts` — extend `request<T>`, never bare `fetch` |
 
@@ -91,7 +94,8 @@ You implement, phase by phase, with tests. The user reviews at each phase gate.
 - **Parser:** Go + `tree-sitter/go-tree-sitter` v0.25.0 + `tree-sitter/tree-sitter-typescript`
   v0.23.2 (both pinned in `go.mod`), pgx with explicit SQL, zap.
 - **Database:** Postgres — edge tables and recursive CTEs. Neo4j deferred indefinitely.
-- **Queue:** Redis + BullMQ.
+- **Queue:** Redis + BullMQ, consumed by a **Node worker that spawns the Go binary** (`pnpm worker`).
+  The parser has no Redis dependency.
 - **Migrations:** golang-migrate, plain SQL, single source at `services/parser/migrations/`, read by
   both the Go writer and the TypeScript reader. Never edit an applied migration.
 - **Tests:** Vitest, testify. Integration tests use `TEST_DATABASE_URL` (falling back to
@@ -139,8 +143,17 @@ Phase 3b is closed. `TASKLIST.md` is the chunk-level truth; this is what outlive
   card showing source re-ran its highlighted block, which the reader saw as untouched cards
   blinking. `sameNodeData` in `lib/graph.ts` is what both node memos use; keep it that way.
 - **Canvas state is persisted but never re-validated.** `store/ui.ts` restores the repository, file
-  and open branches through `zustand/persist`. Phase 4's re-parse reinserts functions under new ids,
-  so a restored branch can point at rows that are gone. See R34.
+  and open branches through `zustand/persist`. A re-parse reinserts changed files' functions under
+  new ids, so a restored branch can point at rows that are gone — and a webhook now does that
+  without anyone touching the browser. See R34.
+- **A webhook's HMAC covers the raw bytes, so the JSON parser is scoped, not global.** Fastify's
+  default parser drops the text, and re-serialising `req.body` does not reproduce what GitHub sent —
+  the digest then fails in a way that reads as a wrong secret. A test that signs *compact* JSON will
+  not catch this, because compact JSON round-trips through `JSON.stringify` unchanged; the test uses
+  a pretty-printed body for exactly that reason.
+- **A rate limit keyed on the request body silently never fires.** `@fastify/rate-limit` runs
+  `onRequest`, before parsing, so the key is `undefined` and every request gets its own bucket. The
+  webhook keys on `x-github-hook-id`.
 - **A React Flow node's box must not use Framer's `layout`.** `layout` measures against the
   viewport, and inside the canvas's panned and zoomed transform those deltas are wrong. Card growth
   is a CSS transition on `width,height` under `motion-safe:`.
@@ -153,9 +166,18 @@ Phase 3b is closed. `TASKLIST.md` is the chunk-level truth; this is what outlive
   are; whether they paint is a browser check. See `docs/CANVAS_DECISIONS.md` §4 — which also records
   why **nothing may set `node.width` / `node.height`**: React Flow then treats the node as measured,
   never computes `handleBounds`, and drops every edge touching it in silence.
-- **`POST /api/repos` parses synchronously**, so a large repository holds the request open until
-  `PARSE_TIMEOUT_MS`. Phase 4's queue replaces the spawn; marked with a `ponytail:` comment.
-- **`/auth/dev-login` exists outside production.** Phase 4 hardening deletes it.
+- **Resolution is whole-repo, so `--incremental` scopes the write and not the parse.** A push
+  re-clones, re-extracts and re-resolves everything; only the changed rows are written. This is not
+  what `PRD.md` FR-9 describes, and the reason is in `docs/RISKS.md` R35: `newIndex` builds six
+  repo-wide maps, and a partial symbol table emits a confident edge where the whole repository would
+  correctly say ambiguous. Scoping the parse means hydrating that table out of Postgres.
+- **The write set is bigger than "files that changed", and the extra clause is invisible.** Deleting
+  a file's functions cascades edges *into* it as well as out. So edges are deleted explicitly by
+  caller, functions only for files whose hash moved, and the caller set is read from the new graph
+  **and from the database** — that second half is what catches a call deleted in this commit, whose
+  only remaining trace is the row. `internal/db/incremental.go`.
+- **`edges` has no uniqueness constraint.** Duplicate protection is entirely the delete that precedes
+  the insert. Write edges for a file whose functions you did not delete and they silently double.
 - **Public repositories only.** The OAuth scope is `read:user`, and the parser clones over public
   HTTPS. See R26 for why `repo` was not the answer.
 - **`pnpm start` cannot run the API.** `packages/shared` exports point at `./src/*.ts`, so plain

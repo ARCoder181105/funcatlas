@@ -11,6 +11,12 @@ import { SidebarProvider } from "./components/ui/sidebar";
 import { Skeleton } from "./components/ui/skeleton";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { useSession } from "./lib/session";
+import {
+  CANVAS_DEFAULT,
+  SIDEBAR_DEFAULT,
+  SIDEBAR_MAX,
+  SIDEBAR_MIN,
+} from "./lib/constants";
 
 /**
  * Percentages of the group. Strings with an explicit unit, because this library
@@ -20,10 +26,6 @@ import { useSession } from "./lib/session";
  * Both panels declare a size: given only one, the library ignores it and falls
  * back to an even split.
  */
-const SIDEBAR_DEFAULT = "22%";
-const SIDEBAR_MIN = "14%";
-const SIDEBAR_MAX = "45%";
-const CANVAS_DEFAULT = "78%";
 
 /**
  * Three states, and the server decides which: resolving, signed out, signed in.

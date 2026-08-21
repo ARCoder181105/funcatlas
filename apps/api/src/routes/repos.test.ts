@@ -3,19 +3,19 @@ import { sql } from "drizzle-orm";
 import type { FastifyInstance, LightMyRequestResponse } from "fastify";
 import { db } from "../db/index.js";
 import { devLogin } from "../test-helpers.js";
-import { ParseError } from "../repos/register.js";
 
-// The spawn itself is covered in repos/register.test.ts against stub binaries.
-// Here it is mocked so the route's own behaviour -- what it does with a
-// success, a failure and a timeout -- is what is being tested.
-vi.mock("../repos/register.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../repos/register.js")>();
-  return { ...actual, runParser: vi.fn() };
+// Registration enqueues; it no longer parses. The queue itself is covered in
+// queue/parse.test.ts against a real Redis, so here it is mocked and what is
+// being tested is the route's own contract: the row it writes, the status it
+// reports, and that exactly one job is asked for.
+vi.mock("../queue/parse.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../queue/parse.js")>();
+  return { ...actual, enqueueParse: vi.fn() };
 });
 
-const { runParser } = await import("../repos/register.js");
+const { enqueueParse } = await import("../queue/parse.js");
 const { buildApp } = await import("../app.js");
-const mockedRunParser = vi.mocked(runParser);
+const mockedEnqueue = vi.mocked(enqueueParse);
 
 const REPO_URL = "https://github.com/owner/repo";
 
@@ -31,19 +31,8 @@ async function post(body: Record<string, unknown>): Promise<LightMyRequestRespon
   });
 }
 
-/** Stands in for a parser run that wrote a repo row, which is what the route
- *  reads back. */
-function parserWrites(url = REPO_URL) {
-  mockedRunParser.mockImplementation(async () => {
-    await db.execute(sql`
-      INSERT INTO repos (github_url, default_branch) VALUES (${url}, 'main')
-      ON CONFLICT (github_url) DO NOTHING
-    `);
-  });
-}
-
 beforeEach(async () => {
-  mockedRunParser.mockReset();
+  mockedEnqueue.mockReset();
   await db.execute(sql`TRUNCATE repos, files, functions, edges RESTART IDENTITY CASCADE`);
   app ??= await buildApp();
   session ??= await devLogin(app);
@@ -55,13 +44,35 @@ afterAll(async () => {
 });
 
 describe("POST /api/repos", () => {
-  it("registers a repository and returns the row the parser wrote", async () => {
-    parserWrites();
-
+  // 202, not 201: the repository exists, its graph does not yet. Returning 201
+  // would claim a resource the client cannot read anything out of.
+  it("accepts the repository and queues the parse", async () => {
     const res = await post({ githubUrl: REPO_URL });
 
-    expect(res.statusCode).toBe(201);
-    expect(res.json()).toMatchObject({ githubUrl: REPO_URL, defaultBranch: "main" });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toMatchObject({ githubUrl: REPO_URL, parseStatus: "queued" });
+    expect(mockedEnqueue).toHaveBeenCalledWith({ githubUrl: REPO_URL, incremental: false });
+  });
+
+  // The whole point of the queue: a large repository must not hold the request
+  // open. Nothing here waits on a parse, so nothing here can be slow.
+  it("returns without running the parser", async () => {
+    const started = Date.now();
+    await post({ githubUrl: REPO_URL });
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it("writes the row before the job, so a worker never sees a missing repository", async () => {
+    mockedEnqueue.mockImplementation(async () => {
+      const rows = await db.execute<{ n: number }>(
+        sql`SELECT count(*)::int AS n FROM repos WHERE github_url = ${REPO_URL}`,
+      );
+      expect(rows[0]?.n).toBe(1);
+    });
+
+    await post({ githubUrl: REPO_URL });
+
+    expect(mockedEnqueue).toHaveBeenCalled();
   });
 
   it.each([
@@ -69,15 +80,43 @@ describe("POST /api/repos", () => {
     "https://github.com/owner/repo/",
     "https://www.github.com/owner/repo",
   ])("treats %s as the same repository", async (spelling) => {
-    parserWrites();
-
     const first = await post({ githubUrl: REPO_URL });
     const second = await post({ githubUrl: spelling });
 
     expect(second.json()).toMatchObject({ id: (first.json() as { id: number }).id });
-    // The canonical URL is what the parser is handed, so it cannot write a
-    // second row under the other spelling.
-    expect(mockedRunParser).toHaveBeenLastCalledWith(REPO_URL);
+    // The canonical URL is what the queue is handed, so a second spelling
+    // cannot become a second repository or a second job.
+    expect(mockedEnqueue).toHaveBeenLastCalledWith({
+      githubUrl: REPO_URL,
+      incremental: false,
+    });
+  });
+
+  // Re-registering is a request to parse again, not an error. The status goes
+  // back to queued and any previous failure stops being reported.
+  it("re-queues a repository that is already registered", async () => {
+    await post({ githubUrl: REPO_URL });
+    await db.execute(
+      sql`UPDATE repos SET parse_status = 'failed', parse_error = 'clone failed'
+          WHERE github_url = ${REPO_URL}`,
+    );
+
+    const res = await post({ githubUrl: REPO_URL });
+
+    expect(res.json()).toMatchObject({ parseStatus: "queued", parseError: null });
+  });
+
+  // A repository with a graph already is re-parsed incrementally; a fresh one
+  // has nothing to scope a write against.
+  it("asks for an incremental re-parse once a commit has been recorded", async () => {
+    await post({ githubUrl: REPO_URL });
+    await db.execute(
+      sql`UPDATE repos SET last_synced_commit = 'abc123' WHERE github_url = ${REPO_URL}`,
+    );
+
+    await post({ githubUrl: REPO_URL });
+
+    expect(mockedEnqueue).toHaveBeenLastCalledWith({ githubUrl: REPO_URL, incremental: true });
   });
 
   it.each([
@@ -90,43 +129,29 @@ describe("POST /api/repos", () => {
     const res = await post({ githubUrl });
 
     expect(res.statusCode).toBe(400);
-    // Nothing gets spawned for input that failed validation.
-    expect(mockedRunParser).not.toHaveBeenCalled();
+    // Nothing is queued for input that failed validation.
+    expect(mockedEnqueue).not.toHaveBeenCalled();
   });
 
   it("400s on a missing body", async () => {
     const res = await post({});
     expect(res.statusCode).toBe(400);
-    expect(mockedRunParser).not.toHaveBeenCalled();
+    expect(mockedEnqueue).not.toHaveBeenCalled();
   });
+});
 
-  it("502s when the parser fails, and says why", async () => {
-    mockedRunParser.mockRejectedValue(
-      new ParseError("parser failed", false, "clone failed: repository not found"),
-    );
+describe("GET /api/repos", () => {
+  it("reports each repository's parse status", async () => {
+    await post({ githubUrl: REPO_URL });
 
-    const res = await post({ githubUrl: REPO_URL });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/repos",
+      headers: { cookie: session },
+    });
 
-    expect(res.statusCode).toBe(502);
-    expect(res.json()).toMatchObject({ detail: expect.stringContaining("not found") });
-  });
-
-  it("504s when the parser times out", async () => {
-    mockedRunParser.mockRejectedValue(new ParseError("parser timed out", true, ""));
-
-    const res = await post({ githubUrl: REPO_URL });
-
-    // Distinct from 502 on purpose: a timeout is worth retrying, a clone
-    // failure is not.
-    expect(res.statusCode).toBe(504);
-  });
-
-  it("502s when the parser exits clean but writes nothing", async () => {
-    mockedRunParser.mockResolvedValue(undefined);
-
-    const res = await post({ githubUrl: REPO_URL });
-
-    // A 201 here would hand back a repository that does not exist.
-    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({
+      repos: [{ githubUrl: REPO_URL, parseStatus: "queued", parseError: null }],
+    });
   });
 });

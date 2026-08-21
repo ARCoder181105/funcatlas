@@ -6,6 +6,9 @@ package ir
 type File struct {
 	Path     string
 	Language string
+	// sha256 of the file's bytes, hex. What a re-parse diffs against to decide
+	// a file changed: a --depth 1 clone has no history to ask git instead.
+	ContentHash string
 }
 
 type Function struct {

@@ -3,7 +3,7 @@
 # `make start` is the one that brings the whole thing up; `make help` lists all.
 
 .PHONY: start stop wait-infra migrate-test install dev build lint typecheck test \
-        migrate up down health \
+        migrate up down health parser-isolated \
         go-build go-build-bin go-test go-vet go-run go-tidy go-lint clean
 
 # Loads .env into a recipe's shell. Sourced rather than `include`d: Make would
@@ -21,7 +21,7 @@ start: ## Bring up EVERYTHING: Postgres, Redis, migrations, parser binary, API, 
 	@echo "  API  http://localhost:3000"
 	@echo "  Web  http://localhost:5173   <- open this"
 	@echo ""
-	@echo "  Sign in with 'Continue as a local dev user'. Ctrl-C stops API and web;"
+	@echo "  Sign in with GitHub. Ctrl-C stops API, web and the parse worker;"
 	@echo "  Postgres and Redis keep running until 'make stop'."
 	@echo ""
 	$(MAKE) dev
@@ -43,7 +43,7 @@ wait-infra: ## Block until Postgres and Redis both accept connections
 install: ## Install all workspace dependencies
 	pnpm install
 
-dev: ## Run api + web in dev mode (hot reload). Assumes infra is already up.
+dev: ## Run api + web + parse worker in dev mode. Assumes infra is already up.
 	pnpm dev
 
 build: ## Build all packages
@@ -57,7 +57,9 @@ typecheck: ## Type-check all packages
 
 test: ## Run all tests (TS + Go)
 	pnpm test
-	cd services/parser && go test ./...
+	# Sourced, or dbtest finds no DATABASE_URL and every integration test skips
+	# -- a green run that never touched Postgres.
+	$(ENV) && cd services/parser && go test ./...
 
 migrate: ## Apply database migrations to DATABASE_URL
 	$(ENV) && migrate -path services/parser/migrations -database "$$DATABASE_URL" up
@@ -92,6 +94,16 @@ go-tidy: ## Tidy Go modules
 
 go-lint: ## Lint the Go parser
 	cd services/parser && golangci-lint run
+
+parser-isolated: ## Run the parser in its container with no network at all (docs/SECURITY.md L31)
+	@echo "Building the parser image..."
+	docker compose build parser
+	@echo ""
+	@echo "Parsing a local fixture with network_mode: none, read_only, cap_drop ALL."
+	@echo "A repository URL cannot work here -- that is the point."
+	docker compose run --rm --no-deps \
+	  -v "$(PWD)/services/parser/testdata/resolve:/fixture:ro" \
+	  parser --repo /fixture --format summary --out -
 
 go-run: ## Run the parser against a local repo (usage: make go-run REPO=./path)
 	cd services/parser && go run ./cmd/parser --repo "$(REPO)"

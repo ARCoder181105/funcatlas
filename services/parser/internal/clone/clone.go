@@ -22,29 +22,46 @@ func New(log *zap.Logger, cfg security.Config) *Cloner {
 	return &Cloner{log: log, cfg: cfg}
 }
 
-// Prepare returns the absolute root path to parse.
-func (c *Cloner) Prepare(repo string) (string, error) {
+// Prepare returns the absolute root path to parse, and a cleanup func the
+// caller must defer.
+//
+// Cleanup removes a clone and does nothing for a local path -- deleting a
+// directory the user asked us to read would be considerably worse than leaking
+// a temp one. It is returned rather than deferred inside here because the
+// directory has to outlive this call: the whole parse reads from it.
+func (c *Cloner) Prepare(repo string) (root string, cleanup func(), err error) {
+	noop := func() {}
+
 	if strings.HasPrefix(repo, "http://") || strings.HasPrefix(repo, "https://") ||
 		strings.HasPrefix(repo, "git@") {
 		dir, err := os.MkdirTemp("", "funcatlas-clone-")
 		if err != nil {
-			return "", err
+			return "", noop, err
 		}
+		remove := func() {
+			if err := os.RemoveAll(dir); err != nil {
+				c.log.Warn("could not remove clone", zap.String("dir", dir), zap.Error(err))
+			}
+		}
+
 		c.log.Info("cloning repo", zap.String("url", repo))
 		cmd := exec.Command("git", "clone", "--depth", "1", repo, dir)
 		// A private or missing repo makes git ask for credentials. On a host with a
 		// terminal that blocks until PARSE_TIMEOUT_MS; fail immediately instead.
 		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=", "SSH_ASKPASS=")
 		if out, err := cmd.CombinedOutput(); err != nil {
-			return "", &CloneError{Msg: string(out)}
+			// The directory exists whether or not the clone filled it.
+			remove()
+			return "", noop, &CloneError{Msg: string(out)}
 		}
-		return dir, nil
+		return dir, remove, nil
 	}
+
 	abs, err := filepath.Abs(repo)
 	if err != nil {
-		return "", err
+		return "", noop, err
 	}
-	return abs, nil
+	return abs, noop, nil
 }
 
 // HeadCommit returns the checked-out commit SHA, or "" when dir is not a git

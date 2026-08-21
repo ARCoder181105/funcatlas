@@ -12,17 +12,8 @@ import { ApiError } from "../lib/api";
 import { useFileFunctions } from "../lib/files";
 import { useExpansions, useSources } from "../lib/functions";
 import { useRepoTree } from "../lib/repos";
-import {
-  buildGraph,
-  fileCardPosition,
-  fileCardSize,
-  FILE_CARD_NODE,
-  FUNCTION_NODE,
-  GHOST_NODE,
-  NODE_HEIGHT,
-  NODE_WIDTH,
-  type GraphNodeData,
-} from "../lib/graph";
+import { buildGraph, fileCardPosition, fileCardSize, type GraphNodeData } from "../lib/graph";
+import { FILE_CARD_NODE, FUNCTION_NODE, GHOST_NODE, NODE_HEIGHT, NODE_WIDTH } from "../lib/graph-constants";
 import { useTheme } from "../lib/theme";
 import { useAnimatedNodes } from "../lib/useAnimatedNodes";
 import { boundingBox, panToReveal } from "../lib/viewport";

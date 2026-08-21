@@ -2,6 +2,8 @@ package ts
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"os"
 	"path/filepath"
@@ -61,7 +63,12 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 		// Every CallSite and Import below carries this, so the resolver can ask
 		// "same file?" and "imported by this file?".
 		fileID := len(graph.Files)
-		graph.Files = append(graph.Files, ir.File{Path: rel, Language: utils.Language})
+		sum := sha256.Sum256(src)
+		graph.Files = append(graph.Files, ir.File{
+			Path:        rel,
+			Language:    utils.Language,
+			ContentHash: hex.EncodeToString(sum[:]),
+		})
 
 		startLen := len(graph.Functions)
 		rootNode := tree.RootNode()

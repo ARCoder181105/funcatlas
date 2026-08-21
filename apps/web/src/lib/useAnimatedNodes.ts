@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef } from "react";
 import type { Node, XYPosition } from "reactflow";
 import { useMotionEnabled } from "./motion";
+import { GLIDE_MS } from "./constants";
 
 /**
  * Glides nodes to their new positions instead of teleporting them.
@@ -24,10 +25,6 @@ import { useMotionEnabled } from "./motion";
  * store updater. Here the tween keys on the positions themselves, so an
  * identical array is free.
  */
-
-/** Milliseconds. Page-level motion in UI_GUIDE §4 is 400-600ms, and this moves
- *  the whole graph. */
-const GLIDE = 420;
 
 /** Fast out of the gate, settling at the end -- the graph is being re-spaced,
  *  not thrown. */
@@ -75,7 +72,7 @@ export function useAnimatedNodes<T>(nodes: Node<T>[]): Node<T>[] {
     let raf = 0;
 
     const step = (now: number) => {
-      const progress = Math.min(1, (now - started) / GLIDE);
+      const progress = Math.min(1, (now - started) / GLIDE_MS);
       const k = ease(progress);
 
       for (const node of latest.current) {

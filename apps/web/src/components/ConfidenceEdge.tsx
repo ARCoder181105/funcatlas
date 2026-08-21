@@ -4,16 +4,12 @@ import { BaseEdge, getBezierPath, type EdgeProps } from "reactflow";
 import { CONFIDENCE, confidenceColor } from "../lib/confidence";
 import { DURATION, useMotionEnabled } from "../lib/motion";
 import { useTheme } from "../lib/theme";
+import { EDGE_STAGGER_SECONDS } from "../lib/constants";
 
 export interface ConfidenceEdgeData {
   confidence: ResolutionConfidence;
   depth: number;
 }
-
-/** Seconds per layer. The phase's one orchestrated moment is the graph
- *  plotting itself outward, so the delay has to come from the layer rather
- *  than from each edge deciding for itself (UI_GUIDE §4). */
-const STAGGER = 0.09;
 
 /**
  * One call, drawn at the confidence the resolver actually had.
@@ -78,7 +74,7 @@ export function ConfidenceEdge({
         animate={{ opacity: 1 }}
         transition={{
           duration: DURATION.panel,
-          delay: (data?.depth ?? 0) * STAGGER,
+          delay: (data?.depth ?? 0) * EDGE_STAGGER_SECONDS,
           ease: "easeOut",
         }}
         // The edge is decoration for a screen reader: the node labels and the

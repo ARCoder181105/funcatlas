@@ -29,6 +29,16 @@ func main() {
 	}
 	defer func() { _ = logger.Sync() }()
 
+	// run rather than a body full of logger.Fatal: Fatal calls os.Exit, which
+	// skips every deferred call -- including the one that removes the clone. A
+	// repository that failed to parse used to leak a checkout on every attempt.
+	if err := run(logger); err != nil {
+		logger.Fatal("parser failed", zap.Error(err))
+	}
+}
+
+func run(logger *zap.Logger) error {
+
 	repo := flag.String("repo", "", "local path or git URL to parse")
 	out := flag.String("out", "out.json", "output file path, or - for stdout")
 	format := flag.String("format", "json", "output format: json|summary")
@@ -36,30 +46,34 @@ func main() {
 	repoURL := flag.String("repo-url", "", "repo identity for --write; defaults to --repo")
 	branch := flag.String("branch", "", "default branch recorded on the repo row; detected when empty")
 	commit := flag.String("commit", "", "commit SHA recorded on every row written; detected when empty")
+	incremental := flag.Bool("incremental", false, "with --write, rewrite only the rows whose files changed")
 	flag.Parse()
 
 	if *repo == "" {
-		logger.Fatal("missing --repo")
+		return fmt.Errorf("missing --repo")
 	}
 
 	cfg := security.ConfigFromEnv()
-	root, err := clone.New(logger, cfg).Prepare(*repo)
+	root, cleanup, err := clone.New(logger, cfg).Prepare(*repo)
+	// A clone used to be left behind on every run. Removed here rather than
+	// inside Prepare: everything below reads from it.
+	defer cleanup()
 	if err != nil {
-		logger.Fatal("clone/prepare failed", zap.Error(err))
+		return fmt.Errorf("clone/prepare failed: %w", err)
 	}
 
 	graph, err := ts.Extract(logger, root, cfg)
 	if err != nil {
-		logger.Fatal("parse failed", zap.Error(err))
+		return fmt.Errorf("parse failed: %w", err)
 	}
 	edges := resolver.Resolve(graph)
 
 	if err := report(*format, *out, graph, edges); err != nil {
-		logger.Fatal("output failed", zap.Error(err))
+		return fmt.Errorf("output failed: %w", err)
 	}
 
 	if !*write {
-		return
+		return nil
 	}
 
 	// Read off the checkout rather than made a required flag: the caller that
@@ -75,9 +89,16 @@ func main() {
 		}
 	}
 
-	if err := writeGraph(logger, graph, edges, *repoURL, *repo, *branch, *commit); err != nil {
-		logger.Fatal("write failed", zap.Error(err))
+	if err := writeGraph(logger, graph, edges, *repo, db.Options{
+		RepoURL:     *repoURL,
+		Branch:      *branch,
+		Commit:      *commit,
+		Incremental: *incremental,
+	}); err != nil {
+		return fmt.Errorf("write failed: %w", err)
 	}
+
+	return nil
 }
 
 // report prints the graph. Works with no database configured, so --format json
@@ -107,13 +128,13 @@ func report(format, out string, graph ir.Graph, edges []ir.Edge) error {
 	return os.WriteFile(out, data, 0o644)
 }
 
-func writeGraph(logger *zap.Logger, graph ir.Graph, edges []ir.Edge, repoURL, repo, branch, commit string) error {
+func writeGraph(logger *zap.Logger, graph ir.Graph, edges []ir.Edge, repo string, opts db.Options) error {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		return fmt.Errorf("--write needs DATABASE_URL")
 	}
-	if repoURL == "" {
-		repoURL = repo
+	if opts.RepoURL == "" {
+		opts.RepoURL = repo
 	}
 
 	ctx := context.Background()
@@ -123,9 +144,7 @@ func writeGraph(logger *zap.Logger, graph ir.Graph, edges []ir.Edge, repoURL, re
 	}
 	defer writer.Close()
 
-	stats, err := writer.WriteGraph(ctx, graph, edges, db.Options{
-		RepoURL: repoURL, Branch: branch, Commit: commit,
-	})
+	stats, err := writer.WriteGraph(ctx, graph, edges, opts)
 	if err != nil {
 		return err
 	}
