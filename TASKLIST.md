@@ -100,7 +100,7 @@ reason the diff does not show.
 
 ---
 
-## D1 — Scope the write to the files whose rows changed  `[ ]`
+## D1 — Scope the write to the files whose rows changed  `[x]`
 
 **Why.** The substance of "incremental", and the reason a naive per-file write is unsafe.
 
@@ -112,13 +112,20 @@ absent. `TestWriteGraph_RenameLeavesNoOrphanEdges` passes today only because it 
 So the write set is not "files whose hash changed":
 
 ```
-writeSet = changed
-         ∪ { F : F has an edge in the NEW graph whose callee lives in `changed` }
-         ∪ { F : F has an edge in the OLD database whose callee lives in `changed` }
+changed      = files whose content hash moved, plus new files, plus files gone from the walk
+rewriteEdges = changed ∪ callers(changed), as the new graph sees them AND as the database still does
+rewriteFuncs = changed
 ```
 
-The new-graph half is in memory. The old half is one `SELECT DISTINCT` across `edges` → `functions`
-→ `files`, and it is the half that is easy to forget and impossible to notice.
+**Planned as one set; it had to be two.** The first cut deleted functions for every file it wanted
+to rewrite edges for — and deleting a file's functions cascades its *incoming* edges too, so each
+caller pulled in its own callers, and so on: a transitive closure that reaches most of a repository
+and gives back nothing. Deleting edges explicitly, by caller, stops the closure at one level. A file
+that merely calls a changed file keeps its function rows and their ids, which is the whole point.
+
+The database half of `callers` is one `SELECT DISTINCT` across `edges` → `functions` → `files`, and
+it is the half that is easy to forget and impossible to notice: it catches the call that was
+*deleted* in this commit, whose only remaining trace is the row.
 
 **Where.** `internal/db/writer.go`, `cmd/parser/main.go`, `internal/db/writer_test.go`.
 
@@ -138,7 +145,10 @@ The new-graph half is in memory. The old half is one `SELECT DISTINCT` across `e
 **Done when.** A test that writes a two-file fixture, edits only the callee's file, re-writes
 incrementally, and asserts: the caller's edge still exists and still points at a live function; the
 caller's function rows kept their ids; and the resulting row counts match a from-scratch full write
-of the same tree. The last assertion is the one that catches everything.
+of the same tree. The last assertion is the one that catches everything. —
+`TestWriteGraph_IncrementalKeepsCrossFileEdges`, `_IncrementalMatchesFullWrite`,
+`_IncrementalPrunesDeletedFiles`, all passing. The first was checked by neutering both caller
+expansions and watching it fail: the edge count drops to zero, which is the bug it exists to catch.
 
 **Watch for.**
 

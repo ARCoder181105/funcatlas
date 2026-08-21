@@ -36,6 +36,7 @@ func main() {
 	repoURL := flag.String("repo-url", "", "repo identity for --write; defaults to --repo")
 	branch := flag.String("branch", "", "default branch recorded on the repo row; detected when empty")
 	commit := flag.String("commit", "", "commit SHA recorded on every row written; detected when empty")
+	incremental := flag.Bool("incremental", false, "with --write, rewrite only the rows whose files changed")
 	flag.Parse()
 
 	if *repo == "" {
@@ -75,7 +76,12 @@ func main() {
 		}
 	}
 
-	if err := writeGraph(logger, graph, edges, *repoURL, *repo, *branch, *commit); err != nil {
+	if err := writeGraph(logger, graph, edges, *repo, db.Options{
+		RepoURL:     *repoURL,
+		Branch:      *branch,
+		Commit:      *commit,
+		Incremental: *incremental,
+	}); err != nil {
 		logger.Fatal("write failed", zap.Error(err))
 	}
 }
@@ -107,13 +113,13 @@ func report(format, out string, graph ir.Graph, edges []ir.Edge) error {
 	return os.WriteFile(out, data, 0o644)
 }
 
-func writeGraph(logger *zap.Logger, graph ir.Graph, edges []ir.Edge, repoURL, repo, branch, commit string) error {
+func writeGraph(logger *zap.Logger, graph ir.Graph, edges []ir.Edge, repo string, opts db.Options) error {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		return fmt.Errorf("--write needs DATABASE_URL")
 	}
-	if repoURL == "" {
-		repoURL = repo
+	if opts.RepoURL == "" {
+		opts.RepoURL = repo
 	}
 
 	ctx := context.Background()
@@ -123,9 +129,7 @@ func writeGraph(logger *zap.Logger, graph ir.Graph, edges []ir.Edge, repoURL, re
 	}
 	defer writer.Close()
 
-	stats, err := writer.WriteGraph(ctx, graph, edges, db.Options{
-		RepoURL: repoURL, Branch: branch, Commit: commit,
-	})
+	stats, err := writer.WriteGraph(ctx, graph, edges, opts)
 	if err != nil {
 		return err
 	}
