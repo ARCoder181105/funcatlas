@@ -3,16 +3,9 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import type { FunctionSource, TraversalResponse } from "@funcatlas/shared";
 import { api } from "./api";
 import { highlight } from "./highlight";
+import { EXPANSION_DEPTH } from "./constants";
 
 /** Function-scoped queries: the traversal, and the source behind it. */
-
-/**
- * Depth 1, always.
- *
- * The map grows a column at a time by clicking, so asking for more would fetch
- * branches the reader has not opened and draw a graph they did not ask for.
- */
-const EXPANSION_DEPTH = 1;
 
 export const expansionKey = (fnId: number) => ["function", fnId, "edges", EXPANSION_DEPTH] as const;
 

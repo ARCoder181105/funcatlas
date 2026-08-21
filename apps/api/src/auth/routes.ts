@@ -2,6 +2,12 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { oauthCallbackSchema } from "@funcatlas/shared";
 import { env } from "../env.js";
+import {
+  OAUTH_SCOPES,
+  OAUTH_STATE_BYTES,
+  OAUTH_STATE_COOKIE,
+  OAUTH_STATE_TTL,
+} from "./constants.js";
 import { clearCookie, readSignedCookie, setSignedCookie } from "./cookies.js";
 import { fetchGitHubUser, github } from "./github.js";
 import {
@@ -22,25 +28,6 @@ import {
  * browser complete a login as the attacker.
  */
 
-const STATE_COOKIE = "funcatlas_oauth_state";
-
-/** Long enough to finish a login, short enough that an abandoned one expires
- *  rather than lingering. */
-const STATE_TTL = 600;
-
-const STATE_BYTES = 32;
-
-/**
- * read:user only.
- *
- * GitHub OAuth apps have no read-only repository scope: the choice is `repo`,
- * which also grants *write* to every private repository the user can reach, or
- * a scope that cannot see private repositories at all. Nothing here reads a
- * private repository -- the parser clones over public HTTPS -- so the narrow
- * scope is correct until a phase actually needs the other one.
- */
-const SCOPES = ["read:user"];
-
 /** Constant-time compare, so a mismatch reveals nothing through timing.
  *  Length is checked first: timingSafeEqual throws on unequal lengths. */
 function sameState(a: string, b: string): boolean {
@@ -51,11 +38,11 @@ function sameState(a: string, b: string): boolean {
 
 export function registerAuth(app: FastifyInstance) {
   app.get("/auth/login", async (_req, reply) => {
-    const state = randomBytes(STATE_BYTES).toString("hex");
-    setSignedCookie(reply, STATE_COOKIE, state, STATE_TTL);
+    const state = randomBytes(OAUTH_STATE_BYTES).toString("hex");
+    setSignedCookie(reply, OAUTH_STATE_COOKIE, state, OAUTH_STATE_TTL);
 
     // arctic 3's createAuthorizationURL is synchronous.
-    return reply.redirect(github.createAuthorizationURL(state, SCOPES).toString());
+    return reply.redirect(github.createAuthorizationURL(state, OAUTH_SCOPES).toString());
   });
 
   app.get("/auth/callback", async (req, reply) => {
@@ -64,9 +51,9 @@ export function registerAuth(app: FastifyInstance) {
       return reply.code(400).send({ error: "invalid callback parameters" });
     }
 
-    const expected = readSignedCookie(req, STATE_COOKIE);
+    const expected = readSignedCookie(req, OAUTH_STATE_COOKIE);
     // Cleared whatever happens next, so a state cannot be replayed.
-    clearCookie(reply, STATE_COOKIE);
+    clearCookie(reply, OAUTH_STATE_COOKIE);
 
     // State before code, always. The code is only worth exchanging once this
     // callback is known to belong to a login this browser started.

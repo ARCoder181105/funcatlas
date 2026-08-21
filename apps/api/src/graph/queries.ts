@@ -12,6 +12,7 @@ import type {
   SearchResult,
   TraversalDirection,
 } from "@funcatlas/shared";
+import { ID_TABLES } from "./constants.js";
 import type { Db } from "../db/index.js";
 
 /**
@@ -156,9 +157,6 @@ export async function repoByUrl(db: Db, githubUrl: string): Promise<RegisteredRe
     lastSyncedCommit: row.last_synced_commit,
   };
 }
-
-/** Closed set, so the table name reaching sql.raw is never user text. */
-const ID_TABLES = { repo: "repos", file: "files", function: "functions" } as const;
 
 /**
  * Whether a row exists, so a route can 404 rather than answer with an empty

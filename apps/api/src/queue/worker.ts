@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
 import { env } from "../env.js";
 import { runParser } from "../repos/register.js";
-import { JOB_NAME, onParseComplete, queueConnection, type ParseJob } from "./parse.js";
+import { onParseComplete, queueConnection, type ParseJob } from "./parse.js";
 
 /**
  * Runs parses off the request path.
@@ -25,5 +25,3 @@ export function createParseWorker(): Worker<ParseJob> {
 
   return worker;
 }
-
-export { JOB_NAME };

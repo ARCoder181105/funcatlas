@@ -2,12 +2,9 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { GITHUB_HOST } from "@funcatlas/shared";
 import { env } from "../env.js";
+import { STDERR_TAIL_LINES } from "./constants.js";
 
 const run = promisify(execFile);
-
-/** Enough of the parser's stderr to say what went wrong, not enough to ship a
- *  log file to the client. */
-const STDERR_TAIL_LINES = 5;
 
 /**
  * Canonical form of a GitHub repository URL: https, lowercase host, no

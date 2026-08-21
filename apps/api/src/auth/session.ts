@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../env.js";
+import { SESSION_ID_BYTES, SESSION_KEY_PREFIX } from "./constants.js";
 import { redis } from "../redis.js";
 import { clearCookie, readSignedCookie, setSignedCookie } from "./cookies.js";
 
@@ -12,11 +13,6 @@ import { clearCookie, readSignedCookie, setSignedCookie } from "./cookies.js";
  * anything in the cookie is in the browser, and a token in the browser is a
  * token in whatever manages to read it.
  */
-
-/** 256 bits. A session id is a bearer credential; it has to be unguessable. */
-const SESSION_ID_BYTES = 32;
-
-const KEY_PREFIX = "session:";
 
 export interface Session {
   /** GitHub's numeric user id, which is stable across username changes. */
@@ -35,12 +31,12 @@ declare module "fastify" {
 /** Creates a session and returns its id. */
 export async function createSession(session: Session): Promise<string> {
   const id = randomBytes(SESSION_ID_BYTES).toString("hex");
-  await redis.setex(KEY_PREFIX + id, env.SESSION_TTL, JSON.stringify(session));
+  await redis.setex(SESSION_KEY_PREFIX + id, env.SESSION_TTL, JSON.stringify(session));
   return id;
 }
 
 export async function readSession(id: string): Promise<Session | null> {
-  const raw = await redis.get(KEY_PREFIX + id);
+  const raw = await redis.get(SESSION_KEY_PREFIX + id);
   if (raw === null) {
     return null;
   }
@@ -54,7 +50,7 @@ export async function readSession(id: string): Promise<Session | null> {
 }
 
 export async function destroySession(id: string): Promise<void> {
-  await redis.del(KEY_PREFIX + id);
+  await redis.del(SESSION_KEY_PREFIX + id);
 }
 
 /** Cookie and Redis entry expire together, so a live cookie always has a

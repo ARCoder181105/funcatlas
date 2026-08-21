@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { UI_STORAGE_KEY } from "../lib/constants";
+
+export { UI_STORAGE_KEY };
 
 /**
  * What the reader has selected. Server state lives in TanStack Query; this is
@@ -112,11 +115,6 @@ const empty = () => ({
   selectedFileId: null,
   ...noMap(),
 });
-
-/** The whole selection survives a reload -- repository, file, and every branch
- *  the reader opened. Rebuilding a map by hand after every refresh was the
- *  complaint that put this here. */
-export const UI_STORAGE_KEY = "funcatlas-ui";
 
 export const useUiStore = create<UiState>()(
   persist(

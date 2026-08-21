@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { env } from "../env.js";
+import { KEEP_FAILED_JOBS, PARSE_DIRTY_TTL_SECONDS, PARSE_JOB_NAME } from "./constants.js";
 
 /** What the worker needs to run one parse. */
 export interface ParseJob {
@@ -9,8 +10,6 @@ export interface ParseJob {
   /** A first parse writes the whole repository; a re-parse scopes the write. */
   incremental: boolean;
 }
-
-export const JOB_NAME = "parse";
 
 /**
  * BullMQ's own connection.
@@ -58,11 +57,11 @@ export async function enqueueParse(job: ParseJob): Promise<void> {
   // enqueue. BullMQ still collapses them by jobId -- the only cost is a dirty
   // flag that outlives its reason, which is one extra parse.
   if (await parseQueue.getJob(jobId)) {
-    await queueConnection.set(dirtyKey(job.githubUrl), "1", "EX", DIRTY_TTL_SECONDS);
+    await queueConnection.set(dirtyKey(job.githubUrl), "1", "EX", PARSE_DIRTY_TTL_SECONDS);
     return;
   }
 
-  await parseQueue.add(JOB_NAME, job, {
+  await parseQueue.add(PARSE_JOB_NAME, job, {
     jobId,
     // Removed on completion so the next push is not collapsed onto a finished
     // job. Failures are kept: a repository stuck failing is worth seeing.
@@ -86,6 +85,3 @@ export async function onParseComplete(job: ParseJob): Promise<void> {
   await enqueueParse({ githubUrl: job.githubUrl, incremental: true });
 }
 
-/** Long enough to outlive a parse, short enough not to strand a stale flag. */
-const DIRTY_TTL_SECONDS = 3600;
-const KEEP_FAILED_JOBS = 50;
