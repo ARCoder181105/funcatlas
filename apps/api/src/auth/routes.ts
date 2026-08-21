@@ -17,7 +17,6 @@ import {
   requireSession,
   sessionIdFrom,
   setSessionCookie,
-  type Session,
 } from "./session.js";
 
 /**
@@ -99,20 +98,4 @@ export function registerAuth(app: FastifyInstance) {
     login: req.session?.login,
   }));
 
-  // Removed in Phase 4 hardening.
-  //
-  // Gated around the registration rather than inside the handler: in
-  // production the route does not exist and answers 404. A guarded handler
-  // would answer 401, which tells a prober there is something here worth
-  // finding credentials for.
-  if (env.NODE_ENV !== "production") {
-    app.post("/auth/dev-login", async (_req, reply) => {
-      setSessionCookie(reply, await createSession(DEV_USER));
-      return reply.code(204).send();
-    });
-  }
 }
-
-/** Empty access token: nothing in this phase calls GitHub with a session's
- *  credentials, and a fake one that looks real is worse than none. */
-const DEV_USER: Session = { userId: 0, login: "dev", accessToken: "" };

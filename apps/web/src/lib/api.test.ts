@@ -60,7 +60,7 @@ describe("request", () => {
 
     // Fastify rejects a POST that sets content-type: application/json and
     // then sends nothing, with FST_ERR_CTP_EMPTY_JSON_BODY -- a 400. Logout
-    // and dev-login are both bodyless.
+    // is bodyless.
     expect(lastCall()[1].headers).not.toHaveProperty("content-type");
   });
 });

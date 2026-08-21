@@ -39,7 +39,10 @@ because there is no binary at `PARSER_BIN`. Rebuild it after any change under `s
 For a real login you also need a GitHub OAuth app (Settings → Developer settings → OAuth Apps) with
 its callback URL set to exactly `GITHUB_REDIRECT_URI`, and `GITHUB_CLIENT_ID` /
 `GITHUB_CLIENT_SECRET` in `.env`. `SESSION_SECRET` is any 32 random bytes: `openssl rand -hex 32`.
-To work on the API without one, use `/auth/dev-login` below.
+
+The OAuth app is now required. `/auth/dev-login` used to stand in for it and was deleted in Phase 4
+(R30): it was a login with no credential, gated only by `NODE_ENV`, so one non-production deployment
+on a reachable host was a session for the asking.
 
 ## Layout
 
@@ -78,8 +81,8 @@ cd services/parser && go run ./cmd/parser --repo ./testdata/sample   # terminal 
 `docker compose up` with no arguments runs the whole stack in prod mode, no hot reload. Use it to
 check that the thing actually works in a container, not to develop in.
 
-Open <http://localhost:5173>, not the API's port. Signed out you get the sign-in card; **Continue as
-a local dev user** skips GitHub entirely, so the whole UI is usable without an OAuth app.
+Open <http://localhost:5173>, not the API's port. Signed out you get the sign-in card and **Sign in
+with GitHub**, which needs the OAuth app above.
 
 ### `WEB_APP_URL`
 
@@ -95,15 +98,16 @@ The API fails fast on start if it is missing, so you will know immediately.
 
 ## Driving the API by hand
 
-Everything under `/api` needs a session, so start by getting one into a cookie jar. `/auth/dev-login`
-only exists outside production; the real flow is `/auth/login` in a browser.
+Everything under `/api` needs a session, and the only way to get one is `/auth/login` in a browser.
+Sign in there, then copy the `funcatlas_session` cookie out of devtools into a jar:
 
 ```bash
-curl -c jar -X POST localhost:3000/auth/dev-login    # 204, sets the session cookie
-curl -b jar localhost:3000/auth/me                   # {"userId":0,"login":"dev"}
+printf 'localhost\tFALSE\t/\tFALSE\t0\tfuncatlas_session\t<paste-value>\n' > jar
+curl -b jar localhost:3000/auth/me                   # {"userId":...,"login":"..."}
 ```
 
-Register a repository. This clones and parses inline, so the request takes as long as the parse:
+Register a repository. This returns immediately now — the parse runs on the queue, so watch
+`parseStatus` rather than the request:
 
 ```bash
 curl -b jar -X POST localhost:3000/api/repos \

@@ -1,10 +1,9 @@
 import { ArrowRight, Github } from "lucide-react";
 import { api } from "../lib/api";
 import { cn } from "../lib/cn";
-import { useDevLogin } from "../lib/session";
 import { ConfidenceLegend } from "./ConfidenceLegend";
 import { ThemeToggle } from "./ThemeToggle";
-import { Button, buttonVariants } from "./ui/button";
+import { buttonVariants } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Separator } from "./ui/separator";
 
@@ -20,7 +19,6 @@ import { Separator } from "./ui/separator";
  * a decoration that does not. The legend beside it was already doing the work.
  */
 export function LoginScreen() {
-  const devLogin = useDevLogin();
 
   return (
     <div className="relative flex h-full w-full items-center justify-center overflow-hidden p-6">
@@ -57,28 +55,6 @@ export function LoginScreen() {
               aria-hidden
             />
           </a>
-
-          {import.meta.env.DEV ? (
-            <div className="flex flex-col gap-2">
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full"
-                disabled={devLogin.isPending}
-                onClick={() => devLogin.mutate()}
-              >
-                {devLogin.isPending ? "Signing in…" : "Continue as a local dev user"}
-              </Button>
-              <p className="text-center text-xs text-ink-muted">
-                Development only. Skips GitHub, so no OAuth app is needed.
-              </p>
-              {devLogin.isError ? (
-                <p className="text-center text-xs text-destructive">
-                  Could not sign in locally. Is the API running?
-                </p>
-              ) : null}
-            </div>
-          ) : null}
         </CardContent>
       </Card>
     </div>

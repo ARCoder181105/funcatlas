@@ -305,50 +305,17 @@ describe("GET /auth/me", () => {
   });
 });
 
-describe("POST /auth/dev-login", () => {
-  it("mints a session without going near GitHub", async () => {
-    // Any fetch would mean this is not the shortcut it claims to be.
-    stubGitHub({});
-
+describe("the deleted dev-login shortcut", () => {
+  // R30: a login with no credential. It was gated to non-production, which
+  // meant it only had to be reachable once -- a non-production NODE_ENV on a
+  // host anyone could reach was a session for the asking.
+  it("does not exist, in any environment", async () => {
     const res = await app.inject({ method: "POST", url: "/auth/dev-login" });
-    expect(res.statusCode).toBe(204);
+    expect(res.statusCode).toBe(404);
 
-    const cookie = cookieHeader(res, env.SESSION_COOKIE_NAME);
-    expect(cookie).not.toBeNull();
-
-    const me = await app.inject({
-      method: "GET",
-      url: "/auth/me",
-      headers: { cookie: String(cookie) },
-    });
-    expect(me.json()).toEqual({ userId: 0, login: "dev" });
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-  });
-
-  it("does not exist in production", async () => {
-    // env is parsed once at import, so the whole module graph has to be
-    // rebuilt to see a different NODE_ENV.
-    vi.stubEnv("NODE_ENV", "production");
-    vi.resetModules();
-
-    const { buildApp: buildProdApp } = await import("../app.js");
-    const prodApp = await buildProdApp();
-
-    try {
-      const res = await prodApp.inject({ method: "POST", url: "/auth/dev-login" });
-      // 404, not 401: the route is absent, not merely refusing.
-      expect(res.statusCode).toBe(404);
-      // The real login is still there, so this proves the gate and not a
-      // broken build.
-      expect((await prodApp.inject({ method: "GET", url: "/auth/login" })).statusCode).toBe(302);
-    } finally {
-      await prodApp.close();
-      // The rebuilt graph opened its own Redis connection; vitest hangs on the
-      // open handle otherwise.
-      const { redis: prodRedis } = await import("../redis.js");
-      await prodRedis.quit();
-      vi.unstubAllEnvs();
-      vi.resetModules();
-    }
+    // The real login is still there, so this proves the route is gone rather
+    // than the app being broken.
+    expect((await app.inject({ method: "GET", url: "/auth/login" })).statusCode).toBe(302);
   });
 });
+
