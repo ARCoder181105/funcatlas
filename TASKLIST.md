@@ -238,7 +238,7 @@ than a spinner (`docs/UI_GUIDE.md` §3.3).
 
 ---
 
-## D4 — The webhook  `[ ]`
+## D4 — The webhook  `[x]`
 
 **Why.** FR-9, and the only reason the queue exists.
 
@@ -263,8 +263,22 @@ than a spinner (`docs/UI_GUIDE.md` §3.3).
    an unknown repository is a 200 and no job.
 
 **Done when.** A signed request enqueues one job; a tampered body is 401; a replayed delivery id is
-200 and enqueues nothing; fifty deliveries for one repository in a second enqueue one job. All four
-are unit tests against `buildApp` — no tunnel needed.
+200 and enqueues nothing; a flood for one repository is throttled. — `routes/webhook.test.ts`,
+twelve tests against `buildApp`, no tunnel needed.
+
+**What it turned up.** Two things, both found by trying to break the tests rather than by reading
+the code.
+
+The throttle keyed on the repository read out of the body, and **never throttled**: the limiter runs
+`onRequest`, before the body is parsed, so the key was `undefined` for every request and each one
+got its own bucket. It keys on `x-github-hook-id` now — a header, available that early, and stable
+per configured webhook.
+
+The byte-exactness test was worthless as first written. Deleting the raw-body parser and
+re-serialising `req.body` still passed, because a compact JSON fixture round-trips through
+`JSON.stringify` unchanged. A pretty-printed body does not, and with one the test fails under
+exactly that mutation — which is what makes the raw parser provably load-bearing rather than
+merely commented as such.
 
 **Watch for.** The signature covers the **exact bytes**, so anything that re-serialises before the
 check breaks it in a way that looks like a wrong secret. Length-check before `timingSafeEqual`; it

@@ -20,6 +20,10 @@ const GATED: { method: "GET" | "POST"; url: string }[] = [
 
 /** Reachable logged out, by necessity: you cannot log in through a gate that
  *  requires being logged in. */
+// Ungated, and asserted here to be. POST /webhooks/github is ungated too but
+// does not belong in this list: it answers 401 to an unsigned request, so "not
+// 401" is the wrong assertion for it. Its own auth is covered in
+// routes/webhook.test.ts.
 const OPEN = ["/healthz", "/auth/login"];
 
 let app: FastifyInstance;

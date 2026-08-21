@@ -6,6 +6,7 @@ import { env } from "./env.js";
 import { redis } from "./redis.js";
 import { registerAuth } from "./auth/routes.js";
 import { registerApi } from "./routes/index.js";
+import { registerWebhook } from "./routes/webhook.js";
 
 /**
  * Builds the app without listening, so tests drive it through app.inject()
@@ -31,6 +32,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get("/healthz", async () => ({ status: "ok", env: env.NODE_ENV }));
 
   registerAuth(app);
+  // Outside registerApi's session gate: GitHub sends no cookie, and the HMAC
+  // is what authenticates it.
+  await registerWebhook(app);
   await registerApi(app);
 
   return app;
