@@ -29,6 +29,16 @@ func main() {
 	}
 	defer func() { _ = logger.Sync() }()
 
+	// run rather than a body full of logger.Fatal: Fatal calls os.Exit, which
+	// skips every deferred call -- including the one that removes the clone. A
+	// repository that failed to parse used to leak a checkout on every attempt.
+	if err := run(logger); err != nil {
+		logger.Fatal("parser failed", zap.Error(err))
+	}
+}
+
+func run(logger *zap.Logger) error {
+
 	repo := flag.String("repo", "", "local path or git URL to parse")
 	out := flag.String("out", "out.json", "output file path, or - for stdout")
 	format := flag.String("format", "json", "output format: json|summary")
@@ -40,27 +50,30 @@ func main() {
 	flag.Parse()
 
 	if *repo == "" {
-		logger.Fatal("missing --repo")
+		return fmt.Errorf("missing --repo")
 	}
 
 	cfg := security.ConfigFromEnv()
-	root, err := clone.New(logger, cfg).Prepare(*repo)
+	root, cleanup, err := clone.New(logger, cfg).Prepare(*repo)
+	// A clone used to be left behind on every run. Removed here rather than
+	// inside Prepare: everything below reads from it.
+	defer cleanup()
 	if err != nil {
-		logger.Fatal("clone/prepare failed", zap.Error(err))
+		return fmt.Errorf("clone/prepare failed: %w", err)
 	}
 
 	graph, err := ts.Extract(logger, root, cfg)
 	if err != nil {
-		logger.Fatal("parse failed", zap.Error(err))
+		return fmt.Errorf("parse failed: %w", err)
 	}
 	edges := resolver.Resolve(graph)
 
 	if err := report(*format, *out, graph, edges); err != nil {
-		logger.Fatal("output failed", zap.Error(err))
+		return fmt.Errorf("output failed: %w", err)
 	}
 
 	if !*write {
-		return
+		return nil
 	}
 
 	// Read off the checkout rather than made a required flag: the caller that
@@ -82,8 +95,10 @@ func main() {
 		Commit:      *commit,
 		Incremental: *incremental,
 	}); err != nil {
-		logger.Fatal("write failed", zap.Error(err))
+		return fmt.Errorf("write failed: %w", err)
 	}
+
+	return nil
 }
 
 // report prints the graph. Works with no database configured, so --format json

@@ -69,16 +69,76 @@ func TestHeadBranchOnDetachedHead(t *testing.T) {
 // that by asking for a username. Unprompted it would sit there until
 // PARSE_TIMEOUT_MS killed it; the clone environment has to refuse the prompt.
 func TestPrepareRefusesCredentialPrompt(t *testing.T) {
-	if exec.Command("git", "ls-remote", "https://github.com/git/git", "HEAD").Run() != nil {
-		t.Skip("no network access to github.com")
-	}
+	requireNetwork(t)
 
 	c := New(zap.NewNop(), security.Config{})
-	_, err := c.Prepare("https://github.com/ARCoder181105/funcatlas-no-such-repo")
+	_, _, err := c.Prepare("https://github.com/ARCoder181105/funcatlas-no-such-repo")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "terminal prompts disabled",
 		"git must fail on the missing credential rather than wait for one")
+}
+
+// Every parse used to leave its checkout in the OS temp directory, forever.
+//
+// Needs a real clone, because Prepare only clones an http(s) or git@ URL -- a
+// local path is used where it lies, which is the other half of this contract.
+func TestPrepareCleansUpItsClone(t *testing.T) {
+	requireNetwork(t)
+
+	c := New(zap.NewNop(), security.Config{})
+	dir, cleanup, err := c.Prepare("https://github.com/octocat/Hello-World")
+	require.NoError(t, err)
+	require.DirExists(t, dir)
+
+	cleanup()
+
+	assert.NoDirExists(t, dir, "the clone must not outlive the parse")
+}
+
+// A local path is the user's own directory. Removing it would be considerably
+// worse than leaking a temp one.
+func TestPrepareLeavesALocalPathAlone(t *testing.T) {
+	dir := t.TempDir()
+
+	c := New(zap.NewNop(), security.Config{})
+	root, cleanup, err := c.Prepare(dir)
+	require.NoError(t, err)
+
+	cleanup()
+
+	assert.DirExists(t, root)
+}
+
+// A clone that fails still created the directory it was going to fill, and
+// this is the path that ran most often: a repository that cannot be reached is
+// retried, and each attempt used to leak.
+func TestPrepareRemovesTheDirectoryWhenTheCloneFails(t *testing.T) {
+	requireNetwork(t)
+	before := tempClones(t)
+
+	c := New(zap.NewNop(), security.Config{})
+	_, _, err := c.Prepare("https://github.com/ARCoder181105/funcatlas-no-such-repo")
+	require.Error(t, err)
+
+	assert.Equal(t, before, tempClones(t), "a failed clone must leave nothing behind")
+}
+
+// requireNetwork skips when github.com cannot be reached, the way the database
+// tests skip without Postgres.
+func requireNetwork(t *testing.T) {
+	t.Helper()
+	if exec.Command("git", "ls-remote", "https://github.com/git/git", "HEAD").Run() != nil {
+		t.Skip("no network access to github.com")
+	}
+}
+
+// How many funcatlas clones are sitting in the OS temp directory.
+func tempClones(t *testing.T) int {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(os.TempDir(), "funcatlas-clone-*"))
+	require.NoError(t, err)
+	return len(matches)
 }
 
 // A local path being parsed need not be a repository. Absence is "unknown",

@@ -21,7 +21,7 @@ start: ## Bring up EVERYTHING: Postgres, Redis, migrations, parser binary, API, 
 	@echo "  API  http://localhost:3000"
 	@echo "  Web  http://localhost:5173   <- open this"
 	@echo ""
-	@echo "  Sign in with 'Continue as a local dev user'. Ctrl-C stops API and web;"
+	@echo "  Sign in with GitHub. Ctrl-C stops API, web and the parse worker;"
 	@echo "  Postgres and Redis keep running until 'make stop'."
 	@echo ""
 	$(MAKE) dev
@@ -43,7 +43,7 @@ wait-infra: ## Block until Postgres and Redis both accept connections
 install: ## Install all workspace dependencies
 	pnpm install
 
-dev: ## Run api + web in dev mode (hot reload). Assumes infra is already up.
+dev: ## Run api + web + parse worker in dev mode. Assumes infra is already up.
 	pnpm dev
 
 build: ## Build all packages
