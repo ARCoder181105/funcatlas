@@ -4,5 +4,9 @@ packages:
   - "services/*"
 allowBuilds:
   esbuild: true
+  # BullMQ's optional native msgpack accelerator. Declined: it compiles at
+  # install time, which is a build script nobody here has read, and BullMQ
+  # falls back to the JavaScript encoder without it.
+  msgpackr-extract: false
 onlyBuiltDependencies:
   - esbuild

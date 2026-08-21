@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "worker": "tsx watch src/worker.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "lint": "eslint . --max-warnings 0",
@@ -17,6 +18,7 @@
     "@fastify/rate-limit": "^10.1.1",
     "@funcatlas/shared": "workspace:*",
     "arctic": "^3.4.0",
+    "bullmq": "^6.1.2",
     "dotenv": "^17.0.0",
     "drizzle-orm": "^0.44.2",
     "fastify": "^5.2.1",

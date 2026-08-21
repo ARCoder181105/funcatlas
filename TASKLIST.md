@@ -161,7 +161,7 @@ expansions and watching it fail: the edge count drops to zero, which is the bug 
 
 ---
 
-## D2 — Queue and worker  `[ ]`
+## D2 — Queue and worker  `[x]`
 
 **Why.** Removes the ceiling `register.ts` already marks with a `ponytail:` comment.
 
@@ -184,7 +184,14 @@ expansions and watching it fail: the edge count drops to zero, which is the bug 
    request event loop.
 
 **Done when.** Two enqueues for one repository run the parser once. An enqueue during a run causes
-exactly one follow-up run. Killing the worker mid-job leaves the repository re-parseable.
+exactly one follow-up run. Killing the worker mid-job leaves the repository re-parseable. —
+`src/queue/parse.test.ts`, seven tests, skipping as a group when Redis is unreachable the way the Go
+integration tests skip without Postgres.
+
+**What it turned up.** `pnpm install` now fails outright until the project records a decision about
+BullMQ's optional native msgpack accelerator. Declined in `pnpm-workspace.yaml`: it compiles at
+install time, which is a build script nobody here has read, and BullMQ falls back to the JavaScript
+encoder without it.
 
 **Watch for.** Two Redis connections exist now and `app.ts`'s `onClose` closes one. The worker must
 close its own or vitest hangs — `auth/routes.test.ts` has the existing pattern for that class of bug.

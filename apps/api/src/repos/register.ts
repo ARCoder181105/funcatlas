@@ -39,20 +39,24 @@ export class ParseError extends Error {
   }
 }
 
+export interface RunParserOptions {
+  /** Rewrite only the rows whose files changed. False for a first parse. */
+  incremental?: boolean;
+  bin?: string;
+  timeout?: number;
+}
+
 /**
  * Clones and parses a repository, writing the graph to Postgres.
  *
  * execFile with an argv array, never a shell: the URL is user input, and no
  * amount of validation makes string interpolation into a command line safe.
  *
- * ponytail: synchronous, so a large repository holds the request open for as
- * long as the parse takes. Phase 4 replaces this with the queue.
+ * Called from the queue worker, not from a request — the timeout below bounds
+ * how long a job runs, not how long a client waits.
  */
-export async function runParser(
-  githubUrl: string,
-  bin = env.PARSER_BIN,
-  timeout = env.PARSE_TIMEOUT_MS,
-): Promise<void> {
+export async function runParser(githubUrl: string, opts: RunParserOptions = {}): Promise<void> {
+  const { incremental = false, bin = env.PARSER_BIN, timeout = env.PARSE_TIMEOUT_MS } = opts;
   try {
     await run(
       bin,
@@ -64,6 +68,7 @@ export async function runParser(
         "--write",
         "--format",
         "summary",
+        ...(incremental ? ["--incremental"] : []),
       ],
       { timeout },
     );

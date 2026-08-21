@@ -37,9 +37,10 @@ const schema = z.object({
   // Built by `make go-build-bin`. Absolute, because the API's working
   // directory depends on how it was started.
   PARSER_BIN: z.string().min(1).default(path.join(repoRoot, "services/parser/bin/parser")),
-  // Registration runs the parser inline, so this is also how long a request
-  // can hang. Phase 4 moves the work to the queue and this stops mattering.
   PARSE_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
+  // How many repositories the worker parses at once. Each one is a whole
+  // tree-sitter pass, so this is a CPU count, not a connection count.
+  PARSE_CONCURRENCY: z.coerce.number().int().positive().default(2),
 });
 
 export const env = schema.parse(process.env);

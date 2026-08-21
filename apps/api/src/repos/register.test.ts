@@ -49,7 +49,7 @@ describe("runParser", () => {
   it("resolves when the parser exits 0", async () => {
     const bin = stubParser("ok", "exit 0");
     await expect(
-      runParser("https://github.com/owner/repo", bin),
+      runParser("https://github.com/owner/repo", { bin }),
     ).resolves.toBeUndefined();
   });
 
@@ -63,11 +63,23 @@ describe("runParser", () => {
     );
     const hostile = `https://github.com/owner/repo; touch ${marker}`;
 
-    await runParser(hostile, bin);
+    await runParser(hostile, { bin });
 
     const { existsSync, readFileSync } = await import("node:fs");
     expect(existsSync(marker)).toBe(false);
     expect(readFileSync(path.join(dir, "seen"), "utf8")).toBe(hostile);
+  });
+
+  it("asks for an incremental write only when told to", async () => {
+    const seen = path.join(dir, "argv-seen");
+    const bin = stubParser("argv", `printf '%s\\n' "$@" > "${seen}"`);
+    const { readFileSync } = await import("node:fs");
+
+    await runParser("https://github.com/owner/repo", { bin });
+    expect(readFileSync(seen, "utf8")).not.toContain("--incremental");
+
+    await runParser("https://github.com/owner/repo", { bin, incremental: true });
+    expect(readFileSync(seen, "utf8")).toContain("--incremental");
   });
 
   it("reports a non-zero exit with the tail of stderr", async () => {
@@ -77,10 +89,10 @@ describe("runParser", () => {
     );
 
     await expect(
-      runParser("https://github.com/owner/repo", bin),
+      runParser("https://github.com/owner/repo", { bin }),
     ).rejects.toThrow(ParseError);
     await expect(
-      runParser("https://github.com/owner/repo", bin),
+      runParser("https://github.com/owner/repo", { bin }),
     ).rejects.toMatchObject({
       timedOut: false,
       detail: expect.stringContaining("repository not found"),
@@ -100,7 +112,7 @@ describe("runParser", () => {
     writeFileSync(log, logs.join("\n") + "\n");
     const bin = stubParser("zap-fail", `cat "${log}" >&2\nexit 1`);
 
-    const detail = await runParser("https://github.com/o/r", bin).catch(
+    const detail = await runParser("https://github.com/o/r", { bin }).catch(
       (err: ParseError) => err.detail,
     );
 
@@ -114,7 +126,7 @@ describe("runParser", () => {
     const bin = stubParser("hang", "sleep 30");
 
     await expect(
-      runParser("https://github.com/owner/repo", bin, 200),
+      runParser("https://github.com/owner/repo", { bin, timeout: 200 }),
     ).rejects.toMatchObject({
       timedOut: true,
     });
@@ -122,10 +134,7 @@ describe("runParser", () => {
 
   it("reports a missing binary rather than throwing something unhandled", async () => {
     await expect(
-      runParser(
-        "https://github.com/owner/repo",
-        path.join(dir, "does-not-exist"),
-      ),
+      runParser("https://github.com/owner/repo", { bin: path.join(dir, "does-not-exist") }),
     ).rejects.toThrow(ParseError);
   });
 });
