@@ -9,6 +9,24 @@ import { registerApi } from "./routes/index.js";
 import { registerWebhook } from "./routes/webhook.js";
 
 /**
+ * ioredis reports an outage as one of a handful of shapes rather than a typed
+ * error: a timeout, a closed connection, a refused socket, or the retry ceiling.
+ * Matching on the message is unlovely and is what the library gives us.
+ */
+function isRedisUnavailable(err: unknown): boolean {
+  if (!(err instanceof Error)) {
+    return false;
+  }
+  return (
+    err.name === "MaxRetriesPerRequestError" ||
+    err.message.includes("Command timed out") ||
+    err.message.includes("Connection is closed") ||
+    err.message.includes("Stream isn't writeable") ||
+    err.message.includes("ECONNREFUSED")
+  );
+}
+
+/**
  * Builds the app without listening, so tests drive it through app.inject()
  * instead of binding a port. index.ts is the only place that listens.
  */
@@ -27,6 +45,24 @@ export async function buildApp(): Promise<FastifyInstance> {
   // shutdown and stops vitest from exiting.
   app.addHook("onClose", async () => {
     await redis.quit();
+  });
+
+  /**
+   * A Redis outage is a 503, not a 500.
+   *
+   * Handled once, here, rather than guarded at every call site: sessions,
+   * logout, the webhook's replay check and the queue all reach Redis, and a
+   * guard per caller is how the next caller ends up without one. 503 says
+   * "try again", which is true -- 500 says the request was malformed, which
+   * is not.
+   */
+  app.setErrorHandler((err, req, reply) => {
+    if (isRedisUnavailable(err)) {
+      req.log.error({ err }, "redis unavailable");
+      return reply.code(503).send({ error: "temporarily unavailable" });
+    }
+    req.log.error({ err }, "unhandled error");
+    return reply.send(err);
   });
 
   app.get("/healthz", async () => ({ status: "ok", env: env.NODE_ENV }));
