@@ -3,8 +3,20 @@ package utils
 // Every shared literal in the parser. One home, so a string like "unresolved"
 // is never spelled twice and cannot drift from the database CHECK constraint.
 
-// Language is the only language the MVP parses.
-const Language = "typescript"
+// Languages, as written to files.language. One name per grammar-and-extension
+// pairing, so the value always says which grammar actually read the file.
+const (
+	LangTypeScript = "typescript"
+	LangTSX        = "tsx"
+)
+
+// Capture names every language's .scm must declare. Missing one is a compile
+// error at load time rather than a file that parses to nothing.
+const (
+	CaptureFunctionDef  = "function.def"
+	CaptureFunctionCall = "function.call"
+	CaptureImportFrom   = "import.from"
+)
 
 // DefaultBranch is recorded when a checkout reports no branch of its own --
 // a detached head, or a path that is not a git repository at all.
@@ -51,6 +63,7 @@ var (
 )
 
 // Tree-sitter node kinds, so a grammar rename breaks in one place.
+// Grouped by language: these are TypeScript's, shared with JSX.
 const (
 	KindIdentifier         = "identifier"
 	KindMemberExpression   = "member_expression"

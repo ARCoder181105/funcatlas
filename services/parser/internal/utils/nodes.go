@@ -2,7 +2,11 @@
 // concern: constants.go, nodes.go, paths.go, qualnames.go, slices.go.
 package utils
 
-import tree_sitter "github.com/tree-sitter/go-tree-sitter"
+import (
+	"strings"
+
+	tree_sitter "github.com/tree-sitter/go-tree-sitter"
+)
 
 // Tree-sitter traversal. Every helper tolerates a nil node -- a malformed file
 // from an untrusted repo must skip, not panic.
@@ -38,6 +42,27 @@ func DeclName(node *tree_sitter.Node, src []byte) string {
 		return name
 	}
 	return Anonymous
+}
+
+// ParentFieldText returns a field of node's parent, but only when the parent is
+// of the given kind. How every language reads a member call's receiver:
+// Repo.sync() -> "Repo", with the callee capture pointing at `sync`.
+func ParentFieldText(node *tree_sitter.Node, parentKind, field string, src []byte) string {
+	if node == nil {
+		return ""
+	}
+	parent := node.Parent()
+	if parent == nil || parent.Kind() != parentKind {
+		return ""
+	}
+	return FieldText(parent, field, src)
+}
+
+// StringLiteralText is a string literal's contents, without the quotes
+// tree-sitter includes in the node. Covers every quoting style the parsed
+// languages use for an import specifier.
+func StringLiteralText(node tree_sitter.Node, src []byte) string {
+	return strings.Trim(node.Utf8Text(src), "\"'`")
 }
 
 // NamedChildren calls fn for each named child, skipping nils.

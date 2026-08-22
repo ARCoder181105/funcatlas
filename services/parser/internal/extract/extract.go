@@ -1,4 +1,9 @@
-package ts
+// Package extract walks a repository and turns each source file into the IR.
+//
+// The per-file loop is language-agnostic: walk, hash, split lines, run three
+// capture passes, number overloads. Everything a language does differently
+// lives in its Spec.
+package extract
 
 import (
 	"bytes"
@@ -19,7 +24,8 @@ import (
 	"github.com/ARCoder181105/funcatlas/parser/internal/utils"
 )
 
-// Extract walks the repo, parses each TypeScript file, and returns the IR.
+// Extract walks the repo, parses every file a registered spec claims, and
+// returns the IR.
 func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, error) {
 	grammars, err := loadGrammars()
 	if err != nil {
@@ -54,7 +60,7 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 		// the usual cause is a grammar mismatch.
 		if tree.RootNode().HasError() {
 			logger.Warn("file parsed with errors; some calls may be missing",
-				zap.String("path", p))
+				zap.String("path", p), zap.String("language", g.spec.Name))
 		}
 
 		rel, _ := filepath.Rel(root, p)
@@ -66,7 +72,7 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 		sum := sha256.Sum256(src)
 		graph.Files = append(graph.Files, ir.File{
 			Path:        rel,
-			Language:    utils.Language,
+			Language:    g.spec.Name,
 			ContentHash: hex.EncodeToString(sum[:]),
 		})
 
@@ -75,7 +81,7 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 		// Split once per file, not once per function found in it.
 		lines := strings.Split(string(src), "\n")
 
-		eachCapture(g.queries.def, rootNode, src, "function.def", func(nameNode tree_sitter.Node) {
+		eachCapture(g.queries.def, rootNode, src, utils.CaptureFunctionDef, func(nameNode tree_sitter.Node) {
 			declNode := nameNode.Parent()
 			if declNode == nil {
 				return
@@ -94,7 +100,7 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 				FileID:        fileID,
 				PackagePath:   pkgPath,
 				Name:          funcName,
-				QualifiedName: qualifiedName(*declNode, src, funcName),
+				QualifiedName: qualifiedName(*declNode, src, g.spec, funcName),
 				StartLine:     startLine,
 				EndLine:       endLine,
 				Source:        strings.Join(lines[startLine-1:endLine], "\n"),
@@ -102,25 +108,25 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 		})
 		assignOverloadIndices(graph.Functions[startLen:])
 
-		eachCapture(g.queries.call, rootNode, src, "function.call", func(callNode tree_sitter.Node) {
+		eachCapture(g.queries.call, rootNode, src, utils.CaptureFunctionCall, func(callNode tree_sitter.Node) {
 			graph.Calls = append(graph.Calls, ir.CallSite{
 				FileID:          fileID,
-				CallerQualified: enclosingQualifiedName(callNode, src),
-				CalleeObject:    calleeObject(callNode, src),
+				CallerQualified: enclosingQualifiedName(callNode, src, g.spec),
+				CalleeObject:    g.spec.CalleeReceiver(callNode, src),
 				CalleeName:      callNode.Utf8Text(src),
 				Line:            int(callNode.StartPosition().Row) + 1,
 			})
 		})
 
-		eachCapture(g.queries.imp, rootNode, src, "import.from", func(sourceNode tree_sitter.Node) {
+		eachCapture(g.queries.imp, rootNode, src, utils.CaptureImportFrom, func(sourceNode tree_sitter.Node) {
 			stmt := sourceNode.Parent()
 			if stmt == nil {
 				return
 			}
 			graph.Imports = append(graph.Imports, ir.Import{
 				FileID:  fileID,
-				From:    strings.Trim(sourceNode.Utf8Text(src), "\"'`"),
-				Symbols: importSymbols(stmt, src),
+				From:    utils.StringLiteralText(sourceNode, src),
+				Symbols: g.spec.Imports(stmt, src),
 			})
 		})
 
@@ -183,79 +189,6 @@ func eachCapture(q *tree_sitter.Query, root *tree_sitter.Node, src []byte, name 
 			fn(capture.Node)
 		}
 	}
-}
-
-// calleeObject returns a member call's receiver: Repo.sync() -> "Repo",
-// a.b.c() -> "a.b". Empty for a bare call.
-//
-// Read from the tree, not captured in the .scm: an `object:` field would make
-// the member_expression pattern require it, so a.b.c() would stop matching
-// and the call site would vanish.
-func calleeObject(callNode tree_sitter.Node, src []byte) string {
-	parent := callNode.Parent()
-	if parent == nil || parent.Kind() != utils.KindMemberExpression {
-		return ""
-	}
-	obj := parent.ChildByFieldName("object")
-	if obj == nil {
-		return ""
-	}
-	return obj.Utf8Text(src)
-}
-
-// importSymbols collects only the names an import binds locally -- what a call
-// site here can actually reference. Walking by node kind rather than grabbing
-// every identifier is what keeps `import { a as b }` from yielding both a and b.
-func importSymbols(stmt *tree_sitter.Node, src []byte) []ir.ImportedSymbol {
-	// A re-export binds nothing locally; recorded for barrel-following later.
-	var out []ir.ImportedSymbol
-
-	if stmt.Kind() == utils.KindExportStatement {
-		clause := utils.ChildByKind(stmt, utils.KindExportClause)
-		if clause == nil {
-			return []ir.ImportedSymbol{{Kind: utils.KindReExport}} // export * from "m"
-		}
-		utils.NamedChildren(clause, func(spec *tree_sitter.Node) {
-			if spec.Kind() == utils.KindExportSpecifier {
-				out = append(out, ir.ImportedSymbol{
-					Original: utils.FieldText(spec, "name", src),
-					Kind:     utils.KindReExport,
-				})
-			}
-		})
-		return out
-	}
-
-	clause := utils.ChildByKind(stmt, utils.KindImportClause)
-	if clause == nil {
-		return []ir.ImportedSymbol{{Kind: utils.KindSideEffect}} // import "m"
-	}
-
-	utils.NamedChildren(clause, func(child *tree_sitter.Node) {
-		switch child.Kind() {
-		case utils.KindIdentifier: // import def from "m"
-			out = append(out, ir.ImportedSymbol{Local: child.Utf8Text(src), Kind: utils.KindDefault})
-
-		case utils.KindNamespaceImport: // import * as ns from "m"
-			if id := utils.ChildByKind(child, utils.KindIdentifier); id != nil {
-				out = append(out, ir.ImportedSymbol{Local: id.Utf8Text(src), Kind: utils.KindNamespace})
-			}
-
-		case utils.KindNamedImports: // import { a, b as c } from "m"
-			utils.NamedChildren(child, func(spec *tree_sitter.Node) {
-				if spec.Kind() != utils.KindImportSpecifier {
-					return
-				}
-				name := utils.FieldText(spec, "name", src)
-				local := utils.FieldText(spec, "alias", src)
-				if local == "" {
-					local = name
-				}
-				out = append(out, ir.ImportedSymbol{Local: local, Original: name, Kind: utils.KindNamed})
-			})
-		}
-	})
-	return out
 }
 
 // assignOverloadIndices numbers functions sharing a qualified_name in one file,

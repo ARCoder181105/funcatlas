@@ -1,4 +1,4 @@
-package ts_test
+package extract_test
 
 import (
 	"encoding/json"
@@ -214,6 +214,22 @@ func TestExtract_TSXCallsInsideJSX(t *testing.T) {
 	// formatLabel sits above the return; the other three are inside the JSX.
 	for _, name := range []string{"formatLabel", "cx", "renderTitle", "helper"} {
 		assert.Contains(t, called, name, "call %q lost -- is .tsx using the TSX grammar?", name)
+	}
+}
+
+// files.language names the grammar that actually read the file, so .tsx is
+// "tsx" rather than "typescript". Shiki then highlights JSX correctly, and a
+// mismatched grammar is visible in the data rather than only in lost calls.
+func TestExtract_LanguagePerExtension(t *testing.T) {
+	byPath := map[string]string{}
+	for _, f := range testutil.Extract(t, "../../testdata/tsx").Files {
+		byPath[f.Path] = f.Language
+	}
+	assert.Equal(t, utils.LangTSX, byPath["Card.tsx"])
+	assert.Equal(t, utils.LangTypeScript, byPath["helpers.ts"])
+
+	for _, f := range extractGolden(t).Files {
+		assert.Equal(t, utils.LangTypeScript, f.Language, "%s", f.Path)
 	}
 }
 

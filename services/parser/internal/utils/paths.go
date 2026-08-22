@@ -50,13 +50,3 @@ func IsRelativeSpecifier(spec string) bool {
 	return spec == "." || spec == ".." ||
 		strings.HasPrefix(spec, "./") || strings.HasPrefix(spec, "../")
 }
-
-// IsSourceFile reports whether a path is a TypeScript file the parser handles.
-func IsSourceFile(filePath string) bool {
-	for _, ext := range SourceExtensions {
-		if strings.HasSuffix(filePath, ext) {
-			return true
-		}
-	}
-	return false
-}

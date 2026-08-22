@@ -16,7 +16,7 @@ import (
 	"github.com/ARCoder181105/funcatlas/parser/internal/ir"
 	"github.com/ARCoder181105/funcatlas/parser/internal/resolver"
 	"github.com/ARCoder181105/funcatlas/parser/internal/security"
-	"github.com/ARCoder181105/funcatlas/parser/internal/ts"
+	"github.com/ARCoder181105/funcatlas/parser/internal/extract"
 	"github.com/ARCoder181105/funcatlas/parser/internal/utils"
 )
 
@@ -62,7 +62,7 @@ func run(logger *zap.Logger) error {
 		return fmt.Errorf("clone/prepare failed: %w", err)
 	}
 
-	graph, err := ts.Extract(logger, root, cfg)
+	graph, err := extract.Extract(logger, root, cfg)
 	if err != nil {
 		return fmt.Errorf("parse failed: %w", err)
 	}
