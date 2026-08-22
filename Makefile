@@ -106,7 +106,9 @@ parser-isolated: ## Run the parser in its container with no network at all (docs
 	  parser --repo /fixture --format summary --out -
 
 go-run: ## Run the parser against a local repo (usage: make go-run REPO=./path)
-	cd services/parser && go run ./cmd/parser --repo "$(REPO)"
+	# abspath, because the recipe cds into services/parser and REPO is written
+	# relative to the repo root -- which is where everything else in here is.
+	cd services/parser && go run ./cmd/parser --repo "$(abspath $(REPO))" --format summary
 
 clean: ## Clean up generated artifacts and caches
 	pnpm store prune
