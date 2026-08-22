@@ -176,3 +176,49 @@ describe("selection", () => {
     expect(state().selectedRepoId).toBe(1);
   });
 });
+
+describe("dropMissingRoots (R34)", () => {
+  it("forgets a restored branch whose function no longer exists", () => {
+    const store = useUiStore.getState();
+    store.selectFile(3);
+    store.toggleRoot(10);
+    store.toggleRoot(20);
+    store.toggleFunction(99); // a callee, in some other file
+    store.toggleCode(20);
+
+    // A re-parse reinserted this file's functions: 20 is gone, 10 survived.
+    useUiStore.getState().dropMissingRoots([10, 11]);
+
+    const after = useUiStore.getState();
+    expect(after.rootFunctionIds).toEqual([10]);
+    expect(after.expandedFunctionIds).not.toContain(20);
+    expect(after.codeFunctionIds).not.toContain(20);
+    // A callee in another file is not this list's to judge; its own query
+    // answers 404 and that branch is simply not drawn.
+    expect(after.expandedFunctionIds).toContain(99);
+  });
+
+  it("clears the selection only when it was one of the dropped roots", () => {
+    const store = useUiStore.getState();
+    store.selectFile(3);
+    store.toggleRoot(10);
+    store.toggleRoot(20);
+
+    useUiStore.getState().dropMissingRoots([10]);
+    expect(useUiStore.getState().selectedFunctionId).toBeNull();
+
+    useUiStore.getState().toggleRoot(10);
+    useUiStore.getState().dropMissingRoots([10]);
+    expect(useUiStore.getState().selectedFunctionId).toBe(10);
+  });
+
+  it("changes nothing when every root still exists", () => {
+    const store = useUiStore.getState();
+    store.selectFile(3);
+    store.toggleRoot(10);
+    const before = useUiStore.getState().rootFunctionIds;
+
+    useUiStore.getState().dropMissingRoots([10, 11, 12]);
+    expect(useUiStore.getState().rootFunctionIds).toBe(before);
+  });
+});

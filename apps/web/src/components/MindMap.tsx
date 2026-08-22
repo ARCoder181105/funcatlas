@@ -64,6 +64,7 @@ export function MindMap() {
   const codeFunctionIds = useUiStore((state) => state.codeFunctionIds);
   const fileListExpanded = useUiStore((state) => state.fileListExpanded);
   const fullSourceIds = useUiStore((state) => state.fullSourceIds);
+  const dropMissingRoots = useUiStore((state) => state.dropMissingRoots);
 
   const selectedFileId = useUiStore((state) => state.selectedFileId);
   const selectedRepoId = useUiStore((state) => state.selectedRepoId);
@@ -181,6 +182,20 @@ export function MindMap() {
   // and what the size depends on is its contents.
   const names = (fileFunctions.data?.functions ?? []).map((fn) => fn.name).join("|");
   const pendingFunctions = fileFunctions.isPending;
+
+  /**
+   * A restored branch whose function is gone gets forgotten (R34).
+   *
+   * A re-parse reinserts a changed file's functions under new ids, and since
+   * Phase 4 a webhook does that with nobody touching the browser -- so the ids
+   * `zustand/persist` brings back can point at rows that no longer exist. This
+   * is the first moment there is anything to check them against.
+   */
+  const ids = (fileFunctions.data?.functions ?? []).map((fn) => fn.id).join(",");
+  useEffect(() => {
+    if (ids === "") return;
+    dropMissingRoots(ids.split(",").map(Number));
+  }, [ids, dropMissingRoots]);
 
   const fileData = useMemo(() => {
     if (file === undefined) return null;
