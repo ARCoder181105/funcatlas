@@ -41,7 +41,7 @@ func pyScopeSegment(node *tree_sitter.Node, src []byte) (string, bool) {
 // pyCalleeReceiver returns an attribute call's object: self.label() -> "self",
 // osp.basename() -> "osp". Empty for a bare call.
 func pyCalleeReceiver(callNode tree_sitter.Node, src []byte) string {
-	return utils.ParentFieldText(&callNode, utils.KindPyAttribute, "object", src)
+	return utils.ParentFieldText(&callNode, utils.KindPyAttribute, utils.FieldObject, src)
 }
 
 // pyImports records what an import binds locally.
@@ -52,14 +52,14 @@ func pyCalleeReceiver(callNode tree_sitter.Node, src []byte) string {
 // a call site here can actually write.
 func pyImports(stmt tree_sitter.Node, src []byte) (string, []ir.ImportedSymbol) {
 	if stmt.Kind() == utils.KindPyImportFrom {
-		from := utils.FieldText(&stmt, "module_name", src)
+		from := utils.FieldText(&stmt, utils.FieldModuleName, src)
 
 		var out []ir.ImportedSymbol
 		utils.NamedChildren(&stmt, func(child *tree_sitter.Node) {
 			// The module_name is a sibling of the imported names, so it has to
 			// be skipped by identity rather than by kind: `from a import b`
 			// spells both as dotted_name.
-			if child.Id() == stmt.ChildByFieldName("module_name").Id() {
+			if child.Id() == stmt.ChildByFieldName(utils.FieldModuleName).Id() {
 				return
 			}
 			if symbol, ok := pyImportedName(child, src); ok {
@@ -92,8 +92,8 @@ func pyImportedName(node *tree_sitter.Node, src []byte) (ir.ImportedSymbol, bool
 	switch node.Kind() {
 	case utils.KindPyAliasedImport: // unwrap as peel
 		return ir.ImportedSymbol{
-			Local:    utils.FieldText(node, "alias", src),
-			Original: utils.FieldText(node, "name", src),
+			Local:    utils.FieldText(node, utils.FieldAlias, src),
+			Original: utils.FieldText(node, utils.FieldName, src),
 			Kind:     utils.KindNamed,
 		}, true
 
@@ -108,7 +108,7 @@ func pyImportedName(node *tree_sitter.Node, src []byte) (ir.ImportedSymbol, bool
 func pyModuleBinding(node *tree_sitter.Node, src []byte) (path, local string) {
 	switch node.Kind() {
 	case utils.KindPyAliasedImport:
-		return utils.FieldText(node, "name", src), utils.FieldText(node, "alias", src)
+		return utils.FieldText(node, utils.FieldName, src), utils.FieldText(node, utils.FieldAlias, src)
 
 	case utils.KindPyDottedName:
 		path = node.Utf8Text(src)

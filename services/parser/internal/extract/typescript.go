@@ -56,7 +56,7 @@ func tsScopeSegment(node *tree_sitter.Node, src []byte) (string, bool) {
 // tsCalleeReceiver returns a member call's receiver: Repo.sync() -> "Repo",
 // a.b.c() -> "a.b". Empty for a bare call.
 func tsCalleeReceiver(callNode tree_sitter.Node, src []byte) string {
-	return utils.ParentFieldText(&callNode, utils.KindMemberExpression, "object", src)
+	return utils.ParentFieldText(&callNode, utils.KindMemberExpression, utils.FieldObject, src)
 }
 
 // tsImports collects only the names an import binds locally. Walking by node
@@ -84,7 +84,7 @@ func tsImportSymbols(stmt *tree_sitter.Node, src []byte) []ir.ImportedSymbol {
 		utils.NamedChildren(clause, func(spec *tree_sitter.Node) {
 			if spec.Kind() == utils.KindExportSpecifier {
 				out = append(out, ir.ImportedSymbol{
-					Original: utils.FieldText(spec, "name", src),
+					Original: utils.FieldText(spec, utils.FieldName, src),
 					Kind:     utils.KindReExport,
 				})
 			}
@@ -112,8 +112,8 @@ func tsImportSymbols(stmt *tree_sitter.Node, src []byte) []ir.ImportedSymbol {
 				if spec.Kind() != utils.KindImportSpecifier {
 					return
 				}
-				name := utils.FieldText(spec, "name", src)
-				local := utils.FieldText(spec, "alias", src)
+				name := utils.FieldText(spec, utils.FieldName, src)
+				local := utils.FieldText(spec, utils.FieldAlias, src)
 				if local == "" {
 					local = name
 				}

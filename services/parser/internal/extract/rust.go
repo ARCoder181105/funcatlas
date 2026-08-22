@@ -37,7 +37,7 @@ func rustScopeSegment(node *tree_sitter.Node, src []byte) (string, bool) {
 		// `impl Repo`, `impl<T> Repo<T>` and `impl Trait for Repo` all name the
 		// target in the `type` field; only the type_identifier in it is a name.
 		if ident := utils.FirstDescendantByKind(
-			node.ChildByFieldName("type"), utils.KindRustTypeIdentifier,
+			node.ChildByFieldName(utils.FieldType), utils.KindRustTypeIdentifier,
 		); ident != nil {
 			return ident.Utf8Text(src), true
 		}
@@ -52,7 +52,7 @@ func rustScopeSegment(node *tree_sitter.Node, src []byte) (string, bool) {
 // rustCalleeReceiver returns a method call's receiver: self.label() -> "self",
 // values.iter() -> "values". Empty for a bare or path call.
 func rustCalleeReceiver(callNode tree_sitter.Node, src []byte) string {
-	return utils.ParentFieldText(&callNode, utils.KindRustFieldExpression, "value", src)
+	return utils.ParentFieldText(&callNode, utils.KindRustFieldExpression, utils.FieldValue, src)
 }
 
 // rustImports records what a `use` binds locally.
@@ -65,8 +65,8 @@ func rustCalleeReceiver(callNode tree_sitter.Node, src []byte) string {
 func rustImports(argument tree_sitter.Node, src []byte) (string, []ir.ImportedSymbol) {
 	switch argument.Kind() {
 	case utils.KindRustScopedUseList: // use a::b::{c, d as e}
-		from := utils.FieldText(&argument, "path", src)
-		list := argument.ChildByFieldName("list")
+		from := utils.FieldText(&argument, utils.FieldPath, src)
+		list := argument.ChildByFieldName(utils.FieldList)
 		if list == nil {
 			return from, []ir.ImportedSymbol{{Kind: utils.KindSideEffect}}
 		}
@@ -96,9 +96,9 @@ func rustImports(argument tree_sitter.Node, src []byte) (string, []ir.ImportedSy
 func rustUseLeaf(node *tree_sitter.Node, src []byte) (ir.ImportedSymbol, bool) {
 	switch node.Kind() {
 	case utils.KindRustUseAsClause: // unwrap as peel
-		original := lastPathSegment(utils.FieldText(node, "path", src))
+		original := lastPathSegment(utils.FieldText(node, utils.FieldPath, src))
 		return ir.ImportedSymbol{
-			Local:    utils.FieldText(node, "alias", src),
+			Local:    utils.FieldText(node, utils.FieldAlias, src),
 			Original: original,
 			Kind:     utils.KindNamed,
 		}, true
@@ -118,7 +118,7 @@ func rustUseLeaf(node *tree_sitter.Node, src []byte) (ir.ImportedSymbol, bool) {
 func rustModulePrefix(node *tree_sitter.Node, src []byte) string {
 	path := node.Utf8Text(src)
 	if node.Kind() == utils.KindRustUseAsClause {
-		path = utils.FieldText(node, "path", src)
+		path = utils.FieldText(node, utils.FieldPath, src)
 	}
 	if i := strings.LastIndex(path, utils.RustPathSeparator); i >= 0 {
 		return path[:i]

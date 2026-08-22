@@ -20,6 +20,13 @@ import (
 	"github.com/ARCoder181105/funcatlas/parser/internal/utils"
 )
 
+// Output formats accepted by --format. Package-local: nothing outside this
+// command reads them.
+const (
+	formatJSON    = "json"
+	formatSummary = "summary"
+)
+
 func main() {
 	_ = godotenv.Load()
 
@@ -41,7 +48,7 @@ func run(logger *zap.Logger) error {
 
 	repo := flag.String("repo", "", "local path or git URL to parse")
 	out := flag.String("out", "out.json", "output file path, or - for stdout")
-	format := flag.String("format", "json", "output format: json|summary")
+	format := flag.String("format", formatJSON, "output format: json|summary")
 	write := flag.Bool("write", false, "write the graph to Postgres (needs DATABASE_URL)")
 	repoURL := flag.String("repo-url", "", "repo identity for --write; defaults to --repo")
 	branch := flag.String("branch", "", "default branch recorded on the repo row; detected when empty")
@@ -104,10 +111,10 @@ func run(logger *zap.Logger) error {
 // report prints the graph. Works with no database configured, so --format json
 // stays usable for inspection.
 func report(format, out string, graph ir.Graph, edges []ir.Edge) error {
-	if format == "summary" {
+	if format == formatSummary {
 		fmt.Printf("files: %d\nfunctions: %d\ncalls: %d\nimports: %d\nedges: %d\n",
 			len(graph.Files), len(graph.Functions), len(graph.Calls), len(graph.Imports), len(edges))
-		for _, c := range []string{"exact", "name_match", "unresolved"} {
+		for _, c := range utils.ConfidenceTiers {
 			fmt.Printf("  %-11s %d\n", c, countConfidence(edges, c))
 		}
 		return nil

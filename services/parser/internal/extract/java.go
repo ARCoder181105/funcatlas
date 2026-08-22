@@ -57,7 +57,7 @@ func javaScopeSegment(node *tree_sitter.Node, src []byte) (string, bool) {
 // Read off the invocation itself rather than a parent, because Java puts the
 // callee name and its object in one node.
 func javaCalleeReceiver(callNode tree_sitter.Node, src []byte) string {
-	return utils.ParentFieldText(&callNode, utils.KindJavaMethodInvocation, "object", src)
+	return utils.ParentFieldText(&callNode, utils.KindJavaMethodInvocation, utils.FieldObject, src)
 }
 
 // javaImports records the name an import binds.

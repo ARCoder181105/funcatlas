@@ -48,7 +48,7 @@ func goScopeSegment(node *tree_sitter.Node, src []byte) (string, bool) {
 // goReceiverType is the bare type name a method hangs off. Written *Repo, Repo
 // or Repo[T]; only the type_identifier inside is the name.
 func goReceiverType(method *tree_sitter.Node, src []byte) string {
-	receiver := method.ChildByFieldName("receiver")
+	receiver := method.ChildByFieldName(utils.FieldReceiver)
 	if receiver == nil {
 		return ""
 	}
@@ -62,7 +62,7 @@ func goReceiverType(method *tree_sitter.Node, src []byte) string {
 // goCalleeReceiver returns a selector call's operand: r.unlock() -> "r",
 // fmt.Errorf() -> "fmt". Empty for a bare call.
 func goCalleeReceiver(callNode tree_sitter.Node, src []byte) string {
-	return utils.ParentFieldText(&callNode, utils.KindGoSelectorExpression, "operand", src)
+	return utils.ParentFieldText(&callNode, utils.KindGoSelectorExpression, utils.FieldOperand, src)
 }
 
 // goImports records what an import binds locally: the package name, which is
@@ -78,7 +78,7 @@ func goImports(specifier tree_sitter.Node, src []byte) (string, []ir.ImportedSym
 	}
 	from := utils.StringLiteralText(specifier, src)
 
-	alias := utils.FieldText(stmt, "name", src)
+	alias := utils.FieldText(stmt, utils.FieldName, src)
 	switch alias {
 	case utils.GoBlankImport, utils.GoDotImport:
 		// `_` binds nothing; `.` binds every exported name under no qualifier,

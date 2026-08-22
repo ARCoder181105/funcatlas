@@ -59,7 +59,7 @@ func jsImports(specifier tree_sitter.Node, src []byte) (string, []ir.ImportedSym
 	from := utils.StringLiteralText(specifier, src)
 
 	call := stmt.Parent()
-	if call == nil || utils.FieldText(call, "function", src) != utils.RequireCallee {
+	if call == nil || utils.FieldText(call, utils.FieldFunction, src) != utils.RequireCallee {
 		return "", nil
 	}
 
@@ -70,7 +70,7 @@ func jsImports(specifier tree_sitter.Node, src []byte) (string, []ir.ImportedSym
 		return from, []ir.ImportedSymbol{{Kind: utils.KindSideEffect}}
 	}
 
-	name := decl.ChildByFieldName("name")
+	name := decl.ChildByFieldName(utils.FieldName)
 	if name == nil {
 		return from, []ir.ImportedSymbol{{Kind: utils.KindSideEffect}}
 	}
@@ -88,8 +88,8 @@ func jsImports(specifier tree_sitter.Node, src []byte) (string, []ir.ImportedSym
 				out = append(out, ir.ImportedSymbol{Local: local, Original: local, Kind: utils.KindNamed})
 			case utils.KindPairPattern:
 				out = append(out, ir.ImportedSymbol{
-					Local:    utils.FieldText(prop, "value", src),
-					Original: utils.FieldText(prop, "key", src),
+					Local:    utils.FieldText(prop, utils.FieldValue, src),
+					Original: utils.FieldText(prop, utils.FieldKey, src),
 					Kind:     utils.KindNamed,
 				})
 			}

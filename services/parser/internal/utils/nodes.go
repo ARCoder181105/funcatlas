@@ -38,7 +38,7 @@ func FieldText(node *tree_sitter.Node, field string, src []byte) string {
 
 // DeclName returns a declaration's name, or Anonymous if it has none.
 func DeclName(node *tree_sitter.Node, src []byte) string {
-	if name := FieldText(node, "name", src); name != "" {
+	if name := FieldText(node, FieldName, src); name != "" {
 		return name
 	}
 	return Anonymous

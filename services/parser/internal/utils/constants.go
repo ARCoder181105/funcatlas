@@ -73,6 +73,11 @@ const (
 	Unresolved = "unresolved"
 )
 
+// ConfidenceTiers is every tier, most confident first -- the order a summary
+// reads in. Here rather than at the call site, so the three are never spelled
+// out a second time and cannot drift from the constants above.
+var ConfidenceTiers = []string{Exact, NameMatch, Unresolved}
+
 // NoFunc marks an edge endpoint that is not a function in this repo:
 // an unresolved callee, or a caller at module level.
 const NoFunc = -1
@@ -117,6 +122,27 @@ func indexFilesFor(extensions []string) []string {
 	}
 	return out
 }
+
+// Tree-sitter *field* names, as opposed to node kinds below. Every grammar
+// names its fields from the same small vocabulary, so these are shared rather
+// than grouped by language -- what differs is which node carries which field.
+//
+// One home for the same reason as the kinds: a grammar that renames a field
+// drops whatever read it, silently, since ChildByFieldName just returns nil.
+const (
+	FieldAlias      = "alias"
+	FieldFunction   = "function"
+	FieldKey        = "key"
+	FieldList       = "list"
+	FieldModuleName = "module_name"
+	FieldName       = "name"
+	FieldObject     = "object"
+	FieldOperand    = "operand"
+	FieldPath       = "path"
+	FieldReceiver   = "receiver"
+	FieldType       = "type"
+	FieldValue      = "value"
+)
 
 // Tree-sitter node kinds, so a grammar rename breaks in one place.
 // Grouped by language: these are TypeScript's, shared with JSX.
