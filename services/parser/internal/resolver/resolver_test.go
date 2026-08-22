@@ -146,3 +146,76 @@ func TestResolve_ConfidenceMatchesCalleePresence(t *testing.T) {
 		}
 	}
 }
+
+// crossLanguage is two files in one directory, each defining and calling a
+// function named helper. Built by hand rather than from a fixture directory:
+// this is the resolver's own guarantee, and it has to hold for every language
+// the extractor learns, including ones it does not read yet.
+func crossLanguage(callerLang, calleeLang string) ir.Graph {
+	return ir.Graph{
+		Files: []ir.File{
+			{Path: "src/main." + callerLang, Language: callerLang},
+			{Path: "src/other." + calleeLang, Language: calleeLang},
+		},
+		Functions: []ir.Function{
+			{FileID: 0, PackagePath: "src", Name: "run", QualifiedName: "run", StartLine: 1, EndLine: 3},
+			{FileID: 1, PackagePath: "src", Name: "helper", QualifiedName: "helper", StartLine: 1, EndLine: 2},
+		},
+		Calls: []ir.CallSite{
+			{FileID: 0, CallerQualified: "run", CalleeName: "helper", Line: 2},
+		},
+	}
+}
+
+// A call in one language must never match a same-named function in another.
+// The two repo-wide lookups are keyed by resolution group for exactly this,
+// and the same package path is the case that would otherwise slip through.
+func TestResolve_NeverCrossesALanguageBoundary(t *testing.T) {
+	languages := []string{utils.LangTypeScript, utils.LangTSX, "go", "rust", "python", "java"}
+
+	for _, caller := range languages {
+		for _, callee := range languages {
+			if utils.ResolutionGroup(caller) == utils.ResolutionGroup(callee) {
+				continue
+			}
+			g := crossLanguage(caller, callee)
+			edges := resolver.Resolve(g)
+			require.Len(t, edges, 1)
+			assert.Equal(t, utils.Unresolved, edges[0].Confidence,
+				"a call in %s resolved to a function in %s", caller, callee)
+			assert.Equal(t, utils.NoFunc, edges[0].CalleeFuncIdx)
+			assert.Equal(t, "helper", edges[0].CalleeName,
+				"an unresolved edge still says what it failed to resolve")
+		}
+	}
+}
+
+// Within a group it still resolves, or the partition would have broken .ts
+// calling .tsx rather than only stopping cross-language matches.
+func TestResolve_MatchesWithinAResolutionGroup(t *testing.T) {
+	g := crossLanguage(utils.LangTypeScript, utils.LangTSX)
+	edges := resolver.Resolve(g)
+
+	require.Len(t, edges, 1)
+	assert.Equal(t, utils.NameMatch, edges[0].Confidence)
+	assert.Equal(t, "helper", target(g, edges[0]))
+}
+
+// Imports are extracted for every language but only followed where a specifier
+// names a file here. Without that, a Python `from utils import helper` would
+// enter rule 2, fail to find a module, and answer unresolved -- throwing away
+// the name_match rule 3 would have given.
+func TestResolve_ImportsAreOnlyFollowedWhereTheyNameAFile(t *testing.T) {
+	g := crossLanguage("python", "python")
+	g.Imports = []ir.Import{{
+		FileID:  0,
+		From:    "utils",
+		Symbols: []ir.ImportedSymbol{{Local: "helper", Original: "helper", Kind: utils.KindNamed}},
+	}}
+
+	edges := resolver.Resolve(g)
+	require.Len(t, edges, 1)
+	assert.Equal(t, utils.NameMatch, edges[0].Confidence,
+		"an unfollowable import must not downgrade a call rule 3 can still answer")
+	assert.Equal(t, "helper", target(g, edges[0]))
+}

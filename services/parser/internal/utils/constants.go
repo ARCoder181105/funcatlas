@@ -10,6 +10,35 @@ const (
 	LangTSX        = "tsx"
 )
 
+// GroupECMAScript is the one resolution group holding more than one language.
+// Every other language is its own group, named after itself.
+const GroupECMAScript = "ecmascript"
+
+// resolutionGroups lists only the languages that share a group with another.
+var resolutionGroups = map[string]string{
+	LangTypeScript: GroupECMAScript,
+	LangTSX:        GroupECMAScript,
+}
+
+// ResolutionGroup partitions the resolver's symbol table. A call in main.go
+// must never match a same-named function in main.py, and partitioning by this
+// at index-build time is what makes that structural rather than a filter
+// somebody can forget to apply.
+func ResolutionGroup(language string) string {
+	if group, ok := resolutionGroups[language]; ok {
+		return group
+	}
+	return language
+}
+
+// ResolvesModules reports whether a language's import specifiers name files in
+// this repository. Only the ECMAScript family's do. For the rest, consulting
+// imports would answer "unresolved" for a module the resolver simply cannot
+// follow, where falling through to name matching is the more honest answer.
+func ResolvesModules(language string) bool {
+	return ResolutionGroup(language) == GroupECMAScript
+}
+
 // Capture names every language's .scm must declare. Missing one is a compile
 // error at load time rather than a file that parses to nothing.
 const (
