@@ -47,31 +47,37 @@ func newJavaScriptLanguage() *tree_sitter.Language {
 // statement, so the .scm can only capture the specifier of *some* call. Which
 // call it was is read from the tree here -- returning nil for anything that is
 // not require() drops the match rather than recording a phantom import.
-func jsImports(stmt *tree_sitter.Node, src []byte) []ir.ImportedSymbol {
-	if stmt.Kind() != utils.KindArguments {
-		return tsImports(stmt, src)
+func jsImports(specifier tree_sitter.Node, src []byte) (string, []ir.ImportedSymbol) {
+	stmt := specifier.Parent()
+	if stmt == nil {
+		return "", nil
 	}
+	if stmt.Kind() != utils.KindArguments {
+		return tsImports(specifier, src)
+	}
+
+	from := utils.StringLiteralText(specifier, src)
 
 	call := stmt.Parent()
 	if call == nil || utils.FieldText(call, "function", src) != utils.RequireCallee {
-		return nil
+		return "", nil
 	}
 
 	// require("m") on its own binds nothing; the binding is the declarator
 	// wrapping it, which is where the local names live.
 	decl := call.Parent()
 	if decl == nil || decl.Kind() != utils.KindVariableDeclarator {
-		return []ir.ImportedSymbol{{Kind: utils.KindSideEffect}}
+		return from, []ir.ImportedSymbol{{Kind: utils.KindSideEffect}}
 	}
 
 	name := decl.ChildByFieldName("name")
 	if name == nil {
-		return []ir.ImportedSymbol{{Kind: utils.KindSideEffect}}
+		return from, []ir.ImportedSymbol{{Kind: utils.KindSideEffect}}
 	}
 
 	switch name.Kind() {
 	case utils.KindIdentifier: // const m = require("m")
-		return []ir.ImportedSymbol{{Local: name.Utf8Text(src), Kind: utils.KindNamespace}}
+		return from, []ir.ImportedSymbol{{Local: name.Utf8Text(src), Kind: utils.KindNamespace}}
 
 	case utils.KindObjectPattern: // const { a, b: c } = require("m")
 		var out []ir.ImportedSymbol
@@ -88,7 +94,7 @@ func jsImports(stmt *tree_sitter.Node, src []byte) []ir.ImportedSymbol {
 				})
 			}
 		})
-		return out
+		return from, out
 	}
-	return nil
+	return "", nil
 }

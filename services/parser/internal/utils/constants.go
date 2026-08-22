@@ -11,6 +11,7 @@ const (
 	LangJavaScript = "javascript"
 	LangJSX        = "jsx"
 	LangGo         = "go"
+	LangRust       = "rust"
 )
 
 // GroupECMAScript is the one resolution group holding more than one language.
@@ -87,13 +88,14 @@ const (
 // cannot parse JSX, and fails silently by dropping calls inside it. The
 // JavaScript grammar has no such split.
 const (
-	ExtTS  = ".ts"
-	ExtTSX = ".tsx"
-	ExtJS  = ".js"
-	ExtJSX = ".jsx"
-	ExtMJS = ".mjs"
-	ExtCJS = ".cjs"
-	ExtGo  = ".go"
+	ExtTS   = ".ts"
+	ExtTSX  = ".tsx"
+	ExtJS   = ".js"
+	ExtJSX  = ".jsx"
+	ExtMJS  = ".mjs"
+	ExtCJS  = ".cjs"
+	ExtGo   = ".go"
+	ExtRust = ".rs"
 )
 
 // Extensions a module specifier is resolved against, in order. TypeScript
@@ -159,6 +161,25 @@ const (
 	GoBlankImport = "_"
 	GoDotImport   = "."
 )
+
+// Rust. A `use` is a nested path expression rather than a quoted specifier,
+// and a method's owner is the type its impl block targets.
+const (
+	KindRustFunctionItem      = "function_item"
+	KindRustImplItem          = "impl_item"
+	KindRustClosureExpression = "closure_expression"
+	KindRustFieldExpression   = "field_expression"
+	KindRustTypeIdentifier    = "type_identifier"
+	KindRustIdentifier        = "identifier"
+	KindRustScopedIdentifier  = "scoped_identifier"
+	KindRustScopedUseList     = "scoped_use_list"
+	KindRustUseAsClause       = "use_as_clause"
+	KindRustUseWildcard       = "use_wildcard"
+	KindRustSelf              = "self"
+)
+
+// RustPathSeparator joins the segments of a use path.
+const RustPathSeparator = "::"
 
 // InsertChunkSize caps rows per multi-row INSERT. Postgres allows 65535 bind
 // parameters; functions is 9 columns wide, so 500 rows is ~4500.

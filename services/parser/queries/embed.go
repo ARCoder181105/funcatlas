@@ -12,3 +12,6 @@ var JavaScriptSCM string
 
 //go:embed go.scm
 var GoSCM string
+
+//go:embed rust.scm
+var RustSCM string

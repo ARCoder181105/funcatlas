@@ -62,7 +62,17 @@ func tsCalleeReceiver(callNode tree_sitter.Node, src []byte) string {
 // tsImports collects only the names an import binds locally. Walking by node
 // kind rather than grabbing every identifier is what keeps `import { a as b }`
 // from yielding both a and b.
-func tsImports(stmt *tree_sitter.Node, src []byte) []ir.ImportedSymbol {
+//
+// The capture is the quoted specifier; the statement around it is the parent.
+func tsImports(specifier tree_sitter.Node, src []byte) (string, []ir.ImportedSymbol) {
+	stmt := specifier.Parent()
+	if stmt == nil {
+		return "", nil
+	}
+	return utils.StringLiteralText(specifier, src), tsImportSymbols(stmt, src)
+}
+
+func tsImportSymbols(stmt *tree_sitter.Node, src []byte) []ir.ImportedSymbol {
 	// A re-export binds nothing locally; recorded for barrel-following later.
 	var out []ir.ImportedSymbol
 

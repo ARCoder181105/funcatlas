@@ -71,17 +71,21 @@ func goCalleeReceiver(callNode tree_sitter.Node, src []byte) string {
 // Namespace rather than named, because a Go import binds a qualifier and never
 // the symbols behind it. The resolver does not follow these -- a Go path names
 // a module, not a file here -- but they are the IR a later Go resolver needs.
-func goImports(stmt *tree_sitter.Node, src []byte) []ir.ImportedSymbol {
-	spec := utils.StringLiteralText(*stmt.ChildByFieldName("path"), src)
+func goImports(specifier tree_sitter.Node, src []byte) (string, []ir.ImportedSymbol) {
+	stmt := specifier.Parent()
+	if stmt == nil {
+		return "", nil
+	}
+	from := utils.StringLiteralText(specifier, src)
 
 	alias := utils.FieldText(stmt, "name", src)
 	switch alias {
 	case utils.GoBlankImport, utils.GoDotImport:
 		// `_` binds nothing; `.` binds every exported name under no qualifier,
 		// which is not a local name this can record.
-		return []ir.ImportedSymbol{{Kind: utils.KindSideEffect}}
+		return from, []ir.ImportedSymbol{{Kind: utils.KindSideEffect}}
 	case "":
-		alias = path.Base(spec)
+		alias = path.Base(from)
 	}
-	return []ir.ImportedSymbol{{Local: alias, Kind: utils.KindNamespace}}
+	return from, []ir.ImportedSymbol{{Local: alias, Kind: utils.KindNamespace}}
 }

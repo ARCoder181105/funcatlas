@@ -119,20 +119,13 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 		})
 
 		eachCapture(g.queries.imp, rootNode, src, utils.CaptureImportFrom, func(sourceNode tree_sitter.Node) {
-			stmt := sourceNode.Parent()
-			if stmt == nil {
-				return
-			}
-			// A nil symbol list means "this match is not an import". Some
-			// queries have to over-capture -- JavaScript's require() is an
-			// ordinary call, and the .scm cannot tell which call it was.
-			symbols := g.spec.Imports(stmt, src)
+			from, symbols := g.spec.Imports(sourceNode, src)
 			if symbols == nil {
-				return
+				return // not an import; see Spec.Imports
 			}
 			graph.Imports = append(graph.Imports, ir.Import{
 				FileID:  fileID,
-				From:    utils.StringLiteralText(sourceNode, src),
+				From:    from,
 				Symbols: symbols,
 			})
 		})
