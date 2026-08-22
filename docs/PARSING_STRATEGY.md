@@ -160,7 +160,32 @@ Every one of these lands as `unresolved` rather than a wrong answer — see the 
 
 - **Re-exports / barrel files** — a symbol may pass through several intermediate files before its real definition. The re-export edges are recorded in the IR (`KindReExport`, carrying the original name and no local binding) but not yet followed.
 - **Overloading / shadowing** — multiple definitions sharing a name are not disambiguated by name and scope alone.
-- **Cross-language repos** — name-only matching could wire a call in one language to an unrelated same-named function in another. Not reachable today: only `.ts` and `.tsx` are walked, and `.js`, `.jsx`, and every non-TypeScript extension are skipped entirely.
+- **Cross-language repos** — closed in Phase 5. The resolver's two repo-wide lookups are keyed by **resolution group**, so a call in `main.go` cannot reach a same-named function in `main.py`. `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs` and `.cjs` share one group and resolve across files normally; `go`, `rust`, `python` and `java` are each their own, and cross-file calls in them are `name_match` or `unresolved`, never `exact`.
+
+## Per-language extraction limits
+
+Every language below is **extraction only**: functions, call sites and imports in the IR, plus
+same-file resolution, which is language-agnostic. Full per-language resolution is deliberately cut
+(`PLAN.md` Phase 5).
+
+Each of these was found by dumping the tree rather than assumed, and each is pinned by an assertion
+in that language's fixture — because the failure mode is a parser that quietly produces *less*,
+which reads as a working parse.
+
+| Language | What is not captured | Why |
+|---|---|---|
+| **Go** | a generic call with **one** type argument — `Map[int](xs)` | It parses as `type_conversion_expression`, the same shape as `int(x)`. Capturing it would invent a call for every conversion in the repository. Two or more type arguments are unambiguous and *are* captured. |
+| **Go** | a call through an index — `handlers[0]()` | The callee has no name to record. |
+| **Rust** | anything inside a macro — `println!("{}", helper())` | A macro body is a `token_tree`; tree-sitter does not parse expressions in it, so `helper` is a bare identifier beside a token tree. Matching identifiers there would invent a call for every name mentioned in every macro. |
+| **Java** | which overload a call meant | Choosing between `sync()` and `sync(int)` needs argument types. `uniqueQualified` answers "many, therefore none" — see the refusal table. |
+| **Python** | nothing structural | Decorators, f-string interpolations, comprehension clauses and `await` are all parsed, so calls inside them are real calls. `decorated_definition` wraps the definition rather than replacing it, so the recorded source is the function's. |
+| **JavaScript** | nothing structural | One grammar handles JSX in any file, unlike TypeScript's `.ts`/`.tsx` split. `require()` is captured by over-matching in the `.scm` and discarding non-`require` calls in Go. |
+
+**Imports are recorded for every language but only followed for the ECMAScript family.** A Go path
+names a module, a Rust `use` names a crate path, a Python import names something on `sys.path`, a
+Java import names a classpath entry — none of which this parser models. Entering the import rule
+for them would answer `unresolved` for a module it cannot reach, throwing away the `name_match` the
+package and repo-wide rules still have. See `utils.ResolvesModules`.
 
 ## v2: LSP-based resolution
 

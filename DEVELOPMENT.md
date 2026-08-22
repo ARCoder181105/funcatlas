@@ -55,7 +55,8 @@ on a reachable host was a session for the asking.
   /cmd/parser           entry point
   /internal/clone       local path or shallow git clone
   /internal/security    path containment, size and depth caps, symlink rejection
-  /internal/ts          tree-sitter extraction and the qualified-name scope walk
+  /internal/extract     tree-sitter extraction: the language-agnostic driver, the
+                        qualified-name scope walk, and one Spec per language
   /internal/ir          Go-native intermediate representation
   /internal/resolver    call resolution and confidence tagging
   /internal/db          Postgres writer

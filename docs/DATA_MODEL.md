@@ -25,7 +25,8 @@ CREATE TABLE files (
     id          SERIAL PRIMARY KEY,
     repo_id     INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
     path        TEXT NOT NULL,       -- repo-relative, e.g. src/services/auth.ts
-    language    TEXT NOT NULL,       -- 'typescript' (only language in the MVP)
+    language    TEXT NOT NULL,       -- one name per grammar: typescript, tsx,
+                                     -- javascript, jsx, go, rust, python, java
     content_hash TEXT,               -- sha256 of the bytes; null = "changed" (migration 0003)
     UNIQUE (repo_id, path)           -- constraint name: files_repo_id_path_key
 );
