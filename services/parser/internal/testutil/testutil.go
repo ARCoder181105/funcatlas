@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"github.com/ARCoder181105/funcatlas/parser/internal/extract"
 	"github.com/ARCoder181105/funcatlas/parser/internal/ir"
 	"github.com/ARCoder181105/funcatlas/parser/internal/security"
-	"github.com/ARCoder181105/funcatlas/parser/internal/ts"
 )
 
 // Config is the security config for fixtures: limits high enough that nothing
@@ -29,7 +29,7 @@ func Config() security.Config {
 // Extract parses a fixture directory into the IR.
 func Extract(t *testing.T, dir string) ir.Graph {
 	t.Helper()
-	g, err := ts.Extract(zap.NewNop(), dir, Config())
+	g, err := extract.Extract(zap.NewNop(), dir, Config())
 	require.NoError(t, err)
 	return g
 }

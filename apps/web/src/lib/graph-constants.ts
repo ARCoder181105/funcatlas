@@ -48,6 +48,9 @@ export const LABEL_CHAR = 7.2;
 export const SUBLABEL_CHAR = 5.5;
 export const CARD_CHROME = 118;
 export const ROOT_BADGE = 50;
+/** A language badge's chrome, on top of its text. Measured like ROOT_BADGE:
+ *  a card that grows a badge it was not measured for truncates its own name. */
+export const LANGUAGE_BADGE = 20;
 
 // --- Code cards -----------------------------------------------------------
 

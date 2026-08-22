@@ -19,6 +19,7 @@ const GRAMMARS: Record<string, BundledLanguage> = {
   go: "go",
   rust: "rust",
   python: "python",
+  java: "java",
 };
 
 /**

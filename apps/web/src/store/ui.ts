@@ -82,6 +82,17 @@ interface UiState {
   toggleFullSource: (id: number) => void;
   /** Clears the map. Used when the file or repository changes. */
   selectFunction: (id: number | null) => void;
+
+  /**
+   * Forgets branch roots the open file no longer has (R34).
+   *
+   * A re-parse reinserts a changed file's functions under new ids while the
+   * file row keeps its own, so a restored branch points at rows that are gone
+   * -- and since Phase 4 a webhook does that without anyone touching the
+   * browser. `existingIds` is the open file's current function list, which is
+   * authoritative for roots because a root is only ever opened from its card.
+   */
+  dropMissingRoots: (existingIds: number[]) => void;
   /** Signing out, where nothing selected should survive the next session. */
   clearSelection: () => void;
 
@@ -209,6 +220,32 @@ export const useUiStore = create<UiState>()(
             : [...state.fullSourceIds, id],
         })),
 
+      dropMissingRoots: (existingIds) =>
+        set((state) => {
+          const exists = new Set(existingIds);
+          const gone = state.rootFunctionIds.filter((id) => !exists.has(id));
+          if (gone.length === 0) return {};
+
+          // Everything the dropped roots left behind goes with them. A root's
+          // own id in expandedFunctionIds would otherwise keep asking for a
+          // traversal from a function that no longer exists.
+          const kept = (ids: number[]) =>
+            ids.filter((id) => exists.has(id) || !gone.includes(id));
+
+          return {
+            rootFunctionIds: state.rootFunctionIds.filter((id) => exists.has(id)),
+            expandedFunctionIds: kept(state.expandedFunctionIds),
+            collapsedFunctionIds: kept(state.collapsedFunctionIds),
+            codeFunctionIds: kept(state.codeFunctionIds),
+            fullSourceIds: kept(state.fullSourceIds),
+            selectedFunctionId:
+              state.selectedFunctionId !== null &&
+              gone.includes(state.selectedFunctionId)
+                ? null
+                : state.selectedFunctionId,
+          };
+        }),
+
       clearSelection: () => set({ ...empty() }),
     }),
     {
@@ -216,10 +253,11 @@ export const useUiStore = create<UiState>()(
       // Everything the reader built, except the palette -- reloading into an
       // open search box is a state they never asked for.
       //
-      // Restored ids are not re-validated. A re-parse reinserts functions under
-      // new ids (Phase 4), so a restored branch can point at rows that no
-      // longer exist; the tree and graph queries answer 404 and the surfaces
-      // show their empty state, which is the honest outcome and not a crash.
+      // Restored ids cannot be checked here -- nothing is loaded yet at
+      // rehydrate. `dropMissingRoots` does it once the open file's function
+      // list arrives, which is the first moment there is anything to check
+      // against. An expanded id deeper in the map, in some other file, is left
+      // to its own query: it 404s and that branch simply is not drawn.
       partialize: (state) => ({
         selectedRepoId: state.selectedRepoId,
         selectedFileId: state.selectedFileId,

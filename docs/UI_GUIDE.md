@@ -167,10 +167,10 @@ A single centred card: wordmark, one line saying what the tool does, the confide
 The legend earns its place here where a background texture did not: it is the notation the canvas is
 about to use, and reading it once beats decoding it later.
 
-**The marketing landing page gets its own PR, opened after the Phase 3b gate.** It is a second full
-surface and the 3b exit test does not touch any of it, so it does not belong in the same review. It
-was requested during 3b and is no longer "someday" — it is the next branch after the gate, and it
-follows §1 like everything else.
+**The marketing landing page gets its own PR, still unopened.** It is a second full surface that no
+phase's exit test touches, so it has never belonged in a phase review. It was requested during 3b
+and named the next branch after that gate; Phases 4 and 5 went first, so it is now overdue rather
+than upcoming. It follows §1 like everything else.
 
 The landing page is the one surface that takes the maximal spatial treatment: section padding at
 `py-24` and above, nested double-bezel cards, and a hero that is a live drawing graph rather than a
@@ -260,7 +260,7 @@ reachable tab order through tree, palette and canvas, and `prefers-reduced-motio
 
 **No longer deferred.** The light theme shipped in Phase 3b alongside the dark one — both palettes
 are in §1.1 and both are enforced by `confidence.test.ts`. The marketing landing page moved from
-"post-MVP" to "the branch after the 3b gate" (§3.1).
+"post-MVP" to a branch of its own, which has not been opened yet (§3.1).
 
 ## 7. What this must not look like
 

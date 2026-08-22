@@ -35,6 +35,11 @@ func Resolve(g ir.Graph) []ir.Edge {
 }
 
 // index holds the lookup tables, built once per repo.
+//
+// The two tables that reach past a single file are keyed by resolution group,
+// not just by name. A call in main.go must never match a same-named function
+// in main.py, and partitioning here rather than filtering at lookup time means
+// there is no code path that can reach a foreign-language candidate at all.
 type index struct {
 	g ir.Graph
 
@@ -42,11 +47,16 @@ type index struct {
 	funcsInFile  map[int][]int // fileID -> function indexes
 
 	byFileQualified map[int]map[string][]int    // fileID -> qualified_name -> indexes
-	byPkgName       map[string]map[string][]int // package_path -> name -> indexes
-	byName          map[string][]int            // name -> indexes, repo-wide
+	byPkgName       map[pkgKey]map[string][]int // group+package_path -> name -> indexes
+	byName          map[string]map[string][]int // group -> name -> indexes
 
 	importsByFile map[int]map[string]importedFrom // fileID -> local -> import
 }
+
+// pkgKey scopes a package path to its language. A polyglot repository puts
+// main.go and main.py in the same directory, so package_path alone is not
+// enough to keep their symbols apart.
+type pkgKey struct{ group, pkg string }
 
 // importedFrom pairs a local binding with the module it came from.
 type importedFrom struct {
@@ -60,8 +70,8 @@ func newIndex(g ir.Graph) *index {
 		fileIDByPath:    make(map[string]int, len(g.Files)),
 		funcsInFile:     make(map[int][]int),
 		byFileQualified: make(map[int]map[string][]int),
-		byPkgName:       make(map[string]map[string][]int),
-		byName:          make(map[string][]int),
+		byPkgName:       make(map[pkgKey]map[string][]int),
+		byName:          make(map[string]map[string][]int),
 		importsByFile:   make(map[int]map[string]importedFrom),
 	}
 
@@ -78,15 +88,31 @@ func newIndex(g ir.Graph) *index {
 		x.byFileQualified[fn.FileID][fn.QualifiedName] = append(
 			x.byFileQualified[fn.FileID][fn.QualifiedName], i)
 
-		if x.byPkgName[fn.PackagePath] == nil {
-			x.byPkgName[fn.PackagePath] = make(map[string][]int)
-		}
-		x.byPkgName[fn.PackagePath][fn.Name] = append(x.byPkgName[fn.PackagePath][fn.Name], i)
+		group := x.groupOf(fn.FileID)
 
-		x.byName[fn.Name] = append(x.byName[fn.Name], i)
+		pkg := pkgKey{group: group, pkg: fn.PackagePath}
+		if x.byPkgName[pkg] == nil {
+			x.byPkgName[pkg] = make(map[string][]int)
+		}
+		x.byPkgName[pkg][fn.Name] = append(x.byPkgName[pkg][fn.Name], i)
+
+		if x.byName[group] == nil {
+			x.byName[group] = make(map[string][]int)
+		}
+		x.byName[group][fn.Name] = append(x.byName[group][fn.Name], i)
 	}
 
+	// Imports are recorded in the IR for every language, but only consulted
+	// where a specifier actually names a file here. Go, Rust, Python and Java
+	// resolve through package clauses, crate paths, sys.path and the classpath
+	// -- none of which this package models. Following them by name would answer
+	// unresolved for a module it cannot reach, where rule 3 still has an honest
+	// name_match to give. Skipping them at the source keeps that one decision
+	// in one place, covering resolveMember as well as rule 2.
 	for _, imp := range g.Imports {
+		if !utils.ResolvesModules(g.Files[imp.FileID].Language) {
+			continue
+		}
 		if x.importsByFile[imp.FileID] == nil {
 			x.importsByFile[imp.FileID] = make(map[string]importedFrom)
 		}
@@ -114,17 +140,19 @@ func (x *index) resolve(c ir.CallSite) (int, string) {
 		return i, utils.Exact
 	}
 
-	// 2. A symbol this file imports.
+	// 2. A symbol this file imports. Empty for languages whose specifiers name
+	// no file in this repository -- see newIndex.
 	if imp, ok := x.importsByFile[c.FileID][c.CalleeName]; ok {
 		return x.resolveImported(c.FileID, imp)
 	}
 
-	// 3. Package, then repo-wide. Name matching only, hence the weaker tag.
-	pkg := utils.PackagePath(x.g.Files[c.FileID].Path)
+	// 3. Package, then group-wide. Name matching only, hence the weaker tag.
+	group := x.groupOf(c.FileID)
+	pkg := pkgKey{group: group, pkg: utils.PackagePath(x.g.Files[c.FileID].Path)}
 	if i, ok := utils.Only(x.byPkgName[pkg][c.CalleeName]); ok && !x.overloaded(i) {
 		return i, utils.NameMatch
 	}
-	if i, ok := utils.Only(x.byName[c.CalleeName]); ok && !x.overloaded(i) {
+	if i, ok := utils.Only(x.byName[group][c.CalleeName]); ok && !x.overloaded(i) {
 		return i, utils.NameMatch
 	}
 
@@ -204,6 +232,11 @@ func (x *index) lookupScoped(fileID int, callerQualified, name string) (int, boo
 		}
 	}
 	return utils.NoFunc, false
+}
+
+// groupOf is the resolution group of the file's language.
+func (x *index) groupOf(fileID int) string {
+	return utils.ResolutionGroup(x.g.Files[fileID].Language)
 }
 
 // uniqueQualified returns the one function with this qualified name in this

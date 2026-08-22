@@ -731,6 +731,7 @@ describe("sameNodeData", () => {
     depth: 0,
     isRoot: true,
     callLines: [],
+    foreignLanguage: null,
     expanded: true,
     isLeaf: false,
     showCode: false,

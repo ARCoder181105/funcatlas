@@ -12,7 +12,13 @@ import { ApiError } from "../lib/api";
 import { useFileFunctions } from "../lib/files";
 import { useExpansions, useSources } from "../lib/functions";
 import { useRepoTree } from "../lib/repos";
-import { buildGraph, fileCardPosition, fileCardSize, type GraphNodeData } from "../lib/graph";
+import {
+  buildGraph,
+  fileCardPosition,
+  fileCardSize,
+  functionCardWidth,
+  type GraphNodeData,
+} from "../lib/graph";
 import { FILE_CARD_NODE, FUNCTION_NODE, GHOST_NODE, NODE_HEIGHT, NODE_WIDTH } from "../lib/graph-constants";
 import { useTheme } from "../lib/theme";
 import { useAnimatedNodes } from "../lib/useAnimatedNodes";
@@ -58,6 +64,7 @@ export function MindMap() {
   const codeFunctionIds = useUiStore((state) => state.codeFunctionIds);
   const fileListExpanded = useUiStore((state) => state.fileListExpanded);
   const fullSourceIds = useUiStore((state) => state.fullSourceIds);
+  const dropMissingRoots = useUiStore((state) => state.dropMissingRoots);
 
   const selectedFileId = useUiStore((state) => state.selectedFileId);
   const selectedRepoId = useUiStore((state) => state.selectedRepoId);
@@ -112,6 +119,62 @@ export function MindMap() {
     () => tree.data?.files.find((candidate) => candidate.id === selectedFileId),
     [tree.data, selectedFileId],
   );
+
+  /**
+   * A callee in another language wears its language; one in the same language
+   * as the file being read does not.
+   *
+   * The tree already has every file and its language, so this costs no request.
+   * It is done here rather than in `buildGraph` because a language belongs to a
+   * file and buildGraph is given functions -- and because only the canvas knows
+   * which file the reader opened, which is what "another language" is measured
+   * against.
+   */
+  const languages = useMemo(() => {
+    const out = new Map<number, string>();
+    for (const candidate of tree.data?.files ?? []) {
+      out.set(candidate.id, candidate.language);
+    }
+    return out;
+  }, [tree.data]);
+
+  const home = file?.language;
+
+  const localised = useMemo(() => {
+    if (home === undefined) return graph;
+    return {
+      ...graph,
+      nodes: graph.nodes.map((node) => {
+        const language =
+          node.data.fileId === null ? undefined : languages.get(node.data.fileId);
+        const foreign =
+          language !== undefined && language !== home ? language : null;
+        // The node object is kept when nothing changed, so the common case --
+        // a single-language repository -- allocates nothing per render.
+        if (foreign === node.data.foreignLanguage) return node;
+
+        // Re-measured, because the badge takes width the card was not sized
+        // for and the name is what gets truncated instead. A card showing its
+        // source is already sized to the source, so it is left alone.
+        const size = node.data.showCode
+          ? node.data.size
+          : {
+              ...node.data.size,
+              width: functionCardWidth(
+                node.data.label,
+                node.data.qualifiedName,
+                node.data.depth === 0,
+                foreign,
+              ),
+            };
+        return {
+          ...node,
+          data: { ...node.data, foreignLanguage: foreign, size },
+        };
+      }),
+    };
+  }, [graph, home, languages]);
+
   // The same query the card itself runs, so the canvas can size the node to
   // its contents without a second request.
   const fileFunctions = useFileFunctions(file?.id ?? null);
@@ -119,6 +182,20 @@ export function MindMap() {
   // and what the size depends on is its contents.
   const names = (fileFunctions.data?.functions ?? []).map((fn) => fn.name).join("|");
   const pendingFunctions = fileFunctions.isPending;
+
+  /**
+   * A restored branch whose function is gone gets forgotten (R34).
+   *
+   * A re-parse reinserts a changed file's functions under new ids, and since
+   * Phase 4 a webhook does that with nobody touching the browser -- so the ids
+   * `zustand/persist` brings back can point at rows that no longer exist. This
+   * is the first moment there is anything to check them against.
+   */
+  const ids = (fileFunctions.data?.functions ?? []).map((fn) => fn.id).join(",");
+  useEffect(() => {
+    if (ids === "") return;
+    dropMissingRoots(ids.split(",").map(Number));
+  }, [ids, dropMissingRoots]);
 
   const fileData = useMemo(() => {
     if (file === undefined) return null;
@@ -139,16 +216,16 @@ export function MindMap() {
 
   const withFile = useMemo(() => {
     if (fileData === null) {
-      return graph;
+      return localised;
     }
 
     const fileNodeId = `file-${fileData.fileId}`;
     // Every branch root, not one: the reader can open several functions out of
     // one file and explore each independently.
-    const rootNodes = graph.nodes.filter((node) => node.data.depth === 0);
+    const rootNodes = localised.nodes.filter((node) => node.data.depth === 0);
 
     return {
-      ...graph,
+      ...localised,
       nodes: [
         {
           id: fileNodeId,
@@ -161,7 +238,7 @@ export function MindMap() {
           data: fileData,
           // A file is not a call, so it carries none of the graph node's data.
         } as unknown as Node<GraphNodeData>,
-        ...graph.nodes,
+        ...localised.nodes,
       ],
       edges: [
         ...rootNodes.map((rootNode) => ({
@@ -173,10 +250,10 @@ export function MindMap() {
           type: "smoothstep",
           style: { stroke: palette.surface.border, strokeWidth: 1.5 },
         })),
-        ...graph.edges,
+        ...localised.edges,
       ],
     };
-  }, [graph, fileData, palette.surface.border]);
+  }, [localised, fileData, palette.surface.border]);
 
   /**
    * A new file frames itself.

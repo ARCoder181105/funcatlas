@@ -30,33 +30,30 @@ func ModuleCandidates(fromPath, spec string) []string {
 		return nil // escaped the repo root
 	}
 
-	// ESM TypeScript writes ./foo.js for what is really ./foo.ts.
-	if ext := path.Ext(base); ext == ".js" || ext == ".jsx" {
-		base = strings.TrimSuffix(base, ext)
+	// ESM TypeScript writes ./foo.js for what is really ./foo.ts, so the
+	// stripped stem is tried first -- but the literal path has to stay a
+	// candidate too, or a specifier naming a real .js file resolves to nothing.
+	stem := base
+	if ext := path.Ext(base); ext == ExtJS || ext == ExtJSX {
+		stem = strings.TrimSuffix(base, ext)
 	}
 
-	out := make([]string, 0, len(SourceExtensions)+len(IndexFiles)+1)
+	out := make([]string, 0, len(SourceExtensions)+len(IndexFiles)+2)
 	for _, ext := range SourceExtensions {
-		out = append(out, base+ext)
+		out = append(out, stem+ext)
 	}
 	for _, index := range IndexFiles {
-		out = append(out, base+index)
+		out = append(out, stem+index)
 	}
-	return append(out, base) // may already carry an explicit extension
+	out = append(out, base) // may already carry an explicit extension
+	if stem != base {
+		out = append(out, stem)
+	}
+	return out
 }
 
 // IsRelativeSpecifier reports whether a specifier points inside the repo.
 func IsRelativeSpecifier(spec string) bool {
 	return spec == "." || spec == ".." ||
 		strings.HasPrefix(spec, "./") || strings.HasPrefix(spec, "../")
-}
-
-// IsSourceFile reports whether a path is a TypeScript file the parser handles.
-func IsSourceFile(filePath string) bool {
-	for _, ext := range SourceExtensions {
-		if strings.HasSuffix(filePath, ext) {
-			return true
-		}
-	}
-	return false
 }

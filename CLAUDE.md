@@ -7,8 +7,9 @@ contract is in `PRD.md` and the phase plan is in `PLAN.md`.
 
 An interactive visual map of a codebase. Clone a repo → tree-sitter extracts functions and call
 sites → resolve calls to definitions → store the graph in Postgres → explore it on a React Flow
-canvas (file → card → function mind-map → code block). Language: **TypeScript** through Phase 4;
-Go, Rust and Python are added in Phase 5, extraction only.
+canvas (file → card → function mind-map → code block). Languages: **TypeScript, TSX, JavaScript,
+JSX, Go, Rust, Python and Java**. Everything past the ECMAScript family is extraction plus
+same-file resolution only — see "Per-language extraction limits" in `docs/PARSING_STRATEGY.md`.
 
 The product is called **funcatlas** everywhere — repo, module path, npm scope, database, cookie.
 The old working name "CodeCanvas" is retired; do not reintroduce it.
@@ -21,7 +22,7 @@ The old working name "CodeCanvas" is retired; do not reintroduce it.
 - [x] Phase 3a — API and auth
 - [x] Phase 3b — Canvas and search
 - [x] Phase 4 — Webhooks, queue, hardening
-- [ ] Phase 5 — Go, Rust, Python (extraction only; per-language resolution stays cut) ← next
+- [x] Phase 5 — Go, Rust, Python, JavaScript, Java (extraction only; per-language resolution stays cut)
 
 Active task list: `TASKLIST.md`.
 
@@ -60,7 +61,8 @@ You implement, phase by phase, with tests. The user reviews at each phase gate.
 
 | Concern | Home |
 |---|---|
-| All parser constants — confidence tiers, node kinds, import kinds, limits | `services/parser/internal/utils/constants.go` |
+| All parser constants — language names, resolution groups, node kinds by language, confidence tiers, import kinds, limits | `services/parser/internal/utils/constants.go` |
+| One language's grammar, `.scm`, scope rules, receiver and imports | `services/parser/internal/extract/<language>.go`, registered in `spec.go` |
 | Tree-sitter node traversal | `services/parser/internal/utils/nodes.go` |
 | Repo-relative paths, module specifier resolution | `services/parser/internal/utils/paths.go` |
 | Qualified-name building and scope candidates | `services/parser/internal/utils/qualnames.go` |
@@ -91,8 +93,9 @@ You implement, phase by phase, with tests. The user reviews at each phase gate.
   lucide-react, Zustand + TanStack Query.
 - **API:** Fastify + Drizzle + postgres.js + Zod, arctic/oslo for GitHub OAuth, Redis sessions,
   `@fastify/rate-limit`.
-- **Parser:** Go + `tree-sitter/go-tree-sitter` v0.25.0 + `tree-sitter/tree-sitter-typescript`
-  v0.23.2 (both pinned in `go.mod`), pgx with explicit SQL, zap.
+- **Parser:** Go + `tree-sitter/go-tree-sitter` v0.25.0, plus one pinned grammar per language:
+  `tree-sitter-typescript` v0.23.2, `-javascript` v0.25.0, `-go` v0.25.0, `-rust` v0.24.2,
+  `-python` v0.25.0, `-java` v0.23.5. pgx with explicit SQL, zap.
 - **Database:** Postgres — edge tables and recursive CTEs. Neo4j deferred indefinitely.
 - **Queue:** Redis + BullMQ, consumed by a **Node worker that spawns the Go binary** (`pnpm worker`).
   The parser has no Redis dependency.
@@ -132,7 +135,17 @@ files over 1 MB skipped.
 - **One grammar per extension, never shared.** `.ts` uses `LanguageTypescript()`, `.tsx` uses
   `LanguageTSX()`. A mismatched grammar fails *silently*: the body becomes an `ERROR` node, the
   declaration still matches, and every call inside is dropped. Any new language needs a fixture that
-  pins the **calls** inside its hardest construct, not just the function names.
+  pins the **calls** inside its hardest construct, not just the function names. `tree-sitter-javascript`
+  is the exception that proves it: one grammar reads JSX in any file, so `.js` and `.jsx` share it.
+- **Adding a language is a `Spec` in `internal/extract/`, a `.scm` in `queries/`, and a fixture.**
+  The third is not optional. `internal/extract/spec_test.go` fails if a `.scm` is missing any of the
+  three captures, and the extension registry is driven off `registry` so a new language cannot leave
+  a test asserting last month's set.
+- **The resolver partitions by language group; it does not filter by it.** `byName` and `byPkgName`
+  are keyed on the group so there is no code path that can reach a foreign-language candidate at
+  all. `.ts`/`.tsx`/`.js`/`.jsx`/`.mjs`/`.cjs` share the one group with more than one language in
+  it. **Do not write a test that decides what to allow by calling `utils.ResolutionGroup`** — it
+  agrees with itself when broken. See R36.
 
 ## Known gaps
 
@@ -142,10 +155,10 @@ Phase 3b is closed. `TASKLIST.md` is the chunk-level truth; this is what outlive
   any change, so a `memo` keyed on reference re-rendered every card whenever one changed — and each
   card showing source re-ran its highlighted block, which the reader saw as untouched cards
   blinking. `sameNodeData` in `lib/graph.ts` is what both node memos use; keep it that way.
-- **Canvas state is persisted but never re-validated.** `store/ui.ts` restores the repository, file
-  and open branches through `zustand/persist`. A re-parse reinserts changed files' functions under
-  new ids, so a restored branch can point at rows that are gone — and a webhook now does that
-  without anyone touching the browser. See R34.
+- **Restored canvas state is checked late, not at rehydrate.** Nothing is loaded when
+  `zustand/persist` rehydrates, so `dropMissingRoots` runs when the open file's function list
+  arrives. That list is authoritative for branch roots only; an expanded id in another file is left
+  to its own query, which 404s. See R34.
 - **A webhook's HMAC covers the raw bytes, so the JSON parser is scoped, not global.** Fastify's
   default parser drops the text, and re-serialising `req.body` does not reproduce what GitHub sent —
   the digest then fails in a way that reads as a wrong secret. A test that signs *compact* JSON will
@@ -184,7 +197,11 @@ Phase 3b is closed. `TASKLIST.md` is the chunk-level truth; this is what outlive
   `node dist/index.js` cannot follow them. `pnpm dev` (tsx) works. Fix before containerising.
 - **Compiled test files land in `apps/api/dist`.** Harmless locally, wrong in an image.
 - **Resolution limits that are honest, not broken:** barrel re-export chains, default imports, and
-  `tsconfig` path aliases all resolve to `unresolved`. See `docs/PARSING_STRATEGY.md`.
+  `tsconfig` path aliases all resolve to `unresolved`. So does every per-language construct in
+  "Per-language extraction limits" — Go's single-type-argument generic call (ambiguous with a
+  conversion), anything inside a Rust macro (a `token_tree` is not parsed), and which Java overload
+  a call meant. Each is pinned by an assertion, because a parser that quietly produces *less* reads
+  as one that worked. See `docs/PARSING_STRATEGY.md`.
 
 ## Verify state before trusting this file
 
@@ -204,7 +221,7 @@ gh run list --branch $(git branch --show-current) --limit 2   # is CI green?
 Parser on its own, when the question is about extraction rather than the app:
 
 ```bash
-make go-run REPO=./services/parser/testdata/resolve
+make go-run REPO=./services/parser/testdata/polyglot
 cd services/parser && go run ./cmd/parser --repo ./testdata/resolve --format summary
 ```
 

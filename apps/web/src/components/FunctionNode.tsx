@@ -128,6 +128,19 @@ function FunctionCard({ data }: NodeProps<GraphNodeData>) {
             </Badge>
           ) : null}
 
+          {/* Only when it differs from the file being read -- see
+              `foreignLanguage`. This is where a reader finds out that the call
+              they followed left the language, which is also where the resolver
+              stops being able to say anything exact. */}
+          {data.foreignLanguage !== null ? (
+            <Badge
+              variant="secondary"
+              className="shrink-0 font-mono text-[10px] font-normal"
+            >
+              {data.foreignLanguage}
+            </Badge>
+          ) : null}
+
           {/* Whether clicking does anything. Without this a leaf looks exactly
               like an unopened function, and clicking it reads as a broken
               canvas rather than as a function that calls nothing. */}

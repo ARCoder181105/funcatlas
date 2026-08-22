@@ -23,7 +23,12 @@ func ConfigFromEnv() Config {
 		MaxFileBytes: envInt64("PARSER_MAX_FILE_BYTES", 1<<20), // 1MB
 		MaxFiles:     envInt("PARSER_MAX_FILES", 50000),
 		MaxDepth:     envInt("PARSER_MAX_DEPTH", 25),
-		SkipPaths:    envSet("PARSER_SKIP_PATHS", "node_modules,.git,dist,build,coverage,.next"),
+		// Dependency and build directories, one set per language. Vendored code
+		// is not this repository's graph, and it is what the file cap is spent
+		// on if it is walked.
+		SkipPaths: envSet("PARSER_SKIP_PATHS",
+			"node_modules,.git,dist,build,coverage,.next,"+
+				"vendor,target,__pycache__,.venv,venv,.gradle,.mypy_cache,.tox"),
 	}
 }
 

@@ -38,9 +38,9 @@ Delivered:
 - `internal/clone` — local path, or `git clone --depth 1`; never runs the repo's install or build scripts.
 - `internal/security` — env-driven caps, `ContainsRoot` path containment, and a `Walk` that hard-fails
   on symlinks, sniffs for binary content, and enforces file-count, per-file-size, and depth limits.
-- `internal/ts` — tree-sitter TypeScript extraction: function declarations, methods, arrow and
+- `internal/ts` (now `internal/extract`) — tree-sitter TypeScript extraction: function declarations, methods, arrow and
   function expressions assigned to variables; call sites with their enclosing caller; imports.
-- `internal/ts/scope.go` — the dot-joined qualified-name walk (`Repo.sync`, `getUser.inner`).
+- `internal/ts/scope.go` (now `internal/extract/scope.go`) — the dot-joined qualified-name walk (`Repo.sync`, `getUser.inner`).
 - `internal/ir` — Go-native `File` / `Function` / `CallSite` / `Import` / `Graph`.
 - `queries/typescript.scm` — the query patterns, embedded at build time with `//go:embed`.
 - `Dockerfile` — multi-stage, non-root; `docker-compose.yml` runs the parser with
@@ -155,10 +155,11 @@ throttled; the parser still works with no network egress. — passed; see `TASKL
 
 **Known carry-over into Phase 5** — R34: `store/ui.ts` restores a file and its open branches through
 `zustand/persist`, and this is the first phase whose re-parse can delete the rows behind them.
+Closed in Phase 5.
 
 ---
 
-## Phase 5 — Go, Rust and Python · not started
+## Phase 5 — Go, Rust, Python, JavaScript and Java · done
 
 Extraction only. Each language gets functions, call sites and imports in the IR, and same-file
 resolution, which is language-agnostic. Cross-file calls resolve to `name_match` or `unresolved`,
@@ -167,7 +168,8 @@ never `exact`.
 **Why the split.** Extraction is a grammar, a `.scm`, and a set of node kinds — cheap and testable.
 Resolution is not, and it is the whole product. Go resolves through package clauses and
 capitalisation-based export, Rust through `mod`/`use`/crate paths and `impl` blocks, Python through
-`sys.path` and `__init__.py`. Sharing one resolver across them would emit confident wrong edges,
+`sys.path` and `__init__.py`, Java through the classpath and argument types. Sharing one resolver
+across them would emit confident wrong edges,
 which is worse than admitting ignorance — see [`PRD.md`](PRD.md#8-the-design-commitment). The
 confidence tiers already carry that admission to the user honestly.
 
@@ -180,13 +182,23 @@ parsed while three of four calls inside its JSX were dropped. One wrong grammar,
 edges gone, no error anywhere. Every language added multiplies that risk, which is why each one
 needs its own fixture pinning *calls*, not just functions.
 
-**Builds:** `tree-sitter-go`, `tree-sitter-rust`, `tree-sitter-python`; one `.scm` per language;
-per-language node-kind constants; `files.language` populated per file rather than hardcoded;
-extraction fixtures per language. The UI learns to show language per node.
+**Shipped:** `tree-sitter-javascript`, `-go`, `-rust`, `-python`, `-java`; one `.scm` per language;
+per-language node-kind constants; `files.language` populated per file rather than hardcoded, so
+`.tsx` now reports `tsx`; extraction fixtures per language. The UI badges a callee whose language
+differs from the file being read.
 
-**Exit test:** a polyglot fixture repo produces correct functions and call sites for all four
-languages, no edge crosses a language boundary, and `.tsx`-style silent grammar mismatch is
-impossible because every language's fixture pins the calls inside its hardest construct.
+JavaScript was added alongside the three, because the TypeScript spec already knew how to read it
+and `.js`/`.jsx` were being skipped entirely. It joins TypeScript's resolution group, so a `.js`
+file importing a `.ts` file still resolves `exact` -- the one cross-file case that survives.
+Java was added because it is the first language here with genuine overloads, which is what
+`overload_index` was always for.
+
+**Exit test:** `testdata/polyglot` produces functions *and* call sites for every language, no edge
+crosses a language boundary, and cross-file resolution is never `exact` outside the ECMAScript
+family. A `.tsx`-style silent mismatch is impossible because every language's fixture pins the
+calls inside its hardest construct -- and each of those turned out to be a real limit worth
+recording rather than a hypothetical: Go's single-type-argument generic call, Rust's macro bodies,
+Python's decorated definitions, Java's overloads.
 
 ---
 
@@ -198,7 +210,7 @@ Each of these was considered and deliberately deferred, not forgotten.
 |---|---|
 | LSP-based resolution | Accurate but slow to build and RPC-heavy on re-export chains. Name/scope resolution ships first, honestly tagged; LSP upgrades `name_match` to `exact` later. |
 | Freehand annotation layer | Pure nice-to-have. Zero bearing on whether the core graph is trustworthy. |
-| ~~Languages beyond TypeScript~~ | **Reinstated as Phase 5** (extraction only). Full per-language resolution is still cut. |
+| ~~Languages beyond TypeScript~~ | **Done in Phase 5** (extraction only). Full per-language resolution is still cut. |
 | Neo4j | Recursive CTEs over an edge table handle this scale. Revisit when traversal is measurably the bottleneck. |
 | Saved canvas layouts | Positions resetting on reload is a papercut, not a blocker. |
 | Multi-tenancy and RBAC | Single-user MVP. Each repo is already an isolated workspace, so this stays cheap to add. |
