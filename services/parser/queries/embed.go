@@ -18,3 +18,6 @@ var RustSCM string
 
 //go:embed python.scm
 var PythonSCM string
+
+//go:embed java.scm
+var JavaSCM string

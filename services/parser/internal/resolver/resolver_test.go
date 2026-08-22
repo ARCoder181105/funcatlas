@@ -171,7 +171,10 @@ func crossLanguage(callerLang, calleeLang string) ir.Graph {
 // The two repo-wide lookups are keyed by resolution group for exactly this,
 // and the same package path is the case that would otherwise slip through.
 func TestResolve_NeverCrossesALanguageBoundary(t *testing.T) {
-	languages := []string{utils.LangTypeScript, utils.LangTSX, "go", "rust", "python", "java"}
+	languages := []string{
+		utils.LangTypeScript, utils.LangTSX, utils.LangJavaScript, utils.LangJSX,
+		utils.LangGo, utils.LangRust, utils.LangPython, utils.LangJava,
+	}
 
 	for _, caller := range languages {
 		for _, callee := range languages {
@@ -206,7 +209,7 @@ func TestResolve_MatchesWithinAResolutionGroup(t *testing.T) {
 // enter rule 2, fail to find a module, and answer unresolved -- throwing away
 // the name_match rule 3 would have given.
 func TestResolve_ImportsAreOnlyFollowedWhereTheyNameAFile(t *testing.T) {
-	g := crossLanguage("python", "python")
+	g := crossLanguage(utils.LangPython, utils.LangPython)
 	g.Imports = []ir.Import{{
 		FileID:  0,
 		From:    "utils",
@@ -218,4 +221,47 @@ func TestResolve_ImportsAreOnlyFollowedWhereTheyNameAFile(t *testing.T) {
 	assert.Equal(t, utils.NameMatch, edges[0].Confidence,
 		"an unfollowable import must not downgrade a call rule 3 can still answer")
 	assert.Equal(t, "helper", target(g, edges[0]))
+}
+
+// A genuine overload resolves to nothing.
+//
+// Java's Repo.sync() and Repo.sync(int) share a qualified name, and picking
+// between them needs argument types this parser does not have. uniqueQualified
+// answers "many, therefore none" -- the whole point of Only over indexing.
+func TestResolve_JavaOverloadIsUnresolved(t *testing.T) {
+	g, edges := resolveFixture(t, "../../testdata/lang/java")
+
+	var found bool
+	for i, c := range g.Calls {
+		if c.CalleeName != "sync" {
+			continue
+		}
+		found = true
+		assert.Equal(t, utils.Unresolved, edges[i].Confidence,
+			"two overloads of sync; choosing one would be a guess")
+		assert.Equal(t, utils.NoFunc, edges[i].CalleeFuncIdx)
+	}
+	require.True(t, found, "no call to sync in the Java fixture")
+}
+
+// Cross-file calls outside the ECMAScript family are never exact: those
+// languages resolve through packages, crate paths, sys.path and the classpath,
+// and none of that is modelled here.
+func TestResolve_NonECMAScriptCrossFileIsNeverExact(t *testing.T) {
+	for _, dir := range []string{
+		"../../testdata/lang/go",
+		"../../testdata/lang/rust",
+		"../../testdata/lang/python",
+		"../../testdata/lang/java",
+	} {
+		g, edges := resolveFixture(t, dir)
+		for i, e := range edges {
+			if e.CalleeFuncIdx == utils.NoFunc || e.Confidence != utils.Exact {
+				continue
+			}
+			assert.Equal(t,
+				g.Calls[i].FileID, g.Functions[e.CalleeFuncIdx].FileID,
+				"%s: an exact edge outside ECMAScript must be same-file", dir)
+		}
+	}
 }

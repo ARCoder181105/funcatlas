@@ -13,6 +13,7 @@ const (
 	LangGo         = "go"
 	LangRust       = "rust"
 	LangPython     = "python"
+	LangJava       = "java"
 )
 
 // GroupECMAScript is the one resolution group holding more than one language.
@@ -98,6 +99,7 @@ const (
 	ExtGo     = ".go"
 	ExtRust   = ".rs"
 	ExtPython = ".py"
+	ExtJava   = ".java"
 )
 
 // Extensions a module specifier is resolved against, in order. TypeScript
@@ -194,6 +196,25 @@ const (
 	KindPyAliasedImport = "aliased_import"
 	KindPyDottedName    = "dotted_name"
 )
+
+// Java. Every enclosing type names a method, and an anonymous inner class is a
+// class_body hanging off an object_creation_expression.
+const (
+	KindJavaMethodDecl       = "method_declaration"
+	KindJavaConstructorDecl  = "constructor_declaration"
+	KindJavaClassDecl        = "class_declaration"
+	KindJavaInterfaceDecl    = "interface_declaration"
+	KindJavaEnumDecl         = "enum_declaration"
+	KindJavaRecordDecl       = "record_declaration"
+	KindJavaLambda           = "lambda_expression"
+	KindJavaObjectCreation   = "object_creation_expression"
+	KindJavaClassBody        = "class_body"
+	KindJavaMethodInvocation = "method_invocation"
+	KindJavaScopedIdentifier = "scoped_identifier"
+)
+
+// JavaWildcardImport binds every type in a package under no local name.
+const JavaWildcardImport = ".*;"
 
 // InsertChunkSize caps rows per multi-row INSERT. Postgres allows 65535 bind
 // parameters; functions is 9 columns wide, so 500 rows is ~4500.
