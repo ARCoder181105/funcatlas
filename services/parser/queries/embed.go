@@ -5,4 +5,7 @@ package queries
 import _ "embed"
 
 //go:embed typescript.scm
-var TypeScriptSCM string 
+var TypeScriptSCM string
+
+//go:embed javascript.scm
+var JavaScriptSCM string

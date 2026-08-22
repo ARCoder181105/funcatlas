@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,7 +37,7 @@ func TestExtract_Golden(t *testing.T) {
 	}
 
 	expected, err := os.ReadFile(goldenJSON)
-	require.NoError(t, err, "run `go test ./internal/ts -run Golden -update` to create it")
+	require.NoError(t, err, "run `go test ./internal/extract -run Golden -update` to create it")
 
 	if !assert.JSONEq(t, string(expected), string(actual)) {
 		out := t.TempDir() + "/extract_actual.json"
@@ -231,34 +230,4 @@ func TestExtract_LanguagePerExtension(t *testing.T) {
 	for _, f := range extractGolden(t).Files {
 		assert.Equal(t, utils.LangTypeScript, f.Language, "%s", f.Path)
 	}
-}
-
-// Both extensions are parsed, and nothing else is.
-func TestExtract_OnlyTypeScriptExtensions(t *testing.T) {
-	dir := t.TempDir()
-	for name, body := range map[string]string{
-		"a.ts":   "export function fromTs() {}\n",
-		"b.tsx":  "export function FromTsx() { return <div />; }\n",
-		"c.js":   "export function fromJs() {}\n",
-		"d.jsx":  "export function FromJsx() { return <div />; }\n",
-		"e.py":   "def from_python(): pass\n",
-		"f.go":   "package main\nfunc FromGo() {}\n",
-		"g.json": `{"not": "source"}`,
-	} {
-		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644))
-	}
-
-	g := testutil.Extract(t, dir)
-
-	var paths []string
-	for _, f := range g.Files {
-		paths = append(paths, f.Path)
-	}
-	assert.ElementsMatch(t, []string{"a.ts", "b.tsx"}, paths)
-
-	var names []string
-	for _, fn := range g.Functions {
-		names = append(names, fn.Name)
-	}
-	assert.ElementsMatch(t, []string{"fromTs", "FromTsx"}, names)
 }

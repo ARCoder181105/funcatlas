@@ -13,10 +13,10 @@ import (
 
 	"github.com/ARCoder181105/funcatlas/parser/internal/clone"
 	"github.com/ARCoder181105/funcatlas/parser/internal/db"
+	"github.com/ARCoder181105/funcatlas/parser/internal/extract"
 	"github.com/ARCoder181105/funcatlas/parser/internal/ir"
 	"github.com/ARCoder181105/funcatlas/parser/internal/resolver"
 	"github.com/ARCoder181105/funcatlas/parser/internal/security"
-	"github.com/ARCoder181105/funcatlas/parser/internal/extract"
 	"github.com/ARCoder181105/funcatlas/parser/internal/utils"
 )
 

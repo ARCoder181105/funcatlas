@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"github.com/ARCoder181105/funcatlas/parser/internal/extract"
 	"github.com/ARCoder181105/funcatlas/parser/internal/ir"
 	"github.com/ARCoder181105/funcatlas/parser/internal/security"
-	"github.com/ARCoder181105/funcatlas/parser/internal/extract"
 )
 
 // Config is the security config for fixtures: limits high enough that nothing

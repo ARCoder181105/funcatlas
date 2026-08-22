@@ -8,6 +8,8 @@ package utils
 const (
 	LangTypeScript = "typescript"
 	LangTSX        = "tsx"
+	LangJavaScript = "javascript"
+	LangJSX        = "jsx"
 )
 
 // GroupECMAScript is the one resolution group holding more than one language.
@@ -18,6 +20,8 @@ const GroupECMAScript = "ecmascript"
 var resolutionGroups = map[string]string{
 	LangTypeScript: GroupECMAScript,
 	LangTSX:        GroupECMAScript,
+	LangJavaScript: GroupECMAScript,
+	LangJSX:        GroupECMAScript,
 }
 
 // ResolutionGroup partitions the resolver's symbol table. A call in main.go
@@ -79,17 +83,32 @@ const (
 )
 
 // Source extensions. .tsx needs its own grammar -- the TypeScript grammar
-// cannot parse JSX, and fails silently by dropping calls inside it.
+// cannot parse JSX, and fails silently by dropping calls inside it. The
+// JavaScript grammar has no such split.
 const (
 	ExtTS  = ".ts"
 	ExtTSX = ".tsx"
+	ExtJS  = ".js"
+	ExtJSX = ".jsx"
+	ExtMJS = ".mjs"
+	ExtCJS = ".cjs"
 )
 
-// Extensions a module specifier is resolved against, in order.
+// Extensions a module specifier is resolved against, in order. TypeScript
+// first: ESM TypeScript writes ./foo.js for what is really ./foo.ts, so the
+// stripped candidates have to be tried before the literal one.
 var (
-	SourceExtensions = []string{ExtTS, ExtTSX}
-	IndexFiles       = []string{"/index" + ExtTS, "/index" + ExtTSX}
+	SourceExtensions = []string{ExtTS, ExtTSX, ExtJS, ExtJSX, ExtMJS, ExtCJS}
+	IndexFiles       = indexFilesFor(SourceExtensions)
 )
+
+func indexFilesFor(extensions []string) []string {
+	out := make([]string, 0, len(extensions))
+	for _, ext := range extensions {
+		out = append(out, "/index"+ext)
+	}
+	return out
+}
 
 // Tree-sitter node kinds, so a grammar rename breaks in one place.
 // Grouped by language: these are TypeScript's, shared with JSX.
@@ -110,6 +129,18 @@ const (
 	KindExportClause       = "export_clause"
 	KindExportSpecifier    = "export_specifier"
 )
+
+// JavaScript adds CommonJS: an import that is a call, and destructuring on the
+// left of it rather than an import clause.
+const (
+	KindArguments                          = "arguments"
+	KindObjectPattern                      = "object_pattern"
+	KindPairPattern                        = "pair_pattern"
+	KindShorthandPropertyIdentifierPattern = "shorthand_property_identifier_pattern"
+)
+
+// RequireCallee is the only call the import query's specifier capture keeps.
+const RequireCallee = "require"
 
 // InsertChunkSize caps rows per multi-row INSERT. Postgres allows 65535 bind
 // parameters; functions is 9 columns wide, so 500 rows is ~4500.

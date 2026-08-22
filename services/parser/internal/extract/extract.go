@@ -123,10 +123,17 @@ func Extract(logger *zap.Logger, root string, cfg security.Config) (ir.Graph, er
 			if stmt == nil {
 				return
 			}
+			// A nil symbol list means "this match is not an import". Some
+			// queries have to over-capture -- JavaScript's require() is an
+			// ordinary call, and the .scm cannot tell which call it was.
+			symbols := g.spec.Imports(stmt, src)
+			if symbols == nil {
+				return
+			}
 			graph.Imports = append(graph.Imports, ir.Import{
 				FileID:  fileID,
 				From:    utils.StringLiteralText(sourceNode, src),
-				Symbols: g.spec.Imports(stmt, src),
+				Symbols: symbols,
 			})
 		})
 
