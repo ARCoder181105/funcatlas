@@ -178,7 +178,10 @@ func TestResolve_NeverCrossesALanguageBoundary(t *testing.T) {
 
 	for _, caller := range languages {
 		for _, callee := range languages {
-			if utils.ResolutionGroup(caller) == utils.ResolutionGroup(callee) {
+			// Spelled out in sameLanguageFamily rather than asked of
+			// ResolutionGroup: a test that decides what to skip by calling the
+			// function under test skips everything when that function breaks.
+			if sameLanguageFamily(caller, callee) {
 				continue
 			}
 			g := crossLanguage(caller, callee)
