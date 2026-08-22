@@ -187,8 +187,8 @@ function TreeBody({
         <EmptyHeader>
           <EmptyTitle>No files to chart</EmptyTitle>
           <EmptyDescription>
-            The parser found nothing it can read here. TypeScript is the only
-            language it extracts today.
+            The parser found nothing it can read here. It reads TypeScript,
+            JavaScript, Go, Rust, Python and Java.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>

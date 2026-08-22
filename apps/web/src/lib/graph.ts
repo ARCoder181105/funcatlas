@@ -23,6 +23,7 @@ import {
   GUTTER,
   HEADER,
   LABEL_CHAR,
+  LANGUAGE_BADGE,
   LINE_HEIGHT,
   LIST_PADDING,
   MORE_ROW,
@@ -79,13 +80,19 @@ export function functionCardWidth(
   label: string,
   qualifiedName: string | null,
   isRoot = false,
+  /** Shown only on a callee in another language; see `foreignLanguage`. */
+  foreignLanguage: string | null = null,
 ): number {
   const sublabel =
     qualifiedName !== null && qualifiedName !== label
       ? qualifiedName.length
       : 0;
   const text = Math.max(label.length * LABEL_CHAR, sublabel * SUBLABEL_CHAR);
-  const chrome = CARD_CHROME + (isRoot ? ROOT_BADGE : 0);
+  const badge =
+    foreignLanguage === null
+      ? 0
+      : foreignLanguage.length * SUBLABEL_CHAR + LANGUAGE_BADGE;
+  const chrome = CARD_CHROME + (isRoot ? ROOT_BADGE : 0) + badge;
 
   // No ceiling. A name is what the reader navigates by, and a card that caps
   // its width just moves the truncation somewhere less obvious.
@@ -234,6 +241,20 @@ export interface GraphNodeData {
   /** Whether the card is showing the function's source. Drives the node's own
    *  size, which is what the layout spaces around. */
   showCode: boolean;
+
+  /**
+   * The node's language, but only when it differs from the file being read.
+   *
+   * Null on a node in the same language, and on a ghost -- which has no file
+   * and so no language. Labelling every node "typescript" on a TypeScript map
+   * is noise on a canvas whose three edge styles are already only a dash apart;
+   * what is worth a badge is the boundary, because the resolver will not cross
+   * one and the reader should be able to see why.
+   *
+   * Filled by `MindMap`, not here: a language belongs to a file, and buildGraph
+   * is given functions.
+   */
+  foreignLanguage: string | null;
 
   /** Whether that source is every line or the first `CODE_PREVIEW_LINES` of
    *  them. Nothing scrolls here; the card grows instead. */
@@ -580,6 +601,7 @@ function toFunctionNode(
     position: { x: 0, y: 0 },
     data: {
       kind: "function",
+      foreignLanguage: null,
       label: fn.name,
       functionId: fn.id,
       qualifiedName: fn.qualifiedName,
@@ -610,6 +632,7 @@ function toGhostNode(ghost: Ghost, depth: number): Node<GraphNodeData> {
     position: { x: 0, y: 0 },
     data: {
       kind: "ghost",
+      foreignLanguage: null,
       label: ghost.name,
       functionId: null,
       qualifiedName: null,
