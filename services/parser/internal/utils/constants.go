@@ -10,6 +10,7 @@ const (
 	LangTSX        = "tsx"
 	LangJavaScript = "javascript"
 	LangJSX        = "jsx"
+	LangGo         = "go"
 )
 
 // GroupECMAScript is the one resolution group holding more than one language.
@@ -92,6 +93,7 @@ const (
 	ExtJSX = ".jsx"
 	ExtMJS = ".mjs"
 	ExtCJS = ".cjs"
+	ExtGo  = ".go"
 )
 
 // Extensions a module specifier is resolved against, in order. TypeScript
@@ -141,6 +143,22 @@ const (
 
 // RequireCallee is the only call the import query's specifier capture keeps.
 const RequireCallee = "require"
+
+// Go. A method's name is a field_identifier, and its receiver type is what
+// makes Repo.Sync distinguishable from a package-level Sync.
+const (
+	KindGoFuncDecl           = "function_declaration"
+	KindGoMethodDecl         = "method_declaration"
+	KindGoFuncLiteral        = "func_literal"
+	KindGoSelectorExpression = "selector_expression"
+	KindGoTypeIdentifier     = "type_identifier"
+)
+
+// Import aliases that bind no usable local name.
+const (
+	GoBlankImport = "_"
+	GoDotImport   = "."
+)
 
 // InsertChunkSize caps rows per multi-row INSERT. Postgres allows 65535 bind
 // parameters; functions is 9 columns wide, so 500 rows is ~4500.

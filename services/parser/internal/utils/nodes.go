@@ -58,6 +58,24 @@ func ParentFieldText(node *tree_sitter.Node, parentKind, field string, src []byt
 	return FieldText(parent, field, src)
 }
 
+// FirstDescendantByKind returns the first named descendant of the given kind,
+// depth-first. How a receiver or an impl target is named: Go writes *Repo,
+// Repo or Repo[T] and only the type_identifier inside is the name.
+func FirstDescendantByKind(node *tree_sitter.Node, kind string) *tree_sitter.Node {
+	if node == nil {
+		return nil
+	}
+	if node.Kind() == kind {
+		return node
+	}
+	for i := uint(0); i < node.NamedChildCount(); i++ {
+		if found := FirstDescendantByKind(node.NamedChild(i), kind); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
 // StringLiteralText is a string literal's contents, without the quotes
 // tree-sitter includes in the node. Covers every quoting style the parsed
 // languages use for an import specifier.

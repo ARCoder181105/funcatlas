@@ -32,4 +32,4 @@ type Spec struct {
 // registry is every language the parser reads. Adding one is a Spec here, a
 // .scm in queries/, and a fixture pinning the calls inside its hardest
 // construct -- the third is not optional; see docs/PARSING_STRATEGY.md.
-var registry = []*Spec{&typeScript, &tsx, &javaScript, &jsx}
+var registry = []*Spec{&typeScript, &tsx, &javaScript, &jsx, &golang}

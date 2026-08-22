@@ -9,3 +9,6 @@ var TypeScriptSCM string
 
 //go:embed javascript.scm
 var JavaScriptSCM string
+
+//go:embed go.scm
+var GoSCM string

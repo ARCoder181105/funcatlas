@@ -12,10 +12,17 @@ import (
 // `Repo.sync` for a method, `getUser.inner` nested. Which nodes count as a
 // scope is the one part a language decides, through Spec.ScopeSegment.
 
-// qualifiedName builds the dot-joined scope path of a declaration. The
-// declaration's own name comes in as baseName, so the walk starts at its
-// parent and never double-counts it.
+// qualifiedName builds the dot-joined scope path of a declaration. The walk
+// starts at its parent so its own name is not counted twice.
+//
+// ScopeSegment gets first say on that name. Usually it agrees with the
+// captured identifier, but a Go method is `Repo.Sync` and only the declaration
+// knows its receiver -- and running it here is what keeps the definition and
+// the call site naming the same scope the same way.
 func qualifiedName(decl tree_sitter.Node, src []byte, spec *Spec, baseName string) string {
+	if segment, ok := spec.ScopeSegment(&decl, src); ok {
+		baseName = segment
+	}
 	return strings.Join(append(scopePath(decl.Parent(), src, spec), baseName), ".")
 }
 
