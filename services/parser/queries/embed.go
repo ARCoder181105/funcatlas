@@ -15,3 +15,6 @@ var GoSCM string
 
 //go:embed rust.scm
 var RustSCM string
+
+//go:embed python.scm
+var PythonSCM string

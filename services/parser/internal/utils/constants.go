@@ -12,6 +12,7 @@ const (
 	LangJSX        = "jsx"
 	LangGo         = "go"
 	LangRust       = "rust"
+	LangPython     = "python"
 )
 
 // GroupECMAScript is the one resolution group holding more than one language.
@@ -88,14 +89,15 @@ const (
 // cannot parse JSX, and fails silently by dropping calls inside it. The
 // JavaScript grammar has no such split.
 const (
-	ExtTS   = ".ts"
-	ExtTSX  = ".tsx"
-	ExtJS   = ".js"
-	ExtJSX  = ".jsx"
-	ExtMJS  = ".mjs"
-	ExtCJS  = ".cjs"
-	ExtGo   = ".go"
-	ExtRust = ".rs"
+	ExtTS     = ".ts"
+	ExtTSX    = ".tsx"
+	ExtJS     = ".js"
+	ExtJSX    = ".jsx"
+	ExtMJS    = ".mjs"
+	ExtCJS    = ".cjs"
+	ExtGo     = ".go"
+	ExtRust   = ".rs"
+	ExtPython = ".py"
 )
 
 // Extensions a module specifier is resolved against, in order. TypeScript
@@ -180,6 +182,18 @@ const (
 
 // RustPathSeparator joins the segments of a use path.
 const RustPathSeparator = "::"
+
+// Python. A decorated definition wraps the function_definition rather than
+// replacing it, and an import statement has no single specifier node.
+const (
+	KindPyFunctionDef   = "function_definition"
+	KindPyClassDef      = "class_definition"
+	KindPyLambda        = "lambda"
+	KindPyAttribute     = "attribute"
+	KindPyImportFrom    = "import_from_statement"
+	KindPyAliasedImport = "aliased_import"
+	KindPyDottedName    = "dotted_name"
+)
 
 // InsertChunkSize caps rows per multi-row INSERT. Postgres allows 65535 bind
 // parameters; functions is 9 columns wide, so 500 rows is ~4500.
