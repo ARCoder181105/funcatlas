@@ -109,8 +109,16 @@ describe("session states", () => {
     renderApp(false);
 
     // A sign-in button here would point at an API that cannot answer.
-    expect(await screen.findByText(/api is not responding/i)).toBeInTheDocument();
+    expect(await screen.findByText(/cannot reach its API/i)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /sign in with github/i })).not.toBeInTheDocument();
+
+    // On a deploy where only the web app is up, this screen is where a visitor
+    // lands. It has to offer a way onward rather than a command they cannot run.
+    expect(screen.getByRole("link", { name: "overview" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "source" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("github.com"),
+    );
   });
 });
 

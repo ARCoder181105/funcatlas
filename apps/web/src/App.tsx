@@ -11,10 +11,11 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./componen
 import { SidebarProvider } from "./components/ui/sidebar";
 import { Skeleton } from "./components/ui/skeleton";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { usePath } from "./lib/router";
+import { Link, usePath } from "./lib/router";
 import { useSession } from "./lib/session";
 import {
   CANVAS_DEFAULT,
+  GITHUB_REPO_URL,
   SIDEBAR_DEFAULT,
   SIDEBAR_MAX,
   SIDEBAR_MIN,
@@ -164,14 +165,39 @@ function ResolvingSession() {
 /**
  * The API could not be reached at all -- which is different from being signed
  * out, and showing a sign-in button here would send the user to a dead link.
+ *
+ * Written for two readers, because both really arrive here. One is running the
+ * stack and has forgotten a process. The other followed a link to a deploy
+ * where only the web app is up, and "run `pnpm dev`" means nothing to them --
+ * they need to know the page is not broken and where the source is.
  */
 function SessionUnavailable() {
   return (
-    <div className="flex h-full w-full items-center justify-center p-6 text-center">
-      <div className="max-w-sm">
-        <p className="font-display text-lg text-ink">The API is not responding</p>
-        <p className="mt-2 text-sm text-ink-muted">
-          Start it with <span className="font-mono text-ink">pnpm dev</span>, then reload.
+    <div className="flex h-full w-full items-center justify-center p-6">
+      <div className="max-w-md text-center">
+        <p className="font-display text-lg text-ink">The canvas cannot reach its API</p>
+
+        <p className="mt-3 text-sm leading-relaxed text-ink-muted">
+          Charting a repository needs the API, the parse worker, Postgres and Redis. None of them
+          answered, so there is nothing to draw.
+        </p>
+
+        <p className="mt-3 text-sm leading-relaxed text-ink-muted">
+          Running it locally? Start them with <span className="font-mono text-ink">make start</span>{" "}
+          and reload. Otherwise the{" "}
+          <a
+            href={GITHUB_REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="text-confidence-exact underline underline-offset-4"
+          >
+            source
+          </a>{" "}
+          has the setup, and the{" "}
+          <Link to="/" className="text-confidence-exact underline underline-offset-4">
+            overview
+          </Link>{" "}
+          explains what it does.
         </p>
       </div>
     </div>
