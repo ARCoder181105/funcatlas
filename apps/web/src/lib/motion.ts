@@ -17,6 +17,15 @@ export const DURATION = {
   page: 0.5,
 } as const;
 
+/**
+ * A heavy decelerate, for the one thing on the landing page that draws itself.
+ *
+ * Not `easeOut`: a symmetric built-in curve reads as a tween, and the hero is
+ * meant to read as a pen being drawn across a chart -- fast away from rest,
+ * settling slowly.
+ */
+export const EASE_DRAW = [0.32, 0.72, 0, 1] as const;
+
 /** Cards and edges use spring physics; routes and fades use easing (§4). */
 const SPRING: Transition = { type: "spring", stiffness: 240, damping: 26 };
 

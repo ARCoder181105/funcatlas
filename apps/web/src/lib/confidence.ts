@@ -42,6 +42,11 @@ export interface ConfidencePresentation {
    *  a class name built by concatenation and would purge it. Resolves through
    *  a CSS variable, so it follows the active theme on its own. */
   textClass: string;
+  /** For SVG we draw ourselves -- the landing page's hero graph. Same reason
+   *  the literal is complete, and the same reason it beats `confidenceColor`
+   *  here: a class follows the theme without the component subscribing to it.
+   *  The canvas still needs the raw value; see `confidenceColor`. */
+  strokeClass: string;
   /** What the tier is called in the interface. */
   label: string;
   /** What it actually means, shown in the canvas legend. */
@@ -53,6 +58,7 @@ export const CONFIDENCE: Record<ResolutionConfidence, ConfidencePresentation> = 
     style: CONFIDENCE_STYLE.exact,
     strokeDasharray: DASH_ARRAY[CONFIDENCE_STYLE.exact],
     textClass: "text-confidence-exact",
+    strokeClass: "stroke-confidence-exact",
     label: "Exact",
     meaning: "Matched to this function.",
   },
@@ -60,6 +66,7 @@ export const CONFIDENCE: Record<ResolutionConfidence, ConfidencePresentation> = 
     style: CONFIDENCE_STYLE.name_match,
     strokeDasharray: DASH_ARRAY[CONFIDENCE_STYLE.name_match],
     textClass: "text-confidence-name",
+    strokeClass: "stroke-confidence-name",
     label: "Name match",
     meaning: "A function with this name is in scope, but it may not be the one called.",
   },
@@ -67,6 +74,7 @@ export const CONFIDENCE: Record<ResolutionConfidence, ConfidencePresentation> = 
     style: CONFIDENCE_STYLE.unresolved,
     strokeDasharray: DASH_ARRAY[CONFIDENCE_STYLE.unresolved],
     textClass: "text-confidence-unresolved",
+    strokeClass: "stroke-confidence-unresolved",
     label: "Unresolved",
     meaning: "The call is real, but which function it reaches could not be determined.",
   },

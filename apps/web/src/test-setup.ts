@@ -53,6 +53,28 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   } as unknown as typeof ResizeObserver;
 }
 
+// The landing page's scroll reveals ask Framer whether an element is in view,
+// and jsdom has no IntersectionObserver at all -- without this, mounting the
+// page throws from inside an effect.
+//
+// A no-op that never reports an intersection, which is the honest answer: this
+// document has no viewport for anything to be inside. The revealed content is
+// still in the DOM the whole time, only at opacity 0, so presence is testable
+// here and whether it actually appears is a browser check.
+if (typeof globalThis.IntersectionObserver === "undefined") {
+  globalThis.IntersectionObserver = class {
+    readonly root = null;
+    readonly rootMargin = "";
+    readonly thresholds: readonly number[] = [];
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  } as unknown as typeof IntersectionObserver;
+}
+
 // React Flow reads the pane's transform through DOMMatrixReadOnly when it
 // measures a node, and jsdom has no implementation. It only started throwing
 // once `lib/graph.ts` stopped pre-declaring node dimensions -- before that

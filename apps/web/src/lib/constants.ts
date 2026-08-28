@@ -28,6 +28,14 @@ export const THEME_STORAGE_KEY = "funcatlas-theme";
  *  complaint that put this here. */
 export const UI_STORAGE_KEY = "funcatlas-ui";
 
+// --- Landing page ---------------------------------------------------------
+
+/** The repository the landing page links to and reads a star count from.
+ *  Only the web app needs it, so it stays here rather than in the shared
+ *  package. */
+export const GITHUB_REPO = "ARCoder181105/funcatlas";
+export const GITHUB_REPO_URL = `https://github.com/${GITHUB_REPO}`;
+
 // --- Motion ---------------------------------------------------------------
 
 /** Milliseconds. Page-level motion in UI_GUIDE §4 is 400-600ms, and this moves
