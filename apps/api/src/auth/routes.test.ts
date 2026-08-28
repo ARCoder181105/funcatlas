@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { APP_ROUTE } from "@funcatlas/shared";
 import { buildApp } from "../app.js";
 import { env } from "../env.js";
 import { cookieHeader } from "../test-helpers.js";
@@ -99,7 +100,10 @@ describe("GET /auth/callback", () => {
     });
 
     expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe(env.WEB_APP_URL);
+    // The canvas, not the web app's root -- the root is the marketing landing
+    // page, and pitching the product to someone who has just signed in to it
+    // is the failure this asserts against.
+    expect(res.headers.location).toBe(new URL(APP_ROUTE, env.WEB_APP_URL).toString());
 
     // Reaching here proves the state in the redirect and the state in the
     // cookie are the same value -- nothing else compares them.

@@ -1,6 +1,6 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import { oauthCallbackSchema } from "@funcatlas/shared";
+import { APP_ROUTE, oauthCallbackSchema } from "@funcatlas/shared";
 import { env } from "../env.js";
 import {
   OAUTH_SCOPES,
@@ -74,9 +74,10 @@ export function registerAuth(app: FastifyInstance) {
     }
 
     setSessionCookie(reply, sessionId);
-    // The web app, not this one. Redirecting to the API's own origin lands a
-    // freshly signed-in user on a JSON endpoint.
-    return reply.redirect(env.WEB_APP_URL);
+    // The web app's canvas, not this API and not the web app's root. The root
+    // is the marketing landing page, so a bare origin here would sign someone
+    // in and then show them the pitch for the product they just signed in to.
+    return reply.redirect(new URL(APP_ROUTE, env.WEB_APP_URL).toString());
   });
 
   // POST, not GET: with SameSite=Lax a cross-site GET navigation still carries

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { APP_ROUTE } from "@funcatlas/shared";
 import App from "./App";
 import { ApiError, api } from "./lib/api";
 
@@ -36,6 +37,30 @@ const SIGNED_OUT = new ApiError(401, "unauthorized");
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Every one of these is about the canvas route. At jsdom's default `/` the
+  // app renders the marketing page, which resolves no session at all.
+  window.history.replaceState(null, "", APP_ROUTE);
+});
+
+describe("routing", () => {
+  it("shows the landing page at the root, without resolving a session", async () => {
+    window.history.replaceState(null, "", "/");
+    mocked.me.mockRejectedValue(SIGNED_OUT);
+
+    renderApp();
+
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(/map of every call/i);
+    expect(mocked.me).not.toHaveBeenCalled();
+  });
+
+  it("shows the canvas route for anything else", async () => {
+    window.history.replaceState(null, "", APP_ROUTE);
+    mocked.me.mockResolvedValue({ userId: 7, login: "octocat" });
+
+    renderApp();
+
+    expect(await screen.findByText("octocat")).toBeInTheDocument();
+  });
 });
 
 describe("session states", () => {

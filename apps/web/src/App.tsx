@@ -1,15 +1,17 @@
 import { useRef, useState } from "react";
-import type { SessionUser } from "@funcatlas/shared";
+import { APP_ROUTE, type SessionUser } from "@funcatlas/shared";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { AppHeader } from "./components/AppHeader";
 import { Canvas } from "./components/Canvas";
 import { CommandPalette } from "./components/CommandPalette";
+import { Landing } from "./components/landing/Landing";
 import { LoginScreen } from "./components/LoginScreen";
 import { Sidebar } from "./components/Sidebar";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./components/ui/resizable";
 import { SidebarProvider } from "./components/ui/sidebar";
 import { Skeleton } from "./components/ui/skeleton";
 import { TooltipProvider } from "./components/ui/tooltip";
+import { usePath } from "./lib/router";
 import { useSession } from "./lib/session";
 import {
   CANVAS_DEFAULT,
@@ -28,12 +30,25 @@ import {
  */
 
 /**
+ * Two routes. Anything that is not the canvas is the landing page -- there is
+ * no 404, because there is nothing else to be.
+ *
+ * The split matters beyond tidiness: `useSession` lives inside `AppRoute`, so
+ * the landing page issues no request at all and renders with the API down.
+ * A marketing page that needs a backend to say what the product is is not a
+ * marketing page.
+ */
+export default function App() {
+  return usePath() === APP_ROUTE ? <AppRoute /> : <Landing />;
+}
+
+/**
  * Three states, and the server decides which: resolving, signed out, signed in.
  *
  * There is no local "is logged in" flag to drift out of sync -- the cookie is
  * HttpOnly, so `useSession` asking the API is the only honest answer.
  */
-export default function App() {
+function AppRoute() {
   const session = useSession();
 
   if (session.isPending) {
