@@ -3,6 +3,7 @@ import { useSmoothScroll } from "../../lib/useSmoothScroll";
 import { ClosingCta } from "./ClosingCta";
 import { Hero } from "./Hero";
 import { HowItWorks } from "./HowItWorks";
+import { Index } from "./Index";
 import { LandingFooter } from "./LandingFooter";
 import { LandingHeader } from "./LandingHeader";
 import { Languages } from "./Languages";
@@ -30,6 +31,7 @@ export function Landing() {
         <Hero />
         <Tiers />
         <HowItWorks />
+        <Index />
         <Languages />
         <ClosingCta />
       </main>

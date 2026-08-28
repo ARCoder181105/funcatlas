@@ -70,6 +70,19 @@ describe("the landing page", () => {
     expect(screen.getByText(/extracted, resolved within a file/i)).toBeInTheDocument();
   });
 
+  it("shows the index with a function count on every file", () => {
+    renderLanding();
+
+    const index = screen.getByRole("heading", { name: /an atlas has an index/i }).closest("section");
+    expect(index).not.toBeNull();
+
+    // The count is what the sidebar puts beside a path, and it is the reason
+    // the tree is worth showing at all rather than describing.
+    const files = within(index as HTMLElement).getAllByText(/\.(tsx?|go)$/);
+    expect(files.length).toBeGreaterThan(3);
+    expect(within(index as HTMLElement).getByText("23")).toBeInTheDocument();
+  });
+
   it("links to the source even when GitHub will not answer", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("rate limited"));
 
