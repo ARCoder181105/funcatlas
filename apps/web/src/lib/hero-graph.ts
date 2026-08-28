@@ -41,9 +41,15 @@ export interface HeroEdge {
   tier: ResolutionConfidence;
 }
 
-/** Wide rather than tall: the hero sits beside the headline, and the graph
- *  reads left to right because that is the direction calls run. */
-export const HERO_VIEWBOX = { width: 560, height: 360 } as const;
+/**
+ * Wide rather than tall: the hero sits beside the headline, and the graph
+ * reads left to right because that is the direction calls run.
+ *
+ * The height is measured off the drawing rather than picked -- 268 is the
+ * lowest node's baseline plus the ghost's caption plus a margin. A taller box
+ * scales the whole graph down to fit its own empty space.
+ */
+export const HERO_VIEWBOX = { width: 560, height: 268 } as const;
 
 /** One size for every node. Measured off `handleRequest` at mono 12px, which
  *  is the longest label here; a card narrower than its own name is the bug
@@ -53,12 +59,12 @@ export const HERO_NODE = { width: 132, height: 36, radius: 8 } as const;
 const COLUMN = [20, 214, 408] as const;
 
 export const HERO_NODES: HeroNode[] = [
-  { id: "handleRequest", label: "handleRequest", depth: 0, x: COLUMN[0], y: 162 },
-  { id: "parseBody", label: "parseBody", depth: 1, x: COLUMN[1], y: 54 },
-  { id: "validate", label: "validate", depth: 1, x: COLUMN[1], y: 162 },
-  { id: "loggerInfo", label: "logger.info", depth: 1, x: COLUMN[1], y: 270 },
-  { id: "readStream", label: "readStream", depth: 2, x: COLUMN[2], y: 54 },
-  { id: "formatError", label: "formatError", depth: 2, x: COLUMN[2], y: 222, ghost: true },
+  { id: "handleRequest", label: "handleRequest", depth: 0, x: COLUMN[0], y: 116 },
+  { id: "parseBody", label: "parseBody", depth: 1, x: COLUMN[1], y: 24 },
+  { id: "validate", label: "validate", depth: 1, x: COLUMN[1], y: 116 },
+  { id: "loggerInfo", label: "logger.info", depth: 1, x: COLUMN[1], y: 208 },
+  { id: "readStream", label: "readStream", depth: 2, x: COLUMN[2], y: 24 },
+  { id: "formatError", label: "formatError", depth: 2, x: COLUMN[2], y: 170, ghost: true },
 ];
 
 export const HERO_EDGES: HeroEdge[] = [

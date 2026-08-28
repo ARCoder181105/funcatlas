@@ -1,10 +1,19 @@
+import { cn } from "../../lib/cn";
 import { GITHUB_REPO_URL } from "../../lib/constants";
+import { LANDING_SHELL } from "./shell";
 
 export function LandingFooter() {
   return (
-    <footer className="border-t border-surface-border/50 px-6 py-10">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4">
-        <span className="font-display text-sm tracking-tight text-ink">funcatlas</span>
+    <footer className="border-t border-surface-border/50 py-10">
+      <div
+        className={cn(
+          LANDING_SHELL,
+          "flex flex-wrap items-center justify-between gap-4",
+        )}
+      >
+        <span className="font-display text-sm tracking-tight text-ink">
+          funcatlas
+        </span>
 
         <p className="font-mono text-[11px] text-ink-muted">
           tree-sitter · Postgres ·{" "}

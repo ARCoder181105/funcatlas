@@ -12,12 +12,14 @@ import { Section } from "./Section";
 const GROUPS = [
   {
     heading: "Resolved across files",
-    detail: "Imports are followed, so a call reaches a definition in another file.",
+    detail:
+      "Imports are followed, so a call reaches a definition in another file.",
     languages: ["TypeScript", "TSX", "JavaScript", "JSX"],
   },
   {
     heading: "Extracted, resolved within a file",
-    detail: "Every function and call site is charted. Cross-file resolution is not built yet.",
+    detail:
+      "Every function and call site is charted. Cross-file resolution is not built yet.",
     languages: ["Go", "Rust", "Python", "Java"],
   },
 ] as const;
@@ -33,8 +35,12 @@ export function Languages() {
       <div className="grid gap-4 md:grid-cols-2">
         {GROUPS.map((group) => (
           <Bezel key={group.heading} innerClassName="p-6">
-            <h3 className="font-display text-lg tracking-tight text-ink">{group.heading}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-ink-muted">{group.detail}</p>
+            <h3 className="font-display text-lg tracking-tight text-ink">
+              {group.heading}
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+              {group.detail}
+            </p>
 
             <ul className="mt-5 flex flex-wrap gap-2">
               {group.languages.map((language) => (

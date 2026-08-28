@@ -1,6 +1,8 @@
+import { cn } from "../../lib/cn";
 import { ThemeToggle } from "../ThemeToggle";
 import { GitHubStars } from "./GitHubStars";
 import { OpenAtlas } from "./OpenAtlas";
+import { LANDING_SHELL } from "./shell";
 
 /**
  * A chart's title block, not a navigation bar.
@@ -12,8 +14,15 @@ import { OpenAtlas } from "./OpenAtlas";
  */
 export function LandingHeader() {
   return (
-    <header className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-6">
-      <span className="font-display text-lg tracking-tight text-ink">funcatlas</span>
+    <header
+      className={cn(
+        LANDING_SHELL,
+        "flex items-center justify-between gap-4 py-6",
+      )}
+    >
+      <span className="font-display text-lg tracking-tight text-ink">
+        funcatlas
+      </span>
 
       <div className="flex items-center gap-2">
         <GitHubStars />

@@ -18,7 +18,9 @@ describe("HeroGraph", () => {
     // stroke-dasharray, which collapses solid, dashed and dotted into one
     // pattern. The graph still animates, still looks fine, and has stopped
     // saying the only thing it is there to say (PRD §8).
-    const patterns = new Set(paths.map((path) => path.getAttribute("stroke-dasharray")));
+    const patterns = new Set(
+      paths.map((path) => path.getAttribute("stroke-dasharray")),
+    );
     expect(patterns.size).toBe(3);
 
     // Solid is the absence of a pattern, not a pattern that looks solid.

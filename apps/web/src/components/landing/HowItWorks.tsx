@@ -12,7 +12,7 @@ const STEPS = [
   },
   {
     title: "Extract",
-    body: "tree-sitter walks every file for function declarations and call sites. One pinned grammar per extension, never shared — a mismatched grammar fails silently and drops every call in the file.",
+    body: "tree-sitter walks every file for function declarations and call sites. One pinned grammar per extension, never shared, because a mismatched grammar fails silently and drops every call in the file.",
   },
   {
     title: "Resolve",
@@ -42,8 +42,12 @@ export function HowItWorks() {
             </span>
 
             <div>
-              <h3 className="font-display text-lg tracking-tight text-ink">{step.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-ink-muted">{step.body}</p>
+              <h3 className="font-display text-lg tracking-tight text-ink">
+                {step.title}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+                {step.body}
+              </p>
             </div>
           </li>
         ))}

@@ -3,6 +3,7 @@ import type { ResolutionConfidence } from "@funcatlas/shared";
 import { cn } from "../../lib/cn";
 import { ConfidenceRule } from "../ConfidenceRule";
 import { Reveal } from "./Reveal";
+import { LANDING_SHELL } from "./shell";
 
 /**
  * One section of the landing page: a rule, an eyebrow, a heading, a lede, and
@@ -36,8 +37,13 @@ export function Section({
   className?: string;
 }) {
   return (
-    <section className={cn("border-t border-surface-border/50 px-6 py-24 sm:py-32", className)}>
-      <div className="mx-auto max-w-5xl">
+    <section
+      className={cn(
+        "border-t border-surface-border/50 py-24 sm:py-32",
+        className,
+      )}
+    >
+      <div className={LANDING_SHELL}>
         <Reveal>
           <ConfidenceRule tier={tier} className="max-w-24" />
 
@@ -50,7 +56,9 @@ export function Section({
           </h2>
 
           {lede === undefined ? null : (
-            <p className="mt-4 max-w-2xl text-base leading-relaxed text-ink-muted">{lede}</p>
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-ink-muted">
+              {lede}
+            </p>
           )}
         </Reveal>
 

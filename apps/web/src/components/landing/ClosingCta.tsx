@@ -5,7 +5,7 @@ import { Section } from "./Section";
  *  everywhere else in this product. */
 const LIMITS = [
   "Public repositories only. The OAuth scope is read:user, and the parser clones over public HTTPS.",
-  "Nothing is written to your GitHub account — no commits, no issues, no status checks.",
+  "Nothing is written to your GitHub account: no commits, no issues, no status checks.",
   "A push updates the graph through a webhook, so what you are looking at is the current commit.",
 ] as const;
 

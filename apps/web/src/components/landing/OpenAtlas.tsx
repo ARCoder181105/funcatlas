@@ -14,9 +14,18 @@ import { buttonVariants } from "../ui/button";
  * reader through it is how they learn the confidence legend before the canvas
  * uses it.
  */
-export function OpenAtlas({ size = "lg", className }: { size?: "sm" | "lg"; className?: string }) {
+export function OpenAtlas({
+  size = "lg",
+  className,
+}: {
+  size?: "sm" | "lg";
+  className?: string;
+}) {
   return (
-    <Link to={APP_ROUTE} className={cn(buttonVariants({ size }), "group", className)}>
+    <Link
+      to={APP_ROUTE}
+      className={cn(buttonVariants({ size }), "group", className)}
+    >
       Open the atlas
       {/* The arrow rides in its own well, so the control reads as a thing with
           a moving part rather than as text with a glyph after it. */}

@@ -10,7 +10,9 @@ import { Landing } from "./Landing";
 vi.mock("../../lib/useSmoothScroll", () => ({ useSmoothScroll: () => {} }));
 
 function renderLanding() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       <Landing />
@@ -27,11 +29,15 @@ describe("the landing page", () => {
   it("asks for nothing from our API", () => {
     // The page explains the product. Needing the backend up to do that would
     // make it fail exactly when someone most needs to read it.
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("offline"));
 
     renderLanding();
 
-    const ours = fetchSpy.mock.calls.filter(([input]) => !String(input).includes("api.github.com"));
+    const ours = fetchSpy.mock.calls.filter(
+      ([input]) => !String(input).includes("api.github.com"),
+    );
     expect(ours).toEqual([]);
   });
 
@@ -48,13 +54,17 @@ describe("the landing page", () => {
   it("names all three tiers and what each one means", () => {
     renderLanding();
 
-    const tiers = screen.getByRole("heading", { name: /certainty is the product/i }).closest("section");
+    const tiers = screen
+      .getByRole("heading", { name: /certainty is the product/i })
+      .closest("section");
     expect(tiers).not.toBeNull();
 
     for (const tier of CONFIDENCE_ORDER) {
       const { label, meaning } = CONFIDENCE[tier];
       expect(within(tiers as HTMLElement).getByText(label)).toBeInTheDocument();
-      expect(within(tiers as HTMLElement).getByText(meaning)).toBeInTheDocument();
+      expect(
+        within(tiers as HTMLElement).getByText(meaning),
+      ).toBeInTheDocument();
     }
   });
 
@@ -67,13 +77,17 @@ describe("the landing page", () => {
     // Said in the hero and again at the closing call to action -- a reader who
     // scrolls past the first one still meets it before signing in.
     expect(screen.getAllByText(/read:user/).length).toBeGreaterThan(1);
-    expect(screen.getByText(/extracted, resolved within a file/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/extracted, resolved within a file/i),
+    ).toBeInTheDocument();
   });
 
   it("shows the index with a function count on every file", () => {
     renderLanding();
 
-    const index = screen.getByRole("heading", { name: /an atlas has an index/i }).closest("section");
+    const index = screen
+      .getByRole("heading", { name: /an atlas has an index/i })
+      .closest("section");
     expect(index).not.toBeNull();
 
     // The count is what the sidebar puts beside a path, and it is the reason
@@ -88,7 +102,12 @@ describe("the landing page", () => {
 
     renderLanding();
 
-    const links = await screen.findAllByRole("link", { name: /funcatlas on github/i });
-    expect(links[0]).toHaveAttribute("href", expect.stringContaining("github.com"));
+    const links = await screen.findAllByRole("link", {
+      name: /funcatlas on github/i,
+    });
+    expect(links[0]).toHaveAttribute(
+      "href",
+      expect.stringContaining("github.com"),
+    );
   });
 });

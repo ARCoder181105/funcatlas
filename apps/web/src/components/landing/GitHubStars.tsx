@@ -40,7 +40,10 @@ export function GitHubStars() {
             className="size-3.5 transition-colors duration-micro group-hover:text-confidence-name"
             aria-hidden
           />
-          <SlidingNumber number={stars.data} fromNumber={animate ? 0 : undefined} />
+          <SlidingNumber
+            number={stars.data}
+            fromNumber={animate ? 0 : undefined}
+          />
         </span>
       ) : null}
     </a>

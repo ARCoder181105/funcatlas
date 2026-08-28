@@ -12,11 +12,12 @@ import { Section } from "./Section";
  * the product does not draw.
  */
 const CAUSE: Record<ResolutionConfidence, string> = {
-  exact: "The import was followed to a declaration, and only one function could be the target.",
+  exact:
+    "The import was followed to a declaration, and only one function could be the target.",
   name_match:
     "A function with that name is in scope. Another one elsewhere may be the function actually called.",
   unresolved:
-    "The call is real and its target is ambiguous — a barrel re-export, a default import, a path alias.",
+    "The call is real and its target is ambiguous: a barrel re-export, a default import, a path alias.",
 };
 
 export function Tiers() {
@@ -25,7 +26,7 @@ export function Tiers() {
       tier="exact"
       eyebrow="Resolution"
       title="Certainty is the product, not a footnote on it."
-      lede="Every call gets one of three answers, and each is drawn as a different line. The scale is learned once and read everywhere — on the canvas, in the legend, and here."
+      lede="Every call gets one of three answers, and each is drawn as a different line. The scale is learned once and read everywhere: on the canvas, in the legend, and here."
     >
       <ul className="grid gap-4 md:grid-cols-3">
         {CONFIDENCE_ORDER.map((tier) => {
@@ -33,14 +34,23 @@ export function Tiers() {
 
           return (
             <li key={tier}>
-              <Bezel className="h-full" innerClassName="flex flex-col gap-4 p-6">
+              <Bezel
+                className="h-full"
+                innerClassName="flex flex-col gap-4 p-6"
+              >
                 <ConfidenceRule tier={tier} />
 
-                <p className={cn("font-mono text-xs tracking-tight", textClass)}>{label}</p>
+                <p
+                  className={cn("font-mono text-xs tracking-tight", textClass)}
+                >
+                  {label}
+                </p>
 
                 <p className="text-sm leading-relaxed text-ink">{meaning}</p>
 
-                <p className="mt-auto text-xs leading-relaxed text-ink-muted">{CAUSE[tier]}</p>
+                <p className="mt-auto text-xs leading-relaxed text-ink-muted">
+                  {CAUSE[tier]}
+                </p>
               </Bezel>
             </li>
           );
@@ -48,9 +58,10 @@ export function Tiers() {
       </ul>
 
       <p className="mt-8 max-w-2xl text-sm leading-relaxed text-ink-muted">
-        An unresolved call is an admission, not an error, and it is never coloured like one. A tool
-        that guesses is worse than a tool that stops — a wrong edge is read as fact and costs more
-        than the missing one it replaced.
+        An unresolved call is an admission, not an error, and it is never
+        coloured like one. A tool that guesses is worse than a tool that stops,
+        because a wrong edge is read as fact and costs more than the missing one
+        it replaced.
       </p>
     </Section>
   );

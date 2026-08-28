@@ -48,8 +48,8 @@ describe("heroEdgePath", () => {
   it("runs from the caller's right edge to the callee's left edge", () => {
     const path = heroEdgePath({ from: "handleRequest", to: "parseBody", tier: "exact" });
 
-    // 20 + 132 wide, centred on 162 + 18; target starts at 214, centred on 72.
-    expect(path).toBe("M 152 180 C 183 180, 183 72, 214 72");
+    // 20 + 132 wide, centred on 116 + 18; target starts at 214, centred on 42.
+    expect(path).toBe("M 152 134 C 183 134, 183 42, 214 42");
   });
 
   it("refuses a node it does not have rather than drawing from NaN", () => {

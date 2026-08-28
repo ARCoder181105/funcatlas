@@ -67,7 +67,11 @@ export function HeroGraph({ className }: { className?: string }) {
         </defs>
       ) : null}
 
-      <g mask={animate ? `url(#${maskId})` : undefined} fill="none" strokeWidth={1.5}>
+      <g
+        mask={animate ? `url(#${maskId})` : undefined}
+        fill="none"
+        strokeWidth={1.5}
+      >
         {HERO_EDGES.map((edge) => (
           <path
             key={`${edge.from}-${edge.to}`}
@@ -101,7 +105,11 @@ export function HeroGraph({ className }: { className?: string }) {
                 ? cn("fill-none", CONFIDENCE.unresolved.strokeClass)
                 : "fill-surface-raised stroke-surface-border"
             }
-            strokeDasharray={node.ghost === true ? CONFIDENCE.unresolved.strokeDasharray : undefined}
+            strokeDasharray={
+              node.ghost === true
+                ? CONFIDENCE.unresolved.strokeDasharray
+                : undefined
+            }
           />
 
           <text
