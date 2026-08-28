@@ -173,16 +173,45 @@ A single centred card: wordmark, one line saying what the tool does, the confide
 The legend earns its place here where a background texture did not: it is the notation the canvas is
 about to use, and reading it once beats decoding it later.
 
-**The marketing landing page gets its own PR, still unopened.** It is a second full surface that no
-phase's exit test touches, so it has never belonged in a phase review. It was requested during 3b
-and named the next branch after that gate; Phases 4 and 5 went first, so it is now overdue rather
-than upcoming. It follows §1 like everything else.
+**The marketing landing page shipped on the `landing-page` branch.** It is a second full surface
+that no phase's exit test touches, so it never belonged in a phase review. Requested during 3b and
+named the next branch after that gate; Phases 4 and 5 went first.
 
-The landing page is the one surface that takes the maximal spatial treatment: section padding at
-`py-24` and above, nested double-bezel cards, and a hero that is a live drawing graph rather than a
-screenshot. The canvas is dense by nature and does not; matching complexity to the surface is the
-point, and applying marketing whitespace to a file tree is how a tool starts feeling like a
-brochure.
+It is the one surface that takes the maximal spatial treatment: section padding at `py-24` and
+above, nested double-bezel cards, and a hero that is a live drawing graph rather than a screenshot.
+The canvas is dense by nature and does not; matching complexity to the surface is the point, and
+applying marketing whitespace to a file tree is how a tool starts feeling like a brochure.
+
+### 3.1a Landing page (`/`) · the `landing-page` branch
+
+`apps/web/src/components/landing/`. Title block, hero, tiers, pipeline, index, coverage, closing
+call to action, footer.
+
+- **Routing.** `/` is the landing page and `/app` is the canvas; anything else falls to the landing
+  page, and there is no 404. `lib/router.tsx` is thirty-odd lines over `pushState` rather than a
+  router library: two static routes, no parameters, no loaders. `useSession` lives behind `/app`, so
+  **the landing page issues no request to our API and renders with the backend down.**
+- **The structural device is the product's notation.** Each section rule is a confidence tier's dash
+  pattern, and each section takes the tier that is true of it — solid over resolution and the
+  pipeline, dashed over coverage because support past the ECMAScript family genuinely is partial,
+  dotted over the limits. `ConfidenceRule` draws it and the legend uses the same component.
+- **One colour rule.** No colour appears that does not carry its canvas meaning. The accent is the
+  hue that already means "known"; clay appears only on a name match, ash only on unresolved.
+- **The hero is plain SVG, not React Flow**, and the draw is a mask sweeping across rather than an
+  animated `pathLength` — that writes an inline `stroke-dasharray` and flattens all three tiers into
+  one pattern. `HeroGraph.test.tsx` asserts three distinct dash values for exactly that reason.
+  The graph carries a ghost node: the signature from §3.2, leading with what the tool cannot do.
+- **Smooth scrolling is mounted from `Landing` only** (Lenis). At the app root it would take the
+  wheel away from the canvas, where the wheel means zoom.
+- **What it deliberately is not:** no sticky bar and no floating glass pill (there is nowhere to
+  navigate to), no bento grid, no gradient mesh, no glow, no backdrop blur. §1.3 and §7.
+
+**Installed, not written.** Three animate-ui pieces via the shadcn CLI — `effects/fade` for the
+section reveals, `texts/sliding-number` for the star count, `components-base-files` for the index
+tree. Every generated file was edited and says so at the top, because `add --overwrite` reverts it
+silently: they ship importing `motion/react` and `@base-ui-components/react`, which are second
+copies of the `framer-motion` and `@base-ui/react` this project locks, and the files component's
+git-status slot carried hardcoded green/amber/red that became a function count instead.
 
 ### 3.2 Canvas explorer (authenticated)
 - **Sidebar — the index.** An atlas has an index, and the file tree is it. Collapsible, directories
@@ -250,7 +279,7 @@ away.
 
 - Desktop-first (it's a power-user tool). The canvas is not a phone surface.
 - Canvas toolbars collapse to icon-only on narrow widths.
-- The sign-in card and, when it exists, the landing page must work on mobile.
+- The sign-in card and the landing page must work on mobile.
 
 ## 5.1 Quality floor
 
@@ -265,8 +294,8 @@ reachable tab order through tree, palette and canvas, and `prefers-reduced-motio
 - Custom theming UI, saved layouts/perspectives.
 
 **No longer deferred.** The light theme shipped in Phase 3b alongside the dark one — both palettes
-are in §1.1 and both are enforced by `confidence.test.ts`. The marketing landing page moved from
-"post-MVP" to a branch of its own, which has not been opened yet (§3.1).
+are in §1.1 and both are enforced by `confidence.test.ts`. The marketing landing page shipped on the
+`landing-page` branch (§3.1a).
 
 ## 7. What this must not look like
 

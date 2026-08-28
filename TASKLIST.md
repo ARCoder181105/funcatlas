@@ -152,3 +152,35 @@ all clean.
 Still to do by hand at the gate: a real polyglot public repository charted end to end in real
 Chrome, checking the tree language labels, the per-node badge, and Shiki highlighting for each
 language.
+
+---
+
+## The landing page (`landing-page`, not a phase)
+
+A second full surface that no phase's exit test touches — `docs/UI_GUIDE.md` §3.1 specified it
+during Phase 3b and named it the next branch after that gate. Phases 4 and 5 went first.
+
+- [x] **Route.** `lib/router.tsx` over `pushState`; `/` is the landing page, `/app` is the canvas,
+      `APP_ROUTE` is shared so the OAuth callback stops returning people to the marketing page.
+- [x] **Hero.** Plain SVG drawing itself under a mask sweep, never an animated `pathLength`, with a
+      ghost node at the map's edge.
+- [x] **Sections.** Title block, hero, resolution, pipeline, index, coverage, closing, footer. Each
+      section rule is the confidence tier that is true of that section.
+- [x] **Installed, not written.** animate-ui `effects/fade`, `texts/sliding-number` and
+      `components-base-files`; `lenis` for smooth scrolling, mounted from `Landing` alone.
+- [x] **Palette.** Ember/Vellum replaced product-wide by Ultramarine/Letterpress. `UI_GUIDE.md`
+      §1.1 rewritten, §7.1 records the old one as shipped and replaced.
+- [x] **Done when.** `make test`, `make lint`, `make typecheck`, `make go-vet` clean.
+
+**Verified by hand in real Chrome:** both themes, the full page, the finished graph, `/app` still
+resolving its session. **Not verified, and stated as such in the PR:** the draw animation and the
+mobile breakpoints — `requestAnimationFrame` ran at roughly one frame per half-second in the
+available browser window and `resize_window` was ignored, so neither could be observed.
+
+## Next
+
+- [ ] **NFR-4 — `docker compose up`.** Four verified faults: `apps/web` has no Dockerfile; there is
+      no `worker` service, so a webhook enqueues a job nothing consumes; the API image runs `node
+      dist/index.js` against `packages/shared` exports that point at `.ts`; and the `parser` service
+      sets both `network_mode: none` and `depends_on` Postgres health. Do **not** resolve the last
+      by giving the parser a network — that undoes a Phase 1 guarantee.
