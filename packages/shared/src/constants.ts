@@ -1,5 +1,15 @@
 /** Every shared literal used by both the API and the web app. */
 
+/**
+ * Where the canvas lives in the web app.
+ *
+ * Shared because both sides act on it: the web app routes on it, and the OAuth
+ * callback redirects there rather than to `/`, which is the marketing landing
+ * page -- a freshly signed-in user landing on marketing copy is the bug this
+ * constant exists to prevent.
+ */
+export const APP_ROUTE = "/app";
+
 /** Mirrors the CHECK constraint on edges.resolution_confidence. */
 export const RESOLUTION_CONFIDENCE = ["exact", "name_match", "unresolved"] as const;
 
