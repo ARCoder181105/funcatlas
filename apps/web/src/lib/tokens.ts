@@ -35,68 +35,76 @@ export interface Palette {
 }
 
 /**
- * Dark — "Ember". A near-black ground against a cool accent, which is the
- * pairing the alternatives did not make: certainty reads as temperature, from
- * cyan through apricot to a warm slate that is barely chromatic at all.
+ * The scale is a two-colour press: two spot inks and a neutral.
  *
- * The ground was warmer — `#141210` on `#1d1a17` — and read as brown rather
- * than as dark. It is near-black now, with the warmth kept as a trace (the
- * hue is still there, the saturation is not) so the apricot and the slate
- * still belong to it. Everything expressive stays in the confidence colours,
- * which is where the meaning is.
+ * A printer with two plates and paper has exactly three things to say, which
+ * is exactly how many answers resolution has. Ultramarine is the fact, fired
+ * clay is the report, and the ash is what neither plate covered. The order is
+ * read as ink weight rather than as temperature, so it survives being drawn as
+ * a hairline on a canvas the reader is zoomed out of.
+ *
+ * This replaced Ember/Vellum, which ran cyan through apricot to a warm slate.
+ * The reasoning there was sound and the execution was fine; it was changed
+ * because cyan-on-near-black is the single most common developer-tool accent
+ * there is, and §7 of `docs/UI_GUIDE.md` is about not landing on the look
+ * every tool in this category already has.
  */
-const EMBER: Palette = {
+
+/** Dark — "Ultramarine". Near-black with a blue cast, so both inks sit on a
+ *  ground that belongs to the same press run. */
+const ULTRAMARINE: Palette = {
   surface: {
-    DEFAULT: "#0a0a0b",
-    raised: "#131315",
-    border: "#26262a",
+    DEFAULT: "#0a0b10",
+    raised: "#12141c",
+    border: "#242839",
   },
   ink: {
-    DEFAULT: "#f3ede5",
-    muted: "#9d9388",
+    DEFAULT: "#eceefa",
+    muted: "#8b90a8",
   },
   confidence: {
-    exact: "#4cc9f0",
-    name: "#f2a154",
+    exact: "#6b8cff",
+    name: "#e0885a",
     /**
-     * A warm slate at about 9% saturation. Deliberately not red: an
-     * unresolved call is an honest admission that resolution could not reach
-     * the callee, not a failure -- colouring it as an error tells the user the
-     * opposite of what PRD §8 promises. It shares the ground's hue family, so
-     * it recedes into the map rather than standing out of it.
+     * Ash at about 11% saturation, in the ground's own hue family so it
+     * recedes into the map rather than standing out of it. Deliberately not
+     * red: an unresolved call is an honest admission that resolution could not
+     * reach the callee, not a failure -- colouring it as an error tells the
+     * user the opposite of what PRD §8 promises.
      */
-    unresolved: "#8a7f73",
+    unresolved: "#767c92",
   },
-  onAccent: "#04161c",
+  onAccent: "#080a14",
 };
 
 /**
- * Light — "Vellum". A drawing on cool paper rather than cream; cream with a
- * serif display is the most common generated look there is, and the cool grey
- * stays out of it.
+ * Light — "Letterpress". Cool paper rather than cream; cream with a serif
+ * display is the most common generated look there is, and the cool grey stays
+ * out of it. Both inks darken rather than changing hue, which is what a press
+ * would actually do on white stock.
  */
-const VELLUM: Palette = {
+const LETTERPRESS: Palette = {
   surface: {
-    DEFAULT: "#f2f5f7",
+    DEFAULT: "#f1f2f7",
     raised: "#ffffff",
-    border: "#d9e1e8",
+    border: "#d8dbe6",
   },
   ink: {
-    DEFAULT: "#0f1a24",
-    muted: "#566573",
+    DEFAULT: "#12141f",
+    muted: "#5a5f74",
   },
   confidence: {
-    exact: "#0d7c6b",
-    name: "#b26a00",
-    /** Cool slate, dark enough to stay legible as a hairline on paper. */
-    unresolved: "#75838f",
+    exact: "#2a44c4",
+    name: "#a55424",
+    /** Cool ash, dark enough to hold as a hairline on paper. */
+    unresolved: "#71768a",
   },
   onAccent: "#ffffff",
 };
 
 export const PALETTE: Record<ThemeMode, Palette> = {
-  dark: EMBER,
-  light: VELLUM,
+  dark: ULTRAMARINE,
+  light: LETTERPRESS,
 };
 
 /** The mode used when the browser states no preference. */

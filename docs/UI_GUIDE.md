@@ -25,39 +25,45 @@ Every value lives in `apps/web/src/lib/tokens.ts`, once per theme. Nothing is ha
 component — `grep -rE '#[0-9a-fA-F]{6}' apps/web/src --include=*.tsx` returns nothing, and that grep
 is the check.
 
-**Dark — "Ember."** A near-black ground against a cool accent, which is the pairing the alternatives
-did not make.
+**The scale is a two-colour press.** Two spot inks and a neutral: a printer with two plates and
+paper has exactly three things to say, which is exactly how many answers resolution has. Ultramarine
+is the fact, fired clay is the report, and the ash is what neither plate covered. Read as ink weight
+rather than as temperature, so it survives being drawn as a hairline on a canvas the reader is
+zoomed out of.
 
-**Revised in B8.** The ground was `#141210` on `#1d1a17` — a coffee undertone that read as brown
-rather than as dark, which is not what a reader means when they ask for dark mode. It is near-black
-now, with the warmth kept as a trace of hue and none of the saturation, so the apricot and the slate
-still belong to the ground they sit on. Everything expressive stays in the confidence colours, which
-is where the meaning is.
+**Revised after the landing-page branch.** This replaced Ember/Vellum, which ran cyan through
+apricot to a warm slate. The reasoning there was sound and the execution was fine; it was changed
+because cyan-on-near-black is the single most common developer-tool accent there is, and §7 is about
+not landing on the look every tool in this category already has.
 
-| Role | Token | Value | Why |
-|---|---|---|---|
-| Ground | `surface` | `#0a0a0b` | Near-black. A trace of hue, no saturation to speak of. |
-| Raised | `surface.raised` | `#131315` | Panels, cards, the sidebar. |
-| Rule | `surface.border` | `#26262a` | Hairlines and card edges. |
-| Ink | `ink` | `#f3ede5` | Warm off-white, matched to the ground's temperature. |
-| Ink, quiet | `ink.muted` | `#9d9388` | Secondary labels, counts. |
-| `exact` | `confidence.exact` | `#4cc9f0` | Cool cyan against a warm ground — the strongest separation available. |
-| `name_match` | `confidence.name` | `#f2a154` | Apricot. Reported, not verified. |
-| `unresolved` | `confidence.unresolved` | `#8a7f73` | Warm slate at ~9% saturation. Shares the ground's hue family, so it recedes into the map. |
-
-**Light — "Vellum."** A drawing on cool paper. Deliberately not cream: cream with a serif display is
-the single most common generated look there is (§7).
+**Dark — "Ultramarine."** Near-black with a blue cast, so both inks sit on a ground that belongs to
+the same press run.
 
 | Role | Token | Value | Why |
 |---|---|---|---|
-| Ground | `surface` | `#f2f5f7` | Cool paper. |
+| Ground | `surface` | `#0a0b10` | Near-black, a trace of blue, no saturation to speak of. |
+| Raised | `surface.raised` | `#12141c` | Panels, cards, the sidebar. |
+| Rule | `surface.border` | `#242839` | Hairlines and card edges. |
+| Ink | `ink` | `#eceefa` | Off-white, matched to the ground's cast. |
+| Ink, quiet | `ink.muted` | `#8b90a8` | Secondary labels, counts. |
+| `exact` | `confidence.exact` | `#6b8cff` | Ultramarine. The first plate: verified. |
+| `name_match` | `confidence.name` | `#e0885a` | Fired clay. The second plate: reported, not verified. |
+| `unresolved` | `confidence.unresolved` | `#767c92` | Ash at ~11% saturation. Shares the ground's hue family, so it recedes into the map. |
+
+**Light — "Letterpress."** Cool paper, deliberately not cream: cream with a serif display is the
+single most common generated look there is (§7). Both inks darken rather than changing hue, which is
+what a press would do on white stock.
+
+| Role | Token | Value | Why |
+|---|---|---|---|
+| Ground | `surface` | `#f1f2f7` | Cool paper. |
 | Raised | `surface.raised` | `#ffffff` | Panels, cards, the sidebar. |
-| Rule | `surface.border` | `#d9e1e8` | Hairlines and card edges. |
-| Ink | `ink` | `#0f1a24` | Near-black with a blue cast, matched to the paper. |
-| Ink, quiet | `ink.muted` | `#566573` | Secondary labels, counts. |
-| `exact` | `confidence.exact` | `#0d7c6b` | Deep teal — the cool end of the same scale. |
-| `name_match` | `confidence.name` | `#b26a00` | Burnt amber. |
-| `unresolved` | `confidence.unresolved` | `#75838f` | Cool slate, dark enough to hold as a hairline on paper. |
+| Rule | `surface.border` | `#d8dbe6` | Hairlines and card edges. |
+| Ink | `ink` | `#12141f` | Near-black with a blue cast, matched to the paper. |
+| Ink, quiet | `ink.muted` | `#5a5f74` | Secondary labels, counts. |
+| `exact` | `confidence.exact` | `#2a44c4` | Ultramarine, darkened for white stock. |
+| `name_match` | `confidence.name` | `#a55424` | Fired clay, darkened the same way. |
+| `unresolved` | `confidence.unresolved` | `#71768a` | Cool ash, dark enough to hold as a hairline on paper. |
 
 Two rules bind both palettes, and `confidence.test.ts` enforces them:
 
@@ -268,7 +274,7 @@ Kept explicit, because the failure mode here is converging on a look that reads 
 regardless of subject. Three clusters to stay out of:
 
 1. Warm cream ground (near `#F4F1EA`), high-contrast serif display, terracotta accent. **This is why
-   the light theme is cool paper `#f2f5f7` and not cream.**
+   the light theme is cool paper `#f1f2f7` and not cream.**
 2. Near-black ground with one bright acid-green or violet accent. **The tokens this project shipped
    with — `#0b0d12` plus `#7c5cff` — were exactly this.**
 3. Broadsheet layout: hairline rules, zero border-radius, dense newspaper columns.
@@ -289,3 +295,9 @@ Recorded so they are not re-proposed as if new, and not treated as mistakes.
   which was cut in B8.
 - **Space Grotesk** as the display face. Dropped because it appears on every "reads as
   AI-generated" list, this document's §7 included.
+- **Ember / Vellum** (near-black + cyan `#4cc9f0` / apricot / warm slate; cool paper + deep teal).
+  Shipped through Phases 3b to 5 and replaced on the landing-page branch. Nothing was wrong with it
+  in isolation: it passed both palette rules and read clearly. It went because cyan on near-black is
+  the accent every developer tool already uses, which §7 exists to keep us off. The *structure* it
+  established survived intact -- three tiers, one accent doing double duty, `unresolved` quiet and
+  achromatic -- and Ultramarine/Letterpress only changed the inks.
