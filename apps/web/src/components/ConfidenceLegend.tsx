@@ -1,5 +1,6 @@
 import { cn } from "../lib/cn";
 import { CONFIDENCE, CONFIDENCE_ORDER } from "../lib/confidence";
+import { ConfidenceRule } from "./ConfidenceRule";
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "./ui/item";
 
 /**
@@ -15,33 +16,12 @@ export function ConfidenceLegend({ className }: { className?: string }) {
   return (
     <ItemGroup className={cn("gap-0", className)}>
       {CONFIDENCE_ORDER.map((tier) => {
-        const { label, meaning, strokeDasharray, textClass } = CONFIDENCE[tier];
+        const { label, meaning, textClass } = CONFIDENCE[tier];
 
         return (
           <Item key={tier} size="sm" className="items-baseline gap-3 px-0">
             <ItemMedia className="pt-1.5">
-              {/* The actual line, not a colour chip. A swatch would show the
-                  hue but not the pattern, and the pattern is the part that
-                  carries the meaning. currentColor, so it follows the theme. */}
-              <svg
-                width="28"
-                height="2"
-                viewBox="0 0 28 2"
-                className={textClass}
-                aria-hidden
-                focusable="false"
-              >
-                <line
-                  x1="0"
-                  y1="1"
-                  x2="28"
-                  y2="1"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeDasharray={strokeDasharray}
-                />
-              </svg>
+              <ConfidenceRule tier={tier} className="w-7" />
             </ItemMedia>
 
             <ItemContent>
