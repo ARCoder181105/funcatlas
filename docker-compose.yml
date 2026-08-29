@@ -5,8 +5,11 @@ services:
       POSTGRES_USER: funcatlas
       POSTGRES_PASSWORD: funcatlas
       POSTGRES_DB: funcatlas
+    # Loopback, like everything else here. Published at all only because
+    # `make start` runs the API and worker natively on the host; a
+    # compose-only stack reaches Postgres over the internal network.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,7 +21,7 @@ services:
   redis:
     image: redis:7
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     # Sessions live here. Without a volume every restart signs everyone out,
     # which in development means losing the login on each `make up`.
     volumes:

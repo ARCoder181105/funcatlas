@@ -11,6 +11,20 @@ const repoRoot = path.resolve(import.meta.dirname, "../../..");
 // A missing .env is not an error -- CI supplies the environment directly.
 config({ path: path.join(repoRoot, ".env") });
 
+/**
+ * An optional key where blank means absent.
+ *
+ * `.optional()` alone only accepts a *missing* variable. A key present and
+ * empty -- which is how `.env.example` ships every value you have not filled
+ * in, and how anyone turns one off -- is a present empty string, and
+ * `.min(1)` rejects it. Without this the API refuses to start on a freshly
+ * copied .env, complaining about the length of a credential it was never
+ * going to use.
+ */
+function blankAsUnset<T extends z.ZodTypeAny>(inner: T) {
+  return z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), inner);
+}
+
 // Fail-fast env validation. All keys mirror .env.example.
 const schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -32,9 +46,9 @@ const schema = z.object({
   //
   // GITHUB_WEBHOOK_SECRET stays required on both paths: it is a random string
   // anyone can generate, not a credential that has to be registered somewhere.
-  GITHUB_CLIENT_ID: z.string().min(1).optional(),
-  GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
-  GITHUB_REDIRECT_URI: z.string().url().optional(),
+  GITHUB_CLIENT_ID: blankAsUnset(z.string().min(1).optional()),
+  GITHUB_CLIENT_SECRET: blankAsUnset(z.string().min(1).optional()),
+  GITHUB_REDIRECT_URI: blankAsUnset(z.string().url().optional()),
   GITHUB_WEBHOOK_SECRET: z.string().min(1),
 
   /**
@@ -54,13 +68,7 @@ const schema = z.object({
    * what sits in front of it, so compose publishes on 127.0.0.1 and the
    * server warns on every start. R39.
    */
-  // Blank counts as unset. `FUNCATLAS_SINGLE_USER=` in a .env is how someone
-  // turns this off, and a bare `.min(1)` answers that with a Zod stack trace
-  // about a string length instead of just starting normally.
-  FUNCATLAS_SINGLE_USER: z.preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-    z.string().min(1).optional(),
-  ),
+  FUNCATLAS_SINGLE_USER: blankAsUnset(z.string().min(1).optional()),
 
   SESSION_SECRET: z.string().min(16),
   SESSION_COOKIE_NAME: z.string().min(1).default("funcatlas_session"),

@@ -28,7 +28,9 @@ setup: ## One-time: write .env, generate secrets, create the test database
 	$(MAKE) up
 	$(MAKE) wait-infra
 	@# Idempotent: the second run finds the database and says so.
-	$(ENV) && docker compose exec -T postgres psql -U funcatlas -d postgres \
+	@# No $(ENV) here: the credentials are compose's own, and sourcing .env
+	@# before it has been filled in is how this used to fail.
+	docker compose exec -T postgres psql -U funcatlas -d postgres \
 	  -c "CREATE DATABASE funcatlas_test OWNER funcatlas" 2>/dev/null \
 	  && echo "Created funcatlas_test." || echo "funcatlas_test already exists."
 	@echo ""
