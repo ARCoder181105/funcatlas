@@ -9,11 +9,12 @@ import {
   OAUTH_STATE_TTL,
 } from "./constants.js";
 import { clearCookie, readSignedCookie, setSignedCookie } from "./cookies.js";
-import { fetchGitHubUser, github } from "./github.js";
+import { fetchGitHubUser, githubClient } from "./github.js";
 import {
   clearSessionCookie,
   createSession,
   destroySession,
+  isSingleUser,
   requireSession,
   sessionIdFrom,
   setSessionCookie,
@@ -36,12 +37,27 @@ function sameState(a: string, b: string): boolean {
 }
 
 export function registerAuth(app: FastifyInstance) {
+  // Under FUNCATLAS_SINGLE_USER the three OAuth routes are never registered,
+  // so they answer 404 rather than existing and refusing -- a handler that
+  // returns 401 tells a prober there is something here worth credentials for.
+  // /auth/me stays: the web app calls it to learn who it is.
+  if (isSingleUser()) {
+    app.log.warn(
+      { login: env.FUNCATLAS_SINGLE_USER },
+      "FUNCATLAS_SINGLE_USER is set: this API has no authentication. Every " +
+        "request is treated as this user and there is no sign-in. Do not " +
+        "expose this process beyond localhost. See docs/RISKS.md R39.",
+    );
+    registerMe(app);
+    return;
+  }
+
   app.get("/auth/login", async (_req, reply) => {
     const state = randomBytes(OAUTH_STATE_BYTES).toString("hex");
     setSignedCookie(reply, OAUTH_STATE_COOKIE, state, OAUTH_STATE_TTL);
 
     // arctic 3's createAuthorizationURL is synchronous.
-    return reply.redirect(github.createAuthorizationURL(state, OAUTH_SCOPES).toString());
+    return reply.redirect(githubClient().createAuthorizationURL(state, OAUTH_SCOPES).toString());
   });
 
   app.get("/auth/callback", async (req, reply) => {
@@ -62,7 +78,7 @@ export function registerAuth(app: FastifyInstance) {
 
     let sessionId: string;
     try {
-      const tokens = await github.validateAuthorizationCode(params.data.code);
+      const tokens = await githubClient().validateAuthorizationCode(params.data.code);
       const accessToken = tokens.accessToken();
       const user = await fetchGitHubUser(accessToken);
       sessionId = await createSession({ userId: user.id, login: user.login, accessToken });
@@ -92,11 +108,20 @@ export function registerAuth(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  // Field by field on purpose: spreading the session would put the access
-  // token in the response body.
+  registerMe(app);
+}
+
+/**
+ * Who the caller is. Registered on both paths, because the web app asks this
+ * before it renders anything and has no other way to learn the answer.
+ *
+ * Field by field on purpose: spreading the session would put the access token
+ * in the response body.
+ */
+function registerMe(app: FastifyInstance) {
   app.get("/auth/me", { preHandler: requireSession }, async (req) => ({
     userId: req.session?.userId,
     login: req.session?.login,
+    singleUser: isSingleUser(),
   }));
-
 }

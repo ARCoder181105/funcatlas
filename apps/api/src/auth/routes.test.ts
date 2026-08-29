@@ -115,7 +115,13 @@ describe("GET /auth/callback", () => {
       url: "/auth/me",
       headers: { cookie: String(sessionCookie) },
     });
-    expect(me.json()).toEqual({ userId: githubUser.id, login: githubUser.login });
+    expect(me.json()).toEqual({
+      userId: githubUser.id,
+      login: githubUser.login,
+      // False on the OAuth path. The web app reads this to decide
+      // whether a Sign out button has anything to POST to.
+      singleUser: false,
+    });
   });
 
   it("keeps the access token out of every response", async () => {

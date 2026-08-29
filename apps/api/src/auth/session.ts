@@ -68,10 +68,37 @@ export function sessionIdFrom(req: FastifyRequest): string | null {
 }
 
 /**
+ * The identity every request gets under FUNCATLAS_SINGLE_USER.
+ *
+ * `userId` is 0 because there is no GitHub account behind it and a real id
+ * would imply one. The access token is empty, which is honest: nothing reads
+ * it -- the parser clones over public HTTPS and the token is fetched once for
+ * a display name and never used again.
+ */
+function singleUserSession(login: string): Session {
+  return { userId: 0, login, accessToken: "" };
+}
+
+/** Whether this process is running unauthenticated. One place to ask. */
+export function isSingleUser(): boolean {
+  return env.FUNCATLAS_SINGLE_USER !== undefined;
+}
+
+/**
  * preHandler that rejects anonymous requests. Applied once to the whole /api
  * subtree in A4, not repeated per route.
+ *
+ * The single-user branch is here rather than in a second hook because this is
+ * the only function that sets `req.session`. A parallel auth path is how two
+ * of them drift until one forgets a check.
  */
 export async function requireSession(req: FastifyRequest, reply: FastifyReply) {
+  const login = env.FUNCATLAS_SINGLE_USER;
+  if (login !== undefined) {
+    req.session = singleUserSession(login);
+    return;
+  }
+
   const id = sessionIdFrom(req);
   const session = id === null ? null : await readSession(id);
   if (session === null) {

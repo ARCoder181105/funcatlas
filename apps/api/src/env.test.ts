@@ -23,16 +23,25 @@ function read(relative: string): string {
 }
 
 /**
- * Keys the schema declares with no `.default(...)`, which are therefore
- * required at startup. Parsed from the source so adding one to `env.ts` is
- * enough to make this test start demanding it.
+ * Keys the schema declares with neither `.default(...)` nor `.optional()`,
+ * which are therefore required at startup. Parsed from the source so adding
+ * one to `env.ts` is enough to make this test start demanding it.
+ *
+ * `.optional()` joined `.default(` here when FUNCATLAS_SINGLE_USER and the
+ * three GitHub OAuth credentials became conditional: they are legitimately
+ * absent, and the old heuristic demanded them in CI.
  */
 function requiredKeys(): string[] {
   const source = read("apps/api/src/env.ts");
   const body = source.slice(source.indexOf("z.object({"), source.indexOf("export const env"));
 
   return [...body.matchAll(/^\s{2}([A-Z][A-Z0-9_]*):\s*([\s\S]*?)(?=^\s{2}[A-Z][A-Z0-9_]*:|^\}\))/gm)]
-    .filter(([, , definition]) => definition !== undefined && !definition.includes(".default("))
+    .filter(
+      ([, , definition]) =>
+        definition !== undefined &&
+        !definition.includes(".default(") &&
+        !definition.includes(".optional("),
+    )
     .map(([, key]) => key as string);
 }
 

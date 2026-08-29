@@ -141,4 +141,11 @@ export interface TraversalResponse {
 export interface SessionUser {
   userId: number;
   login: string;
+  /**
+   * True when the API is running under FUNCATLAS_SINGLE_USER: there is no
+   * OAuth, and no sign-out either, because there is no session to end. The web
+   * app reads this to hide a Sign out button that would POST to a route the
+   * server did not register.
+   */
+  singleUser: boolean;
 }

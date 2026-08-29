@@ -2,11 +2,24 @@ import { GitHub } from "arctic";
 import { env } from "../env.js";
 import { GITHUB_USER_ENDPOINT } from "./constants.js";
 
-export const github = new GitHub(
-  env.GITHUB_CLIENT_ID,
-  env.GITHUB_CLIENT_SECRET,
-  env.GITHUB_REDIRECT_URI,
-);
+/**
+ * Built on demand rather than at import.
+ *
+ * Under FUNCATLAS_SINGLE_USER the credentials are absent and no OAuth route is
+ * registered, so constructing this at module load would fail on a client
+ * nothing was ever going to call. `env.ts` guarantees all three are present
+ * whenever single-user mode is off, which is the only time this runs.
+ */
+let client: GitHub | null = null;
+
+export function githubClient(): GitHub {
+  client ??= new GitHub(
+    env.GITHUB_CLIENT_ID as string,
+    env.GITHUB_CLIENT_SECRET as string,
+    env.GITHUB_REDIRECT_URI as string,
+  );
+  return client;
+}
 
 
 /** Only what a session needs. The rest of the profile is not ours to keep. */
