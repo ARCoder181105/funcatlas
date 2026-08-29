@@ -25,6 +25,7 @@
   --confidence-name: theme("palette.light.confidence.name");
   --confidence-unresolved: theme("palette.light.confidence.unresolved");
   --on-accent: theme("palette.light.onAccent");
+  --spot: theme("palette.light.spot");
 
   /* A genuinely destructive action is red. Deliberately not the unresolved
      tier, which is a neutral slate because an unresolved call is an honest
@@ -45,6 +46,7 @@
   --confidence-name: theme("palette.dark.confidence.name");
   --confidence-unresolved: theme("palette.dark.confidence.unresolved");
   --on-accent: theme("palette.dark.onAccent");
+  --spot: theme("palette.dark.spot");
 
   --destructive: oklch(0.68 0.19 25);
 }
@@ -164,6 +166,19 @@ body,
   text-align: right;
   color: var(--ink-muted);
   user-select: none;
+}
+
+/* The landing page's language strip. The track holds the set twice and moves
+   by exactly half its width, so the loop closes on itself invisibly. Applied
+   through an arbitrary `animate-[...]` utility, which needs the keyframe to
+   exist in plain CSS. */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 @layer base {

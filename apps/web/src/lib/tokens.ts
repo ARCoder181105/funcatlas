@@ -32,6 +32,20 @@ export interface Palette {
   };
   /** Text drawn on top of `confidence.exact`, which doubles as the accent. */
   onAccent: string;
+  /**
+   * A third ink, and the only colour in here that carries no canvas meaning.
+   *
+   * The two spot inks plus a neutral say everything resolution has to say, but
+   * on a page three thousand pixels long they say it in two hues and the page
+   * reads flat. A map is drawn in three inks: land, route, and water. This is
+   * the water.
+   *
+   * **Landing page only.** It appears on eyebrows, section detail and hover
+   * states, and never on the canvas -- there, a colour that means nothing would
+   * be competing with three that mean something. It sits at 174°, a clear 53°
+   * off `exact` and 153° off `name`, so it cannot be misread as either.
+   */
+  spot: string;
 }
 
 /**
@@ -75,6 +89,7 @@ const ULTRAMARINE: Palette = {
     unresolved: "#767c92",
   },
   onAccent: "#080a14",
+  spot: "#2ad4c4",
 };
 
 /**
@@ -100,6 +115,8 @@ const LETTERPRESS: Palette = {
     unresolved: "#71768a",
   },
   onAccent: "#ffffff",
+  /** Darker than the dark theme's, to clear 4.5:1 as text on paper. */
+  spot: "#0b7268",
 };
 
 export const PALETTE: Record<ThemeMode, Palette> = {

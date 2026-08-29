@@ -26,6 +26,9 @@ export default {
           DEFAULT: "var(--ink)",
           muted: "var(--ink-muted)",
         },
+        // The landing page's third ink. Not a confidence tier, and deliberately
+        // named so it cannot be mistaken for one.
+        spot: "var(--spot)",
         confidence: {
           exact: "var(--confidence-exact)",
           name: "var(--confidence-name)",
