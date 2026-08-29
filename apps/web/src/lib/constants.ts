@@ -36,6 +36,20 @@ export const UI_STORAGE_KEY = "funcatlas-ui";
 export const GITHUB_REPO = "ARCoder181105/funcatlas";
 export const GITHUB_REPO_URL = `https://github.com/${GITHUB_REPO}`;
 
+/**
+ * This build has no API behind it.
+ *
+ * A deploy of the web app on its own -- the public face of a tool you run
+ * yourself. `/app` would reach nothing, so the landing page sends readers to
+ * the repository instead of to an error screen.
+ *
+ * Build-time rather than a runtime probe, and deliberately so: the landing page
+ * makes no request to our API at all, which is what lets it render when the
+ * backend is absent. Asking whether the API is up would give that away for a
+ * fact the build already knows.
+ */
+export const SHOWCASE = import.meta.env.VITE_SHOWCASE === "true";
+
 // --- Motion ---------------------------------------------------------------
 
 /** Milliseconds. Page-level motion in UI_GUIDE §4 is 400-600ms, and this moves

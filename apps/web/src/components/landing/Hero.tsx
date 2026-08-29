@@ -50,7 +50,7 @@ export function Hero() {
         </div>
 
         <p className="mt-6 max-w-md text-xs leading-relaxed text-ink-muted">
-          Public repositories. GitHub sign-in at{" "}
+          A tool you run yourself, on public repositories. GitHub sign-in at{" "}
           <span className="font-mono">read:user</span>, and nothing is written
           to your account.
         </p>
