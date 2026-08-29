@@ -1,10 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+// `configure` comes from here rather than @testing-library/dom, which is only
+// a transitive dependency and does not resolve from this package.
+import { configure, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { APP_ROUTE } from "@funcatlas/shared";
 import App from "./App";
 import { ApiError, api } from "./lib/api";
+
+// `/app` is behind `React.lazy`, and resolving that chunk really does pull
+// React Flow and the rest of the canvas. Alone it lands well inside the 1s
+// default; in a full run, with every other file competing for the same
+// threads, it does not, and this file failed intermittently on the route test.
+//
+// A longer ceiling rather than a mock: the wait is a real property of the
+// route, and the assertions still fail if it never renders at all.
+configure({ asyncUtilTimeout: 5000 });
 
 // The real module is kept for ApiError -- session.ts branches on
 // `instanceof`, so a stubbed class would make the 401 path silently dead.
