@@ -237,6 +237,11 @@ function FunctionList({
                   // and made the row taller than the card was measured for.
                   // The card is sized to the longest name instead.
                   "nodrag cursor-pointer flex-nowrap text-left",
+                  // Selection eases in rather than snapping. Everything else
+                  // on this canvas moves under a transition, so a row that
+                  // changed instantly read as a repaint rather than as an
+                  // answer to the click.
+                  "motion-safe:transition-colors motion-safe:duration-micro",
                   active
                     ? "bg-accent text-accent-foreground"
                     : "hover:bg-muted",
@@ -257,9 +262,17 @@ function FunctionList({
                   </ItemTitle>
                 </ItemContent>
                 <ItemActions>
+                  {/* The outline badge is bordered with --border, and --accent
+                      is the same token, so on the selected row the pill's edge
+                      was drawn in the colour of the row underneath it and
+                      vanished. It keeps its own ground there instead. */}
                   <Badge
                     variant="outline"
-                    className="font-mono text-[10px] tabular-nums"
+                    className={cn(
+                      "font-mono text-[10px] tabular-nums",
+                      "motion-safe:transition-colors motion-safe:duration-micro",
+                      active && "border-ink/20 bg-surface-raised",
+                    )}
                   >
                     {fn.startLine}
                   </Badge>
