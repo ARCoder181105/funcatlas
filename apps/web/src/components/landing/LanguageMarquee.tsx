@@ -1,3 +1,4 @@
+import { cn } from "../../lib/cn";
 import { LANGUAGE_MARK, type LanguageMark } from "../../lib/language-marks";
 import { useMotionEnabled } from "../../lib/motion";
 
@@ -37,10 +38,17 @@ export function LanguageMarquee() {
       role="list"
       aria-label="Languages funcatlas reads"
     >
+      {/* The spacing is per-item padding, not `gap`, and that is the whole
+          trick. `gap` sits *between* items, so a 16-item track has 15 of them:
+          half the width is one set plus seven and a half gaps, while a
+          seamless loop needs one set plus a whole one. Translating -50% then
+          lands half a gap short and the strip visibly jumps every cycle. With
+          each item carrying its own trailing space the two halves are exactly
+          equal and -50% is exactly one set. */}
       <div
         className={
           animate
-            ? "flex w-max animate-[marquee_38s_linear_infinite] gap-14 hover:[animation-play-state:paused]"
+            ? "flex w-max animate-[marquee_38s_linear_infinite] hover:[animation-play-state:paused]"
             : "flex flex-wrap justify-center gap-x-14 gap-y-6"
         }
       >
@@ -49,6 +57,7 @@ export function LanguageMarquee() {
             key={`${language.name}-${index}`}
             name={language.name}
             mark={language.mark}
+            spaced={animate}
             // The second copy exists only to make the loop seamless, so it is
             // hidden from the list a screen reader walks.
             duplicate={index >= LANGUAGES.length}
@@ -63,16 +72,23 @@ function Mark({
   name,
   mark,
   duplicate,
+  spaced,
 }: {
   name: string;
   mark: LanguageMark;
   duplicate: boolean;
+  /** Trailing space carried by the item rather than by a `gap`, so the two
+   *  halves of the looping track measure identically. */
+  spaced: boolean;
 }) {
   return (
     <div
       role={duplicate ? "presentation" : "listitem"}
       aria-hidden={duplicate || undefined}
-      className="group flex shrink-0 items-center gap-2.5 text-ink-muted transition-colors duration-panel hover:text-ink"
+      className={cn(
+        "group flex shrink-0 items-center gap-2.5 text-ink-muted transition-colors duration-panel hover:text-ink",
+        spaced && "pe-14",
+      )}
     >
       <svg viewBox="0 0 24 24" className="size-6 fill-current" aria-hidden focusable="false">
         <path d={mark.path} />
