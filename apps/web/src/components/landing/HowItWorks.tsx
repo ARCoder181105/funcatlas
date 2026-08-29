@@ -7,8 +7,8 @@ import { Section } from "./Section";
  */
 const STEPS = [
   {
-    title: "Clone, in a box",
-    body: "The repository is cloned into a sandbox with no network, a read-only root filesystem, no capabilities and a non-root user. Symlinks fail the run rather than being followed; files over 1 MB are skipped.",
+    title: "Clone, without running anything",
+    body: "Nothing from the repository is executed: no install, no build, no test scripts. Parsing only reads text. The clone is depth-one over public HTTPS, symlinks fail the run rather than being followed, files over 1 MB are skipped, and the checkout is deleted afterwards, including when the parse fails.",
   },
   {
     title: "Extract",

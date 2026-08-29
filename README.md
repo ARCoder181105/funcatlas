@@ -18,7 +18,7 @@ actually changed.
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Monorepo bootstrap, migrations, CI | done |
-| 1 | Go + tree-sitter parser, sandbox hardening | done |
+| 1 | Go + tree-sitter parser, input hardening | done |
 | 2 | Postgres persistence, call resolution | done |
 | 3a | GitHub OAuth, Redis sessions, the graph API | done |
 | 3b | React Flow canvas, search UI | done |
@@ -30,7 +30,8 @@ Phase-by-phase detail is in [`PLAN.md`](PLAN.md); the current chunk list is in
 
 ## How it works
 
-1. **Clone** the target repo into an isolated, network-less, read-only container.
+1. **Clone** the target repo, depth one, over public HTTPS. Nothing in it is ever executed — no
+   install, build or test scripts — because parsing only reads text.
 2. **Parse** every `.ts`/`.tsx` file with tree-sitter; extract function definitions, call sites,
    and imports into a Go-native intermediate representation.
 3. **Resolve** each call to a definition — same file, then imported symbol, then package fallback —

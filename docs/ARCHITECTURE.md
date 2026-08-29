@@ -7,9 +7,9 @@ GitHub repo URL
       │
       ▼
 ┌──────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│ Clone step   │──▶ │ Parser Worker    │──▶ │ Resolver         │
-│ (network on, │    │ (Go+tree-sitter, │    │ (name and scope  │
-│  isolated)   │    │  network none)   │    │  matching)       │
+│ Clone step   │──▶ │ Parser           │──▶ │ Resolver         │
+│ (depth one,  │    │ (Go+tree-sitter, │    │ (name and scope  │
+│  no scripts) │    │  read only)      │    │  matching)       │
 └──────────────┘    └──────────────────┘    └──────────────────┘
                                                       │
                                                       ▼
@@ -85,6 +85,8 @@ Job queue ──▶ diff changed files ──▶ re-parse only those ──▶ r
 - **The worker is a Node process that spawns the Go binary**, exactly as registration used to. The
   parser gains no Redis dependency and stays a CLI that takes a path and writes to Postgres — which
   is also what keeps `make go-run` and the container's `--network none` check working unchanged.
+  Note what that does *not* say: the worker spawns the binary with `execFile`, so the container's
+  constraints apply to `make parser-isolated` and not to the running product. R38.
   An earlier draft of this document said the worker "communicates only through the job queue and
   Postgres"; it does not, and reimplementing BullMQ's job protocol in Go to make that true would
   have bought nothing.
