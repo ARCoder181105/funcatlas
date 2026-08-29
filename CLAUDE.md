@@ -200,9 +200,14 @@ Phase 3b is closed. `TASKLIST.md` is the chunk-level truth; this is what outlive
   the insert. Write edges for a file whose functions you did not delete and they silently double.
 - **Public repositories only.** The OAuth scope is `read:user`, and the parser clones over public
   HTTPS. See R26 for why `repo` was not the answer.
-- **`pnpm start` cannot run the API.** `packages/shared` exports point at `./src/*.ts`, so plain
-  `node dist/index.js` cannot follow them. `pnpm dev` (tsx) works. Fix before containerising.
-- **Compiled test files land in `apps/api/dist`.** Harmless locally, wrong in an image.
+- **`docker compose up` is the front door, and everything runs under `tsx`.** `packages/shared`
+  exports point at `./src/*.ts`, so `node dist/index.js` cannot follow them -- the image ships
+  source and runs tsx, and `pnpm start` does the same. Building shared to `dist` and repointing
+  `exports` is the cleaner endpoint; it was not done because it puts a build step in front of the
+  dev loop. `.dockerignore` keeps compiled tests, `node_modules` and `.env` out of every image.
+- **`make setup` writes `FUNCATLAS_SINGLE_USER`, so the default stack has no authentication.**
+  One branch in `requireSession`, no OAuth routes registered, every compose port on `127.0.0.1`,
+  and a warning on every start. R39 -- read it before assuming this is safe to deploy.
 - **Resolution limits that are honest, not broken:** barrel re-export chains, default imports, and
   `tsconfig` path aliases all resolve to `unresolved`. So does every per-language construct in
   "Per-language extraction limits" — Go's single-type-argument generic call (ambiguous with a

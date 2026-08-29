@@ -184,3 +184,39 @@ available browser window and `resize_window` was ignored, so neither could be ob
       dist/index.js` against `packages/shared` exports that point at `.ts`; and the `parser` service
       sets both `network_mode: none` and `depends_on` Postgres health. Do **not** resolve the last
       by giving the parser a network — that undoes a Phase 1 guarantee.
+
+---
+
+## NFR-4 — `docker compose up` (`clone-and-run`, not a phase)
+
+The promise in `PRD.md` since Phase 0, never once tested. Eight faults, not the six on record:
+the `api` build context and the missing `.dockerignore` turned up on re-reading, and three more
+only appeared when the images were actually built and run.
+
+- [x] **`.dockerignore`.** First and alone: `COPY . .` with no ignore file put `.env` — a real
+      client secret — into every image layer.
+- [x] **API and worker image.** Root build context, `packages/shared` copied, runs under `tsx`.
+      Go stage builds the parser with cgo; `git` installed, because `clone.go` shells out to it.
+- [x] **Worker service.** Nothing consumed the queue: a webhook answered 202 and the graph never
+      moved.
+- [x] **`migrate` service**, gating api and worker on `service_completed_successfully`.
+- [x] **Web image** — Vite build behind nginx with a `try_files` SPA fallback.
+- [x] **Parser service** — vestigial `depends_on` dropped, isolation kept, `tools` profile so
+      `docker compose up` does not start it.
+- [x] **`make setup`** and **`FUNCATLAS_SINGLE_USER`**, so a clone needs no GitHub OAuth app.
+- [x] **Every port on `127.0.0.1`**, Postgres and Redis included.
+
+**Exit test passed** from a clean clone in /tmp with `make start` never run: `make setup`,
+`docker compose up`, register `sindresorhus/p-limit` through the API with no cookie, worker parses
+it to `ready` — 6 files, 36 functions, commit SHA recorded.
+
+Found by running it rather than reading it: pnpm 11 will not start on Node 20; `pnpm run` verifies
+the workspace before executing, so a build stage needs every manifest; `.env`'s `localhost` means
+the container itself; `<placeholder>` values broke every `set -a && . ./.env`; and `.optional()`
+rejects a present-but-empty variable, which is the state every fresh `.env` is in.
+
+## Next
+
+- [ ] **NFR-1 — the performance targets have never been measured.** `honojs/hono` is the fixed
+      benchmark (R3); the timings are not.
+- [ ] **FR-7 — several file cards at once.** Cut deliberately in 3b (`UI_GUIDE.md` §6).
