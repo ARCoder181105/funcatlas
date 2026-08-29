@@ -29,6 +29,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # Nothing ran migrations in compose. `make start` does it with the
+  # golang-migrate CLI, which a contributor running `docker compose up` has no
+  # reason to have installed. Same image CI already uses (R17).
+  migrate:
+    image: migrate/migrate:v4.18.1
+    volumes:
+      - ./services/parser/migrations:/migrations:ro
+    command:
+      - -path=/migrations
+      - -database=postgres://funcatlas:funcatlas@postgres:5432/funcatlas?sslmode=disable
+      - up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   # The API and the worker are the same image with different entrypoints. Only
   # the worker spawns the parser, but one image is one thing to keep in step.
   api: &node
@@ -57,6 +73,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # Not just started -- finished. Either service reaching a database with
+      # no tables fails in a way that reads as a code bug.
+      migrate:
+        condition: service_completed_successfully
     # Bound to loopback, not 0.0.0.0. With FUNCATLAS_SINGLE_USER set there is
     # no authentication in front of this, and the host's port mapping is the
     # only thing keeping it off the network -- the process cannot bind loopback
@@ -74,24 +94,37 @@ services:
     ports: []
 
   web:
-    build: ./apps/web
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Vite inlines this at build time, so it cannot be an environment
+        # variable on the running container. The browser is on the host, so it
+        # is localhost rather than the `api` service name.
+        VITE_API_URL: http://localhost:3000
     depends_on:
       - api
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:80"
 
+  # The isolation harness, not a service the stack runs. `make parser-isolated`
+  # invokes it with `docker compose run --rm --no-deps`, which is why nobody
+  # noticed it declared both `network_mode: none` and a dependency on Postgres
+  # health -- with no interfaces it can never reach Postgres over TCP, so it
+  # could never have started. The depends_on was vestigial and is gone; the
+  # three isolation settings are the actual contract (docs/SECURITY.md).
+  #
+  # Behind a profile so `docker compose up` does not try to start it. The
+  # product spawns the parser as a subprocess of the worker and never uses this
+  # container -- see R38.
   parser:
     build: ./services/parser
+    profiles: ["tools"]
     env_file: .env
     network_mode: "none"
     read_only: true
     cap_drop:
       - ALL
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
 volumes:
   pgdata:

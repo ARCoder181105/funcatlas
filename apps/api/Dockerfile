@@ -32,7 +32,13 @@ RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json .npmrc ./
 COPY apps/api/package.json apps/api/
+# Both config packages are copied, not just shared: `tsconfig.json` extends
+# `@funcatlas/typescript-config/base.json`, and without it tsc silently falls
+# back to its own defaults -- ES3 target, no JSX namespace -- and reports forty
+# downstream errors that all trace to one missing file.
 COPY packages/shared/package.json packages/shared/
+COPY packages/typescript-config/ packages/typescript-config/
+COPY packages/eslint-config/package.json packages/eslint-config/
 # Dev dependencies included on purpose: `tsx` is one, and the runtime needs it.
 # `packages/shared` exports `./src/*.ts`, so plain node cannot follow them --
 # see the CMD note. --frozen-lockfile so the image cannot silently resolve a
@@ -57,6 +63,7 @@ COPY apps/api ./apps/api
 # Shipped as source, not built. The API imports it through exports that point
 # at `./src/*.ts`, which is why `node dist/index.js` exited immediately before.
 COPY packages/shared ./packages/shared
+COPY packages/typescript-config ./packages/typescript-config
 
 COPY --from=parser /parser /usr/local/bin/funcatlas-parser
 
