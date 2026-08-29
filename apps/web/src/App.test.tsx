@@ -66,7 +66,7 @@ describe("routing", () => {
 
   it("shows the canvas route for anything else", async () => {
     window.history.replaceState(null, "", APP_ROUTE);
-    mocked.me.mockResolvedValue({ userId: 7, login: "octocat" });
+    mocked.me.mockResolvedValue({ userId: 7, login: "octocat", singleUser: false });
 
     renderApp();
 
@@ -95,7 +95,7 @@ describe("session states", () => {
   });
 
   it("shows the explorer when signed in", async () => {
-    mocked.me.mockResolvedValue({ userId: 7, login: "octocat" });
+    mocked.me.mockResolvedValue({ userId: 7, login: "octocat", singleUser: false });
 
     renderApp();
 
@@ -146,7 +146,7 @@ describe("signing in and out", () => {
   });
 
   it("returns to the sign-in card after signing out", async () => {
-    mocked.me.mockResolvedValue({ userId: 7, login: "octocat" });
+    mocked.me.mockResolvedValue({ userId: 7, login: "octocat", singleUser: false });
     mocked.logout.mockResolvedValue(undefined);
 
     renderApp();
@@ -159,7 +159,7 @@ describe("signing in and out", () => {
 
 describe("the file tree panel", () => {
   it("labels the toggle by what it does, and survives being used", async () => {
-    mocked.me.mockResolvedValue({ userId: 7, login: "octocat" });
+    mocked.me.mockResolvedValue({ userId: 7, login: "octocat", singleUser: false });
 
     renderApp();
 
@@ -175,7 +175,7 @@ describe("the file tree panel", () => {
   });
 
   it("gives the panel a keyboard-reachable resize handle", async () => {
-    mocked.me.mockResolvedValue({ userId: 7, login: "octocat" });
+    mocked.me.mockResolvedValue({ userId: 7, login: "octocat", singleUser: false });
 
     renderApp();
     await screen.findByText("octocat");

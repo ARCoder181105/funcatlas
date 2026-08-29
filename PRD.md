@@ -79,7 +79,7 @@ database, saved canvas layouts, real-time multi-user editing. Rationale for each
 | NFR-1 | **Performance** — 300-file TypeScript repo parsed and resolved in under 90 s; `functions-for-file` p95 under 150 ms; 5-hop traversal over 10k edges under 500 ms; 60 fps at 2,000 visible nodes. |
 | NFR-2 | **Security** — no network egress during parse; an untrusted repo cannot read host files; webhooks are replay- and flood-safe; every graph endpoint is session-gated; secrets come from the environment. |
 | NFR-3 | **Correctness** — re-parsing a renamed or deleted function leaves no orphan edges, and resolution never claims certainty it does not have. |
-| NFR-4 | **Operability** — one `docker compose up` brings the whole stack up; `/healthz` on api and parser; structured logs (zap in the parser, pino in the api). |
+| NFR-4 | **Operability** — one `docker compose up` brings the whole stack up; `/healthz` on api and parser; structured logs (zap in the parser, pino in the api). **Met on the clone-and-run branch**, verified from a clean clone with `make start` never run. |
 | NFR-5 | **Maintainability** — shared TypeScript types only in `packages/shared`; one SQL migration source at `services/parser/migrations/`; explicit SQL via sqlx in Go, Drizzle in the API, no full ORM anywhere. |
 | NFR-6 | **UX** — dark-mode-first with accent tokens; motion that explains rather than decorates; skeleton loading; actionable errors; `prefers-reduced-motion` respected. |
 

@@ -48,14 +48,19 @@ export function AppHeader({
       <div className="flex items-center gap-2">
         <span className="font-mono text-xs text-ink-muted">{user.login}</span>
         <ThemeToggle />
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={logout.isPending}
-          onClick={() => logout.mutate()}
-        >
-          {logout.isPending ? "Signing out…" : "Sign out"}
-        </Button>
+        {/* No sign-out under FUNCATLAS_SINGLE_USER: the server registers no
+            /auth/logout, so the button would POST at a 404, and there is no
+            session to end in the first place. */}
+        {user.singleUser ? null : (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={logout.isPending}
+            onClick={() => logout.mutate()}
+          >
+            {logout.isPending ? "Signing out…" : "Sign out"}
+          </Button>
+        )}
       </div>
     </header>
   );

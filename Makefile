@@ -2,7 +2,7 @@
 # Run `make <target>`. Most targets shell out to pnpm/turbo or docker.
 # `make start` is the one that brings the whole thing up; `make help` lists all.
 
-.PHONY: start stop wait-infra migrate-test install dev build lint typecheck test \
+.PHONY: setup start stop wait-infra migrate-test install dev build lint typecheck test \
         migrate up down health parser-isolated \
         go-build go-build-bin go-test go-vet go-run go-tidy go-lint clean
 
@@ -10,6 +10,31 @@
 # read a `#` inside a value as a comment and try to expand a `$`. Recipes that
 # need a variable from it write `$$DATABASE_URL`, not `$(DATABASE_URL)`.
 ENV := set -a && . ./.env && set +a
+
+setup: ## One-time: write .env, generate secrets, create the test database
+	@test -f .env && echo ".env already exists, leaving it alone." || { \
+	  cp .env.example .env; \
+	  sed -i "s|^SESSION_SECRET=.*|SESSION_SECRET=$$(openssl rand -hex 32)|" .env; \
+	  sed -i "s|^GITHUB_WEBHOOK_SECRET=.*|GITHUB_WEBHOOK_SECRET=$$(openssl rand -hex 32)|" .env; \
+	  sed -i "s|^FUNCATLAS_SINGLE_USER=.*|FUNCATLAS_SINGLE_USER=$$(id -un)|" .env; \
+	  echo "Wrote .env with generated secrets."; \
+	  echo ""; \
+	  echo "  FUNCATLAS_SINGLE_USER=$$(id -un) -- the API will run with NO"; \
+	  echo "  AUTHENTICATION so you do not need a GitHub OAuth app. Compose"; \
+	  echo "  publishes on 127.0.0.1 only. Do not expose the port."; \
+	  echo "  Blank the value in .env to use real GitHub sign-in instead."; \
+	  echo ""; \
+	}
+	$(MAKE) up
+	$(MAKE) wait-infra
+	@# Idempotent: the second run finds the database and says so.
+	@# No $(ENV) here: the credentials are compose's own, and sourcing .env
+	@# before it has been filled in is how this used to fail.
+	docker compose exec -T postgres psql -U funcatlas -d postgres \
+	  -c "CREATE DATABASE funcatlas_test OWNER funcatlas" 2>/dev/null \
+	  && echo "Created funcatlas_test." || echo "funcatlas_test already exists."
+	@echo ""
+	@echo "Ready. Run 'docker compose up' and open http://localhost:5173"
 
 start: ## Bring up EVERYTHING: Postgres, Redis, migrations, parser binary, API, web
 	@test -f .env || { echo "No .env — copy .env.example to .env first."; exit 1; }
@@ -56,6 +81,14 @@ typecheck: ## Type-check all packages
 	pnpm typecheck
 
 test: ## Run all tests (TS + Go)
+	@# A running compose worker consumes the very jobs queue/parse.test.ts
+	@# enqueues and asserts on, so the failures read as a broken queue rather
+	@# than as two things sharing one Redis.
+	@docker compose ps --services --filter status=running 2>/dev/null | grep -qx worker && { \
+	  echo "The compose worker is running; it will consume the jobs these tests assert on."; \
+	  echo "Run 'docker compose stop worker' first."; \
+	  exit 1; \
+	} || true
 	pnpm test
 	# Sourced, or dbtest finds no DATABASE_URL and every integration test skips
 	# -- a green run that never touched Postgres.

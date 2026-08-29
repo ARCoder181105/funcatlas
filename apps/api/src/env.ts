@@ -11,6 +11,20 @@ const repoRoot = path.resolve(import.meta.dirname, "../../..");
 // A missing .env is not an error -- CI supplies the environment directly.
 config({ path: path.join(repoRoot, ".env") });
 
+/**
+ * An optional key where blank means absent.
+ *
+ * `.optional()` alone only accepts a *missing* variable. A key present and
+ * empty -- which is how `.env.example` ships every value you have not filled
+ * in, and how anyone turns one off -- is a present empty string, and
+ * `.min(1)` rejects it. Without this the API refuses to start on a freshly
+ * copied .env, complaining about the length of a credential it was never
+ * going to use.
+ */
+function blankAsUnset<T extends z.ZodTypeAny>(inner: T) {
+  return z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), inner);
+}
+
 // Fail-fast env validation. All keys mirror .env.example.
 const schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -25,10 +39,36 @@ const schema = z.object({
   REDIS_URL: z.string().url(),
   QUEUE_NAME: z.string().min(1),
 
-  GITHUB_CLIENT_ID: z.string().min(1),
-  GITHUB_CLIENT_SECRET: z.string().min(1),
-  GITHUB_REDIRECT_URI: z.string().url(),
+  // Optional, and enforced below only when there is actually an OAuth flow to
+  // run. Requiring them unconditionally would mean registering a GitHub OAuth
+  // app before `docker compose up` did anything, which is exactly the friction
+  // FUNCATLAS_SINGLE_USER exists to remove.
+  //
+  // GITHUB_WEBHOOK_SECRET stays required on both paths: it is a random string
+  // anyone can generate, not a credential that has to be registered somewhere.
+  GITHUB_CLIENT_ID: blankAsUnset(z.string().min(1).optional()),
+  GITHUB_CLIENT_SECRET: blankAsUnset(z.string().min(1).optional()),
+  GITHUB_REDIRECT_URI: blankAsUnset(z.string().url().optional()),
   GITHUB_WEBHOOK_SECRET: z.string().min(1),
+
+  /**
+   * Run with no authentication at all, as this GitHub login.
+   *
+   * Set, the API registers no /auth/login, /auth/callback or /auth/logout and
+   * every request resolves to this user. It exists so `docker compose up`
+   * works without registering a GitHub OAuth app, which was the single
+   * largest thing standing between a clone and a running stack.
+   *
+   * This is not R30 wearing a different hat. R30 was a session-minting
+   * endpoint that shipped in every deployment behind a NODE_ENV gate, so the
+   * gate had to be right exactly once. Here there is no endpoint to reach and
+   * no gate to be wrong: the instance is unauthenticated because a human wrote
+   * their username into their own .env. What it is not is safe to expose --
+   * the process binds 0.0.0.0 (it must, inside a container) and cannot know
+   * what sits in front of it, so compose publishes on 127.0.0.1 and the
+   * server warns on every start. R39.
+   */
+  FUNCATLAS_SINGLE_USER: blankAsUnset(z.string().min(1).optional()),
 
   SESSION_SECRET: z.string().min(16),
   SESSION_COOKIE_NAME: z.string().min(1).default("funcatlas_session"),
@@ -43,4 +83,21 @@ const schema = z.object({
   PARSE_CONCURRENCY: z.coerce.number().int().positive().default(2),
 });
 
-export const env = schema.parse(process.env);
+const parsed = schema.parse(process.env);
+
+// Checked here rather than at the first request: a missing client id should
+// stop the process on the line that starts it, not surface as a 500 the first
+// time somebody clicks sign in.
+if (parsed.FUNCATLAS_SINGLE_USER === undefined) {
+  const missing = (["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "GITHUB_REDIRECT_URI"] as const)
+    .filter((key) => parsed[key] === undefined);
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing ${missing.join(", ")}. Either register a GitHub OAuth app and fill them in, ` +
+        "or set FUNCATLAS_SINGLE_USER to run with no authentication (see .env.example).",
+    );
+  }
+}
+
+export const env = parsed;

@@ -1,0 +1,46 @@
+# Both Dockerfiles build from the repo root and do `COPY . .`, so without this
+# every image carried the whole working tree -- including `.env`, which holds a
+# real GitHub client secret and session secret. A secret in a layer stays in
+# that layer whatever the running container does with it.
+
+# Secrets first, because this is the line that matters.
+.env
+.env.*
+!.env.example
+
+# Reinstalled inside the image, and a host node_modules is the wrong platform
+# anyway -- the parser's tree-sitter bindings are compiled.
+node_modules
+**/node_modules
+
+# Build output. The image builds its own; copying a stale one in is how a
+# container serves last week's bundle.
+dist
+**/dist
+apps/web/dist
+services/parser/bin
+
+# History and tooling that never affect the build, but do bust the cache on
+# every commit.
+.git
+.github
+.claude
+.agents
+**/*.log
+
+# Tests do not run in the image. This also keeps compiled test files out of
+# `apps/api/dist`, which CLAUDE.md lists as harmless locally and wrong here.
+**/*.test.ts
+**/*.test.tsx
+**/*_test.go
+**/__tests__
+
+# Documentation and plans.
+docs
+*.md
+!README.md
+
+# Editor and OS noise.
+.vscode
+.idea
+.DS_Store

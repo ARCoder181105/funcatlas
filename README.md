@@ -45,21 +45,28 @@ produces *less* reads as one that worked. See [`docs/PARSING_STRATEGY.md`](docs/
 
 ## Running it
 
-### Prerequisites
+Two commands. You need **Docker**, plus `make` and `openssl` — both already present on macOS and
+any Linux.
 
-- **Node 20+** and **pnpm** (`npm i -g pnpm`)
-- **Go 1.24+** with a C toolchain (`gcc`) — tree-sitter uses cgo
-- **Docker** and **Docker Compose** — for Postgres and Redis
-- **golang-migrate** CLI — or the `migrate/migrate` Docker image, as CI does
-- A **GitHub OAuth App** — the app has no other way to know who you are
+```bash
+git clone https://github.com/ARCoder181105/funcatlas.git
+cd funcatlas
+make setup          # writes .env, generates secrets, creates the test database
+docker compose up   # then open http://localhost:5173
+```
 
-> `docker compose up` does **not** work yet and is the next piece of work: `apps/web` has no
-> Dockerfile, there is no worker service, and the API image cannot start. Until then the four
-> prerequisites above are all required. See NFR-4 in [`PRD.md`](PRD.md).
+Paste a public repository URL and explore it. `⌘K` finds any function by name.
 
-### Register a GitHub OAuth App
+> **`make setup` sets `FUNCATLAS_SINGLE_USER`, which means the API runs with no authentication.**
+> That is what lets you skip registering a GitHub OAuth app. Compose publishes every port on
+> `127.0.0.1`, so nothing off-box can reach it — but do not expose these ports, and do not run it
+> this way on a server. Blank the value in `.env` to use real GitHub sign-in instead
+> ([`docs/RISKS.md`](docs/RISKS.md) R39).
 
-<https://github.com/settings/developers> → **New OAuth App**. The exact values:
+### With real GitHub sign-in
+
+Blank `FUNCATLAS_SINGLE_USER` in `.env` and register an OAuth app at
+<https://github.com/settings/developers> → **New OAuth App**:
 
 | Field | Value |
 |---|---|
@@ -67,47 +74,28 @@ produces *less* reads as one that worked. See [`docs/PARSING_STRATEGY.md`](docs/
 | Homepage URL | `http://localhost:5173` |
 | Authorization callback URL | `http://localhost:3000/auth/callback` |
 
-Generate a client secret and keep both values for the next step. The scope requested is
-`read:user` and nothing more — funcatlas never writes to your account, and the token is read once
-for your username and then never used again. It clones over public HTTPS, which is why only public
-repositories work: the only scope that reads private ones is `repo`, and that also grants **write**
-access to every private repository you can reach.
+Put the client id and secret into `.env` as `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`. The
+scope requested is `read:user` and nothing more — funcatlas never writes to your account, and the
+token is read once for your username and then never used again. It clones over public HTTPS, which
+is why only public repositories work: the only scope that reads private ones is `repo`, and that
+also grants **write** access to every private repository you can reach.
 
-### Set up and start
+### Working on the code
+
+`docker compose up` has no hot reload. For that, run the services natively — which needs three more
+things installed:
+
+- **Node 24+** and **pnpm** (`npm i -g pnpm`) — pnpm 11 does not run on Node 20
+- **Go 1.25+** with a C toolchain (`gcc`) — tree-sitter uses cgo
+- **golang-migrate** CLI — or the `migrate/migrate` Docker image, as CI does
 
 ```bash
-git clone https://github.com/ARCoder181105/funcatlas.git
-cd funcatlas
 pnpm install
-cp .env.example .env
+make start          # infra in compose, api + web + worker natively, with watch
 ```
 
-Then edit `.env` and fill in four values:
-
-```bash
-GITHUB_CLIENT_ID=<from the OAuth app>
-GITHUB_CLIENT_SECRET=<from the OAuth app>
-GITHUB_WEBHOOK_SECRET=$(openssl rand -hex 32)   # unused locally, but required
-SESSION_SECRET=$(openssl rand -hex 32)
-```
-
-Create the test database once, or `make test` truncates the one you develop against:
-
-```bash
-docker compose up -d postgres redis
-docker compose exec postgres psql -U funcatlas -d postgres \
-  -c "CREATE DATABASE funcatlas_test OWNER funcatlas;"
-```
-
-Then bring the whole thing up — infra, migrations, the parser binary, the API, the web app and the
-parse worker:
-
-```bash
-make start          # then open http://localhost:5173
-```
-
-Sign in with GitHub, paste a public repository URL, and explore it. `⌘K` finds any function by
-name.
+Stop the compose worker first if it is running: it consumes the queue the tests assert on, and
+`make test` will tell you so rather than failing obscurely.
 
 ### Without the app
 
@@ -140,6 +128,9 @@ Stated here rather than discovered later:
 
 - **Public repositories only.** See the OAuth section above for why.
 - **No hosted instance.** You run it.
+- **No authentication by default.** `make setup` turns on single-user mode so you can skip
+  registering an OAuth app. Fine on a laptop behind a loopback-only port map, wrong anywhere else
+  ([`docs/RISKS.md`](docs/RISKS.md) R39).
 - **An incremental re-parse still re-parses everything.** The *write* is scoped to changed files;
   the clone, extract and resolve are not. Resolution is whole-repo, and a partial symbol table
   would emit a confident edge where the whole repository would correctly say ambiguous

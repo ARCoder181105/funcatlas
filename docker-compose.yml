@@ -5,8 +5,11 @@ services:
       POSTGRES_USER: funcatlas
       POSTGRES_PASSWORD: funcatlas
       POSTGRES_DB: funcatlas
+    # Loopback, like everything else here. Published at all only because
+    # `make start` runs the API and worker natively on the host; a
+    # compose-only stack reaches Postgres over the internal network.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,7 +21,7 @@ services:
   redis:
     image: redis:7
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     # Sessions live here. Without a volume every restart signs everyone out,
     # which in development means losing the login on each `make up`.
     volumes:
@@ -29,36 +32,102 @@ services:
       timeout: 5s
       retries: 5
 
-  api:
-    build: ./apps/api
+  # Nothing ran migrations in compose. `make start` does it with the
+  # golang-migrate CLI, which a contributor running `docker compose up` has no
+  # reason to have installed. Same image CI already uses (R17).
+  migrate:
+    image: migrate/migrate:v4.18.1
+    volumes:
+      - ./services/parser/migrations:/migrations:ro
+    command:
+      - -path=/migrations
+      - -database=postgres://funcatlas:funcatlas@postgres:5432/funcatlas?sslmode=disable
+      - up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # The API and the worker are the same image with different entrypoints. Only
+  # the worker spawns the parser, but one image is one thing to keep in step.
+  api: &node
+    build:
+      # The repo root, not apps/api: the Dockerfile COPYs the workspace
+      # manifests and packages/shared, which live above that directory.
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: funcatlas-node
     env_file: .env
+    environment:
+      # `environment` wins over `env_file`, which is the point: .env is written
+      # for host-native `make start`, where Postgres and Redis are on
+      # localhost. Inside a container localhost is the container, so these two
+      # have to be service names or every connection is refused.
+      DATABASE_URL: postgres://funcatlas:funcatlas@postgres:5432/funcatlas?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      # The default is an absolute host path from `make go-build-bin`. In the
+      # image the binary is somewhere else entirely.
+      PARSER_BIN: /usr/local/bin/funcatlas-parser
+      # Everything else stays host-facing on purpose: the browser runs on the
+      # host, so WEB_APP_URL, CORS_ORIGIN and GITHUB_REDIRECT_URI are correct
+      # as written in .env.
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # Not just started -- finished. Either service reaching a database with
+      # no tables fails in a way that reads as a code bug.
+      migrate:
+        condition: service_completed_successfully
+    # Bound to loopback, not 0.0.0.0. With FUNCATLAS_SINGLE_USER set there is
+    # no authentication in front of this, and the host's port mapping is the
+    # only thing keeping it off the network -- the process cannot bind loopback
+    # itself or Docker could not reach it. See R39.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
+
+  # Nothing consumed the queue before this existed. A webhook verified its
+  # HMAC, enqueued a job, answered 202, and the graph never changed -- which
+  # reads as a slow parse rather than as a missing process.
+  worker:
+    <<: *node
+    image: funcatlas-node
+    command: ["./node_modules/.bin/tsx", "src/worker.ts"]
+    ports: []
 
   web:
-    build: ./apps/web
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Vite inlines this at build time, so it cannot be an environment
+        # variable on the running container. The browser is on the host, so it
+        # is localhost rather than the `api` service name.
+        VITE_API_URL: http://localhost:3000
     depends_on:
       - api
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:80"
 
+  # The isolation harness, not a service the stack runs. `make parser-isolated`
+  # invokes it with `docker compose run --rm --no-deps`, which is why nobody
+  # noticed it declared both `network_mode: none` and a dependency on Postgres
+  # health -- with no interfaces it can never reach Postgres over TCP, so it
+  # could never have started. The depends_on was vestigial and is gone; the
+  # three isolation settings are the actual contract (docs/SECURITY.md).
+  #
+  # Behind a profile so `docker compose up` does not try to start it. The
+  # product spawns the parser as a subprocess of the worker and never uses this
+  # container -- see R38.
   parser:
     build: ./services/parser
+    profiles: ["tools"]
     env_file: .env
     network_mode: "none"
     read_only: true
     cap_drop:
       - ALL
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
 volumes:
   pgdata:
