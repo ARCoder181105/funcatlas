@@ -47,16 +47,23 @@ export function Section({
         <Reveal>
           <ConfidenceRule tier={tier} className="max-w-24" />
 
-          <p className="mt-6 font-mono text-[11px] tracking-[0.2em] text-ink-muted uppercase">
+          {/* The page's third ink lands here: an eyebrow is a label, not a
+              claim, so it is the one place colour can be spent without
+              competing with the three that mean something. */}
+          <p className="mt-6 font-mono text-[11px] tracking-[0.2em] text-spot uppercase">
             {eyebrow}
           </p>
 
-          <h2 className="mt-4 max-w-2xl font-display text-3xl tracking-tight text-balance text-ink sm:text-4xl">
+          {/* 40-48px against 16px body. The old 30px heading sat too close to
+              its own lede for the eye to rank them, which is most of why the
+              page read flat. Bricolage's weight axis carries the rest: 560
+              here against 400 in prose. */}
+          <h2 className="mt-4 max-w-3xl font-display text-4xl leading-[1.08] tracking-tight text-balance text-ink [font-variation-settings:'wght'_560] sm:text-5xl">
             {title}
           </h2>
 
           {lede === undefined ? null : (
-            <p className="mt-4 max-w-2xl text-base leading-relaxed text-ink-muted">
+            <p className="mt-5 max-w-2xl text-lg leading-relaxed text-ink-muted">
               {lede}
             </p>
           )}

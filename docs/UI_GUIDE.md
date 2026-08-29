@@ -65,6 +65,13 @@ what a press would do on white stock.
 | `name_match` | `confidence.name` | `#a55424` | Fired clay, darkened the same way. |
 | `unresolved` | `confidence.unresolved` | `#71768a` | Cool ash, dark enough to hold as a hairline on paper. |
 
+**A third ink, `spot`, for the landing page only** — `#2ad4c4` dark, `#0b7268` light. It carries no
+canvas meaning, which is why it is named `spot` and not a tier: on a page three thousand pixels long
+two hues read flat, and a map is drawn in three inks rather than two. It sits at 174°, a clear 53°
+off `exact` and 153° off `name`, so it cannot be misread as either, and it never appears on the
+canvas — there a colour that means nothing would compete with three that mean something. Used on
+eyebrows, section detail and hover states.
+
 Two rules bind both palettes, and `confidence.test.ts` enforces them:
 
 1. **`unresolved` is never a chromatic red.** Colouring an honest admission as a failure tells the

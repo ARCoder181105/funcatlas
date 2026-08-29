@@ -1,141 +1,216 @@
 # funcatlas
 
-An interactive visual map of a codebase. Point it at a repository and it parses every function,
-links call sites into a graph, and renders it as an explorable canvas — click a file to get a card,
-click the card to get a mind-map of its functions, click a function to read its code.
+An interactive visual map of a codebase. Point it at a public GitHub repository and it clones it,
+extracts every function and call site with tree-sitter, resolves each call to the function it
+reaches, and draws the result as a graph you can walk: file tree → file card → function mind-map →
+highlighted source.
 
-Built for one problem: large codebases don't fit in your head, and grep or go-to-definition only
-ever shows you one file at a time — never the shape of the whole thing.
+**The part that matters: it tells you what it does not know.** Every call gets one of three
+answers, and each is drawn as a different line.
 
-**Status:** in development, and usable. Log in, point it at a public TypeScript repository, and
-explore the call graph on the canvas — file tree to card to function mind-map to highlighted source,
-with ⌘K to find a function by name. Registering returns immediately and the parse runs on a queue;
-point a GitHub webhook at it and the graph follows your pushes, rewriting only the rows a commit
-actually changed.
+| | Tier | Drawn | Means |
+|---|---|---|---|
+| ─── | `exact` | solid | The import was followed to a declaration, and only one function could be the target. |
+| ─ ─ ─ | `name_match` | dashed | A function with that name is in scope. Another one elsewhere may be the one actually called. |
+| · · · | `unresolved` | dotted | The call is real and its target is ambiguous: a barrel re-export, a default import, a path alias. |
 
-## Progress
+Ambiguity resolves to `unresolved`, never to a guess, and an unresolved call is never coloured as
+an error. A tool that guesses is worse than one that stops, because a wrong edge is read as fact
+and costs more than the missing one it replaced. Unresolved callees are drawn as ghost nodes at the
+edge of the map, labelled with the name the parser saw — the map showing its own boundary.
 
-| Phase | Scope | State |
-|---|---|---|
-| 0 | Monorepo bootstrap, migrations, CI | done |
-| 1 | Go + tree-sitter parser, sandbox hardening | done |
-| 2 | Postgres persistence, call resolution | done |
-| 3a | GitHub OAuth, Redis sessions, the graph API | done |
-| 3b | React Flow canvas, search UI | done |
-| 4 | Webhooks, job queue, security hardening | done |
-| 5 | Go, Rust and Python — extraction only | not started |
+Built for one problem: large codebases do not fit in your head, and grep or go-to-definition only
+ever shows you one file at a time, never the shape of the whole thing.
 
-Phase-by-phase detail is in [`PLAN.md`](PLAN.md); the current chunk list is in
-[`TASKLIST.md`](TASKLIST.md).
+## Status
+
+Phases 0 through 5 are done and merged. It works and it is usable: sign in, chart a public
+repository, and explore it. Registering returns immediately and the parse runs on a queue; point a
+GitHub webhook at it and the graph follows your pushes, rewriting only the rows a commit changed.
+
+**There is no hosted instance.** You run it yourself, so the database and the graphs are yours and
+stay on your machine.
+
+## Languages
+
+Eight, at two different depths. Support is not uniform, so it is not presented as though it were.
+
+| Depth | Languages |
+|---|---|
+| **Resolved across files** — imports are followed, so a call reaches a definition in another file | TypeScript, TSX, JavaScript, JSX |
+| **Extracted, resolved within a file** — every function and call site is charted, cross-file resolution is not built | Go, Rust, Python, Java |
+
+Per-language limits are pinned by assertions rather than described, because a parser that quietly
+produces *less* reads as one that worked. See [`docs/PARSING_STRATEGY.md`](docs/PARSING_STRATEGY.md).
+
+## Running it
+
+### Prerequisites
+
+- **Node 20+** and **pnpm** (`npm i -g pnpm`)
+- **Go 1.24+** with a C toolchain (`gcc`) — tree-sitter uses cgo
+- **Docker** and **Docker Compose** — for Postgres and Redis
+- **golang-migrate** CLI — or the `migrate/migrate` Docker image, as CI does
+- A **GitHub OAuth App** — the app has no other way to know who you are
+
+> `docker compose up` does **not** work yet and is the next piece of work: `apps/web` has no
+> Dockerfile, there is no worker service, and the API image cannot start. Until then the four
+> prerequisites above are all required. See NFR-4 in [`PRD.md`](PRD.md).
+
+### Register a GitHub OAuth App
+
+<https://github.com/settings/developers> → **New OAuth App**. The exact values:
+
+| Field | Value |
+|---|---|
+| Application name | anything — `funcatlas (local)` |
+| Homepage URL | `http://localhost:5173` |
+| Authorization callback URL | `http://localhost:3000/auth/callback` |
+
+Generate a client secret and keep both values for the next step. The scope requested is
+`read:user` and nothing more — funcatlas never writes to your account, and the token is read once
+for your username and then never used again. It clones over public HTTPS, which is why only public
+repositories work: the only scope that reads private ones is `repo`, and that also grants **write**
+access to every private repository you can reach.
+
+### Set up and start
+
+```bash
+git clone https://github.com/ARCoder181105/funcatlas.git
+cd funcatlas
+pnpm install
+cp .env.example .env
+```
+
+Then edit `.env` and fill in four values:
+
+```bash
+GITHUB_CLIENT_ID=<from the OAuth app>
+GITHUB_CLIENT_SECRET=<from the OAuth app>
+GITHUB_WEBHOOK_SECRET=$(openssl rand -hex 32)   # unused locally, but required
+SESSION_SECRET=$(openssl rand -hex 32)
+```
+
+Create the test database once, or `make test` truncates the one you develop against:
+
+```bash
+docker compose up -d postgres redis
+docker compose exec postgres psql -U funcatlas -d postgres \
+  -c "CREATE DATABASE funcatlas_test OWNER funcatlas;"
+```
+
+Then bring the whole thing up — infra, migrations, the parser binary, the API, the web app and the
+parse worker:
+
+```bash
+make start          # then open http://localhost:5173
+```
+
+Sign in with GitHub, paste a public repository URL, and explore it. `⌘K` finds any function by
+name.
+
+### Without the app
+
+Parse a repository straight to stdout, no database and no API:
+
+```bash
+make go-run REPO=./services/parser/testdata/polyglot
+cd services/parser && go run ./cmd/parser --repo ./testdata/resolve --format summary
+```
 
 ## How it works
 
-1. **Clone** the target repo into an isolated, network-less, read-only container.
-2. **Parse** every `.ts`/`.tsx` file with tree-sitter; extract function definitions, call sites,
-   and imports into a Go-native intermediate representation.
-3. **Resolve** each call to a definition — same file, then imported symbol, then package fallback —
-   and tag the resulting edge `exact`, `name_match`, or `unresolved`.
-4. **Store** functions and edges in Postgres, keyed so an incremental re-parse never orphans an edge.
-5. **Serve** the graph behind a GitHub login — every endpoint is session-gated, and sessions are
+1. **Clone** the repository, depth one, over public HTTPS. Nothing in it is ever executed — no
+   install, build or test scripts — because parsing only reads text. Symlinks fail the run rather
+   than being followed, files over 1 MB are skipped, and file count and depth are capped.
+2. **Extract** every function declaration and call site with tree-sitter, into a Go-native
+   intermediate representation. One pinned grammar per extension, never shared: a mismatched
+   grammar fails *silently* and drops every call in the file.
+3. **Resolve** each call against a symbol table partitioned by language, so no edge can cross a
+   language boundary, and tag it `exact`, `name_match` or `unresolved`.
+4. **Store** functions and edges in Postgres, keyed so an incremental re-parse never orphans an
+   edge.
+5. **Serve** the graph behind a GitHub login. Every `/api` route is session-gated, and sessions are
    opaque ids in Redis rather than anything the browser can read.
-6. **Explore** the graph on a React Flow canvas, where edge style reflects resolution confidence.
+6. **Explore** it on a React Flow canvas, where the edge style is the resolution confidence.
 
-The confidence tag is the point of the design: a guess is never drawn as a fact.
+## What it does not do
+
+Stated here rather than discovered later:
+
+- **Public repositories only.** See the OAuth section above for why.
+- **No hosted instance.** You run it.
+- **An incremental re-parse still re-parses everything.** The *write* is scoped to changed files;
+  the clone, extract and resolve are not. Resolution is whole-repo, and a partial symbol table
+  would emit a confident edge where the whole repository would correctly say ambiguous
+  ([`docs/RISKS.md`](docs/RISKS.md) R35).
+- **The parser sandbox is a harness, not the running path.** `--network none`, a read-only rootfs
+  and dropped capabilities apply under `make parser-isolated`; the queue worker spawns the binary
+  as a plain subprocess. The input hardening in step 1 above is enforced everywhere. R38 and
+  [`docs/SECURITY.md`](docs/SECURITY.md).
+- **One file card at a time**, with as many function branches off it as you open.
+- **Barrel re-export chains, default imports and `tsconfig` path aliases** all resolve to
+  `unresolved`. Deliberately.
+
+## Working on it
+
+```bash
+make start          # everything, then open :5173
+make test           # TypeScript AND Go — `pnpm -r test` silently skips the parser
+make lint && make typecheck
+make go-vet         # not part of `make test`
+make help           # every target
+```
+
+Integration tests read `TEST_DATABASE_URL` and skip when it is unset, so a green run that never
+touched Postgres is possible — check that you created the test database above.
+
+[`CLAUDE.md`](CLAUDE.md) is the load-bearing summary of how this repository is organised and which
+conventions bite if ignored; it is worth reading before a first change even though it is addressed
+to an assistant. [`DEVELOPMENT.md`](DEVELOPMENT.md) has the daily loop.
+
+## Layout
+
+```
+/apps/api             Fastify — auth, repo registration, graph endpoints, the parse worker
+/apps/web             Vite + React — the landing page and the canvas
+/packages/shared      Drizzle schema + Zod schemas, shared by api and web
+/services/parser      Go — clone, extract, resolve, write to Postgres
+/docs                 architecture, data model, parsing, security, risks, UI
+```
 
 ## Stack
 
 | Layer | Choice |
 |---|---|
-| Parser | Go + tree-sitter, pgx, zap |
-| Database | Postgres (edge tables + recursive CTEs) |
+| Parser | Go + tree-sitter, pgx with explicit SQL, zap |
+| Database | Postgres — edge tables and recursive CTEs |
 | API | Fastify + Drizzle + postgres.js + Zod |
-| Frontend | Vite + React + React Flow + Tailwind + shadcn/ui |
-| Queue | Redis + BullMQ |
-| Auth | GitHub OAuth (arctic), opaque sessions in Redis |
+| Frontend | Vite + React 19 + React Flow + Tailwind v4 + shadcn/ui on Base UI |
+| Queue | Redis + BullMQ, consumed by a Node worker that spawns the Go binary |
+| Auth | GitHub OAuth (arctic/oslo), opaque sessions in Redis |
 | Monorepo | pnpm workspaces + Turborepo |
 
-Reasoning for each pick is in [`docs/TECH_STACK.md`](docs/TECH_STACK.md).
-
-## Layout
-
-```
-/packages/shared      Drizzle schema + Zod schemas, shared by api and web
-/apps/api             Fastify — auth, repo registration, graph endpoints
-/apps/web             Vite + React — the canvas
-/services/parser      Go — clone, parse, resolve, write to Postgres
-/docs                 architecture, data model, security, risks
-```
-
-## Running it
-
-```bash
-pnpm install
-cp .env.example .env                                 # fill in DATABASE_URL and REDIS_URL
-docker compose up -d postgres redis
-migrate -path services/parser/migrations -database "$DATABASE_URL" up
-make go-build-bin                                    # the binary the API spawns
-```
-
-Parse a fixture without touching the API:
-
-```bash
-make go-run REPO=./services/parser/testdata/sample   # emits out.json
-```
-
-Or bring the whole thing up and use it — infra, migrations, parser binary, API and web in one:
-
-```bash
-make start                                           # then open http://localhost:5173
-```
-
-Sign in with **Continue as a local dev user**, chart a public repository, and explore it.
-
-Or drive it over HTTP instead. `/auth/dev-login` exists outside production so this works
-without a GitHub OAuth app:
-
-```bash
-cd apps/api && pnpm dev
-
-curl -c jar -X POST localhost:3000/auth/dev-login
-curl -b jar -X POST localhost:3000/api/repos \
-  -H 'content-type: application/json' \
-  -d '{"githubUrl":"https://github.com/ARCoder181105/funcatlas"}'
-curl -b jar localhost:3000/api/repos/1/tree
-curl -b jar 'localhost:3000/api/repos/1/search?query=parse'
-```
-
-Every `/api` route answers 401 without that cookie. Full setup, prerequisites, and the daily loop
-are in [`DEVELOPMENT.md`](DEVELOPMENT.md).
+Reasoning for each pick, and the rejected alternatives, is in
+[`docs/TECH_STACK.md`](docs/TECH_STACK.md).
 
 ## Documentation
 
 | Document | Owns |
 |---|---|
-| [`PRD.md`](PRD.md) | What we're building and why — the product contract |
-| [`PLAN.md`](PLAN.md) | The 4-phase execution plan |
-| [`TASKLIST.md`](TASKLIST.md) | The live task list for the current phase |
-| [`DEVELOPMENT.md`](DEVELOPMENT.md) | Setup, dev loop, conventions |
+| [`PRD.md`](PRD.md) | What we are building and what counts as done |
+| [`PLAN.md`](PLAN.md) | The phase order and what closed each one |
+| [`TASKLIST.md`](TASKLIST.md) | The live task list |
+| [`CLAUDE.md`](CLAUDE.md) | Conventions, and what bites if ignored |
+| [`DEVELOPMENT.md`](DEVELOPMENT.md) | Setup and the daily loop |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Components and how they connect |
-| [`docs/TECH_STACK.md`](docs/TECH_STACK.md) | Stack decisions and rejected alternatives |
 | [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | Postgres schema |
-| [`docs/PARSING_STRATEGY.md`](docs/PARSING_STRATEGY.md) | Extraction and call resolution, with limits |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | Parsing untrusted repos safely |
+| [`docs/PARSING_STRATEGY.md`](docs/PARSING_STRATEGY.md) | Extraction, resolution, per-language limits |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Parsing untrusted repositories, and where the isolation actually applies |
 | [`docs/RISKS.md`](docs/RISKS.md) | Open decisions and tracked risks |
-| [`docs/UI_GUIDE.md`](docs/UI_GUIDE.md) | Visual direction for the canvas |
-
-## Scope
-
-**In:** TypeScript for the full pipeline. Public repositories via GitHub OAuth — the scope is
-`read:user`, since GitHub offers no read-only repository scope and `repo` would grant write access
-to every private repository you can reach. Name/scope call resolution with confidence tags.
-Webhook-driven incremental updates. Function-name search.
-
-**Planned:** Go, Rust and Python in Phase 5, extraction only — per-language call resolution stays
-cut.
-
-**Out (post-MVP):** LSP-based resolution, freehand annotation layer, Neo4j, saved canvas layouts,
-multi-tenancy, private repositories.
+| [`docs/UI_GUIDE.md`](docs/UI_GUIDE.md) | Visual direction, and what this must not look like |
+| [`docs/CANVAS_DECISIONS.md`](docs/CANVAS_DECISIONS.md) | Why the canvas behaves the way it does |
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE).

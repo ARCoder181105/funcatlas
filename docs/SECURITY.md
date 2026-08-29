@@ -7,9 +7,43 @@ This project clones and reads arbitrary user-supplied repositories. That's a rea
 - **Parsing never requires execution.** Tree-sitter reads file contents and produces a syntax tree — it does not need `npm install`, `pip install`, build scripts, or any other code from the target repo to run. The clone/parse pipeline should never invoke the repo's own install/build/test scripts.
 - **Isolate the clone + parse step.** Even without deliberately executing the repo's code, git hooks and certain tooling can trigger unexpected behavior on clone/checkout. Run cloning and parsing inside a container at minimum; a microVM (e.g. Firecracker-style isolation) is a stronger option if handling many untrusted third-party repos at scale.
 - **Mount only what's needed.** The parser process should only have access to the cloned repo's directory — never the host filesystem, credentials, or other users' cloned repos.
-- **No network access from the parse step.** The parser doesn't need outbound network access to do its job; blocking it removes a whole class of potential exfiltration or supply-chain risk from a malicious repo. This is enforced as a **hard runtime constraint** (`docker run --network none`, read-only mount, dropped capabilities) — not just a note.
+- **No network access from the parse step.** The parser doesn't need outbound network access once the clone is done; blocking it removes a whole class of potential exfiltration or supply-chain risk from a malicious repo. **This is a goal, not something the running product currently enforces** — see "Where the isolation actually applies" below before relying on it.
 - **Auth.** GitHub OAuth for user login. The scope is `read:user`, not `repo` -- GitHub OAuth apps have no read-only repository scope, and `repo` grants write access to every private repository the user can reach (R26). Private repositories are therefore out of scope until a phase needs them. Webhook payloads must be signature-verified (GitHub's HMAC signature) before being trusted and enqueued.
 - **Tenant isolation.** If this ever serves more than one user, cloned repos and parse jobs must not share state, disk, or memory across users/repos — treat each clone as its own isolated workspace, cleaned up after use.
+
+## Where the isolation actually applies
+
+Read this before quoting anything above as a guarantee. **The container constraints are real and
+tested, and the running product does not use them.**
+
+There are two ways the parser runs, and only one is sandboxed:
+
+| Path | How it runs | Sandboxed? |
+|---|---|---|
+| `make parser-isolated` | `docker compose run --rm --no-deps parser` against the `parser` service, which sets `network_mode: "none"`, `read_only: true`, `cap_drop: [ALL]` and a non-root user | **Yes.** This is the harness the constraints were written for. |
+| The product, on every path | `apps/api/src/repos/register.ts` calls `execFile(env.PARSER_BIN, [...])` from the queue worker | **No.** A plain child process of the worker, with the worker's network, filesystem and user. |
+
+So `--network none`, the read-only rootfs and the dropped capabilities apply when you deliberately
+invoke the harness, and at no other time. `make start` does not use them, and neither would a
+composed stack — `docker-compose.yml`'s `parser` service is the harness, which is why it can carry
+`network_mode: "none"` and a `depends_on` on Postgres without anyone noticing the contradiction.
+
+**What is genuinely enforced on every path**, because it lives in the parser rather than around it
+(`services/parser/internal/security`, covered by `security` package tests):
+
+- Symlinks hard-fail the run; every path is bounded to the clone root.
+- Files over `PARSER_MAX_FILE_BYTES` (1 MB) are skipped, and `PARSER_MAX_FILES` /
+  `PARSER_MAX_DEPTH` / `PARSER_SKIP_PATHS` cap the walk.
+- The clone is `git clone --depth 1` with `GIT_TERMINAL_PROMPT=0` and empty `GIT_ASKPASS` /
+  `SSH_ASKPASS`, so a private or missing repository fails immediately instead of blocking on a
+  credential prompt (R32).
+- The repo's own install, build and test scripts are never invoked. Parsing does not execute code.
+- The clone is removed afterwards, on the failure path too.
+
+Closing the gap is **R38**. The two routes both cost something: having the worker shell out to
+`docker run` means mounting the Docker socket into it, which grants root-equivalent control of the
+host and trades one security property for a worse one; doing it with namespaces, seccomp or
+bubblewrap avoids that but is Linux-only and a project in its own right.
 
 ## Concrete input hardening (enforced in the clone/parse step)
 
@@ -26,10 +60,10 @@ This project clones and reads arbitrary user-supplied repositories. That's a rea
 
 ## Checklist before handling real users' private repos
 
-- [x] Clone/parse runs in an isolated container, not the host running the API
-- [x] No install/build scripts from the target repo are ever invoked
-- [x] Parser process has no outbound network access (`--network none`, read-only mount, dropped caps)
-- [ ] Symlink / path-traversal escapes are checked — **path validation done; descriptor-based TOCTOU protection deferred again in Phase 4.** `Walk` hard-fails on any symlink and `ContainsRoot` bounds every path, so an escape needs a directory swapped between the check and the open. That is a real race and a narrow one: the parser reads a checkout it made itself, seconds earlier, in a container with no network and no capabilities. Revisit when it parses a tree someone else can write to.
+- [ ] Clone/parse runs in an isolated container, not the host running the API — **the container exists and is tested; the product does not use it.** `make parser-isolated` runs the parser under `network_mode: "none"`, a read-only rootfs, `cap_drop: ALL` and a non-root user. The queue worker runs the same binary through `execFile`, in its own process space. Ticked from Phase 1 until the landing-page branch, on the strength of the harness rather than of the running path. R38.
+- [x] No install/build scripts from the target repo are ever invoked — parsing reads file contents into a syntax tree and nothing else. This one holds on every path, container or not, because it is a property of tree-sitter rather than of the sandbox.
+- [ ] Parser process has no outbound network access (`--network none`, read-only mount, dropped caps) — **only under `make parser-isolated`.** Same gap as the box above, and note the parser needs network for `git clone` in the first place, so a real sandbox has to admit a clone stage before it drops the interface.
+- [ ] Symlink / path-traversal escapes are checked — **path validation done; descriptor-based TOCTOU protection deferred again in Phase 4.** `Walk` hard-fails on any symlink and `ContainsRoot` bounds every path, so an escape needs a directory swapped between the check and the open. That is a real race and a narrow one: the parser reads a checkout it made itself, seconds earlier, from a `--depth 1` clone of a public repository. **The original wording justified this partly by "in a container with no network and no capabilities", which R38 shows is not true of the running path** — the deferral still stands on the rest, but it stands on less than it appeared to. Revisit when it parses a tree someone else can write to.
 - [x] File-count, per-file size (>1MB), and depth caps are enforced; binary/`node_modules`/`.git` skipped
 - [x] Webhook signatures are verified, replay-protected, and per-repo throttled — HMAC-SHA256 over the **raw bytes** (`routes/webhook.ts`), delivery ids held in Redis with `SET NX`, and a per-hook rate limit. Replay protection is by delivery id rather than a timestamp window: GitHub sends no timestamp, and the id is what a retry repeats.
 - [x] All graph endpoints are session-gated — one `preHandler` on one encapsulated scope (`routes/index.ts`), asserted route by route in `routes/graph.test.ts`. Shipped in Phase 3a; the box was never ticked. The webhook is deliberately outside that gate and is authenticated by its signature instead.

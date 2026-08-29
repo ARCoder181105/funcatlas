@@ -110,9 +110,16 @@ No GORM. No Prisma. No full ORM on the Go side.
 ## Locked product decisions
 
 GitHub OAuth from day one. Webhook-driven incremental updates in the MVP. Function-name search in
-the MVP. Excalidraw annotation and LSP resolution are out. Parser isolation was built in Phase 1,
-not deferred: `--network none`, read-only rootfs, non-root, no capabilities, symlinks hard-fail,
-files over 1 MB skipped.
+the MVP. Excalidraw annotation and LSP resolution are out.
+
+**Parser isolation: the harness was built in Phase 1, the product does not use it.** `--network
+none`, read-only rootfs, non-root and dropped capabilities apply under `make parser-isolated` and
+nowhere else — `repos/register.ts` runs the binary with `execFile` from the queue worker, so on
+`make start` and in any composed stack it is a plain child process. What *is* enforced on every
+path, because it lives in the parser rather than around it: symlinks hard-fail, files over 1 MB
+skipped, file-count and depth caps, a `--depth 1` clone with credential prompts disabled, and no
+repo scripts ever invoked. See R38 and `docs/SECURITY.md` before quoting the sandbox as a
+guarantee.
 
 ## Conventions that bite if ignored
 

@@ -33,6 +33,10 @@ Given a local repo path, emit a correct intermediate representation for TypeScri
 no UI. Isolation is built here rather than deferred, because retrofitting a sandbox around a parser
 that already assumes host filesystem access is far more expensive than building it in.
 
+> **Corrected later.** What Phase 1 built was the isolation *harness* — the `parser` compose service
+> and `make parser-isolated`. The product spawns the binary with `execFile` and never runs it inside
+> that container, so the retrofit this paragraph set out to avoid is still owed. R38.
+
 Delivered:
 
 - `internal/clone` — local path, or `git clone --depth 1`; never runs the repo's install or build scripts.

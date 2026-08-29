@@ -237,9 +237,18 @@ function FunctionList({
                   // and made the row taller than the card was measured for.
                   // The card is sized to the longest name instead.
                   "nodrag cursor-pointer flex-nowrap text-left",
+                  // The same treatment ⌘K gives a result: accent ground and a
+                  // ring in the hue that means "known". Both surfaces are
+                  // offering the same thing -- a function you can pick -- so
+                  // picking one should look the same in either.
+                  //
+                  // box-shadow is in the transition because that is what a
+                  // ring is; `transition-colors` alone would ease the fill and
+                  // snap the outline.
+                  "motion-safe:transition-[background-color,box-shadow] motion-safe:duration-micro",
                   active
-                    ? "bg-accent text-accent-foreground"
-                    : "hover:bg-muted",
+                    ? "bg-accent text-accent-foreground ring-1 ring-primary/40"
+                    : "hover:bg-muted hover:ring-1 hover:ring-primary/20",
                 )}
                 render={
                   <motion.button
@@ -257,9 +266,17 @@ function FunctionList({
                   </ItemTitle>
                 </ItemContent>
                 <ItemActions>
+                  {/* The outline badge is bordered with --border, and --accent
+                      is the same token, so on the selected row the pill's edge
+                      was drawn in the colour of the row underneath it and
+                      vanished. It keeps its own ground there instead. */}
                   <Badge
                     variant="outline"
-                    className="font-mono text-[10px] tabular-nums"
+                    className={cn(
+                      "font-mono text-[10px] tabular-nums",
+                      "motion-safe:transition-colors motion-safe:duration-micro",
+                      active && "border-ink/20 bg-surface-raised",
+                    )}
                   >
                     {fn.startLine}
                   </Badge>
