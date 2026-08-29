@@ -237,14 +237,18 @@ function FunctionList({
                   // and made the row taller than the card was measured for.
                   // The card is sized to the longest name instead.
                   "nodrag cursor-pointer flex-nowrap text-left",
-                  // Selection eases in rather than snapping. Everything else
-                  // on this canvas moves under a transition, so a row that
-                  // changed instantly read as a repaint rather than as an
-                  // answer to the click.
-                  "motion-safe:transition-colors motion-safe:duration-micro",
+                  // The same treatment ⌘K gives a result: accent ground and a
+                  // ring in the hue that means "known". Both surfaces are
+                  // offering the same thing -- a function you can pick -- so
+                  // picking one should look the same in either.
+                  //
+                  // box-shadow is in the transition because that is what a
+                  // ring is; `transition-colors` alone would ease the fill and
+                  // snap the outline.
+                  "motion-safe:transition-[background-color,box-shadow] motion-safe:duration-micro",
                   active
-                    ? "bg-accent text-accent-foreground"
-                    : "hover:bg-muted",
+                    ? "bg-accent text-accent-foreground ring-1 ring-primary/40"
+                    : "hover:bg-muted hover:ring-1 hover:ring-primary/20",
                 )}
                 render={
                   <motion.button
