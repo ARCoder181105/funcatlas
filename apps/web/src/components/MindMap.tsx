@@ -391,6 +391,9 @@ export function MindMap() {
       maxZoom={1.75}
       nodesDraggable
       nodesConnectable={false}
+      // Default is bottom-right, on top of the minimap. The other two corners
+      // hold the controls and the minimap, so centre is the free one.
+      attributionPosition="bottom-center"
     >
       {graph.truncated > 0 ? (
         <Panel position="top-left">
