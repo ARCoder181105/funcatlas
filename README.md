@@ -39,6 +39,10 @@ GitHub webhook at it and the graph follows your pushes, rewriting only the rows 
 **There is no hosted instance.** You run it yourself, so the database and the graphs are yours and
 stay on your machine.
 
+`honojs/hono` — 358 files, 1,472 functions — clones, parses, resolves and writes to Postgres in
+**under 4 seconds**. Walking the graph is single-digit milliseconds: `functions-for-file` p95 3.1 ms,
+a 5-hop traversal 4.4 ms. Numbers and method in [`PRD.md`](PRD.md) § NFR-1.
+
 ## Languages
 
 Eight, at two different depths. Support is not uniform, so it is not presented as though it were.

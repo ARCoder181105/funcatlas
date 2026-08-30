@@ -226,6 +226,6 @@ The MVP is done. Nothing below blocks it; each is a known gap rather than a bug.
 
 | | Gap |
 |---|---|
-| **NFR-1** | The performance targets have never been measured. `honojs/hono` is the fixed benchmark repository (`docs/RISKS.md` R3); the timings are not. |
+| **NFR-1** | **Measured** — three of four targets pass with 20-50x of headroom; see `PRD.md` § NFR-1, measured. The fourth, 60 fps at 2,000 nodes, could not be tested at that scale: no real map on the benchmark repository gets past a few hundred nodes. |
 | **FR-7** | Several file cards on the canvas at once, cut deliberately in Phase 3b (`docs/UI_GUIDE.md` §6). |
 | **FR-9** | An incremental re-parse still re-parses the whole repository; only the write is scoped (R35). |
