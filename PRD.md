@@ -76,12 +76,32 @@ database, saved canvas layouts, real-time multi-user editing. Rationale for each
 
 | | Requirement |
 |---|---|
-| NFR-1 | **Performance** — 300-file TypeScript repo parsed and resolved in under 90 s; `functions-for-file` p95 under 150 ms; 5-hop traversal over 10k edges under 500 ms; 60 fps at 2,000 visible nodes. |
+| NFR-1 | **Performance** — 300-file TypeScript repo parsed and resolved in under 90 s; `functions-for-file` p95 under 150 ms; 5-hop traversal over 10k edges under 500 ms; 60 fps at 2,000 visible nodes. **Measured** — see below. |
 | NFR-2 | **Security** — no network egress during parse; an untrusted repo cannot read host files; webhooks are replay- and flood-safe; every graph endpoint is session-gated; secrets come from the environment. |
 | NFR-3 | **Correctness** — re-parsing a renamed or deleted function leaves no orphan edges, and resolution never claims certainty it does not have. |
 | NFR-4 | **Operability** — one `docker compose up` brings the whole stack up; `/healthz` on api and parser; structured logs (zap in the parser, pino in the api). **Met on the clone-and-run branch**, verified from a clean clone with `make start` never run. |
 | NFR-5 | **Maintainability** — shared TypeScript types only in `packages/shared`; one SQL migration source at `services/parser/migrations/`; explicit SQL via sqlx in Go, Drizzle in the API, no full ORM anywhere. |
 | NFR-6 | **UX** — dark-mode-first with accent tokens; motion that explains rather than decorates; skeleton loading; actionable errors; `prefers-reduced-motion` respected. |
+
+### NFR-1, measured
+
+Against `honojs/hono`, the benchmark repository fixed in `docs/RISKS.md` R3: 358 files, 1,472
+functions, 37,116 call sites, 5,292 stored edges. One laptop, Postgres in Docker, everything cold.
+
+| Target | Result | |
+|---|---|---|
+| 300-file TypeScript repo parsed and resolved under **90 s** | **3.2–4.5 s** over three runs, `git clone` included. **3.9 s** with the Postgres write. Peak RSS 72 MB. | pass |
+| `functions-for-file` p95 under **150 ms** | **3.1 ms** — every file in the repository, three passes, n=1,065. p50 1.6 ms, max 12.8 ms. | pass |
+| 5-hop traversal over 10k edges under **500 ms** | **4.4 ms** p95 over 600 samples. Worst single case **9.1 ms**, for the largest reachable set in the repository (392 nodes). | pass |
+| **60 fps** at 2,000 visible nodes | Not reachable here. Opening and expanding every function in hono's largest file produces **210 nodes**, and no real map on this repository approaches the 2,000-node `NODE_CEILING`. At 210 nodes a continuous pan holds 60 fps with no frame over budget: p50 16.7 ms, p95 17.0 ms, max 17.1 ms. | not tested at scale |
+
+Two things worth knowing before re-running this:
+
+- **The parser's summary counts call sites; the database stores deduplicated edges.** 37,116 against
+  5,292 is not a bug and not a discrepancy to chase.
+- **The API rate-limits at 100 requests per minute**, so any latency run above that rate measures
+  429s, which are fast and make the numbers look better than they are. Raise it deliberately for a
+  benchmark and put it back afterwards.
 
 ## 7. Success metrics
 
