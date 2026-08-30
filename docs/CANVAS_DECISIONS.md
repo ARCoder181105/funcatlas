@@ -1,6 +1,6 @@
 # Canvas decisions
 
-Decisions taken **during** Phase 3b, after the plan in `TASKLIST.md` was written. They are here
+Decisions taken **during** Phase 3b, after the phase plan was written. They are here
 because they changed the shape of the canvas rather than the look of it, and a commit message is a
 bad place to look them up six weeks later.
 
@@ -440,10 +440,10 @@ because nothing is broken and a migration mid-phase buys tidiness at the cost of
 canvas behaviour by hand, none of which has an automated edge test to catch a regression. Worth
 doing when there is a second reason.
 
-**A router.** The Back button leaves the app entirely, because there are no routes — `TASKLIST.md`
-cut them from 3b. The reader noticed and it is a fair complaint: URL-addressable repo, file and
-function would make Back walk the selection and make a function linkable. It belongs with the
-landing-page PR, which introduces a second route anyway.
+**A router that addresses the selection.** There is one now — `lib/router.tsx`, added with the
+landing page — but it only separates `/` from `/app`. Inside the canvas the Back button still leaves
+the app entirely, because repo, file and function are in the store rather than the URL. Putting them
+there would make Back walk the selection and make a single function linkable.
 
 **Collapsing individual nodes inside a branch** works (§1b). What does not exist is any way to close
 *everything* at once, or to remove a branch entirely rather than collapse it. Nobody has asked yet.

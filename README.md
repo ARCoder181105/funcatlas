@@ -168,7 +168,7 @@ touched Postgres is possible — check that you created the test database above.
 how to add a language, and the four conventions that will fail review if you miss them.
 [`CLAUDE.md`](CLAUDE.md) is the load-bearing summary of how this repository is organised and which
 conventions bite if ignored; it is worth reading before a first change even though it is addressed
-to an assistant. [`DEVELOPMENT.md`](DEVELOPMENT.md) has the daily loop.
+to an assistant.
 
 ## Layout
 
@@ -200,11 +200,9 @@ Reasoning for each pick, and the rejected alternatives, is in
 | Document | Owns |
 |---|---|
 | [`PRD.md`](PRD.md) | What we are building and what counts as done |
-| [`PLAN.md`](PLAN.md) | The phase order and what closed each one |
+| [`PLAN.md`](PLAN.md) | The phase order, what closed each one, and what is still open |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to make a change here, and what review checks |
-| [`TASKLIST.md`](TASKLIST.md) | The live task list |
 | [`CLAUDE.md`](CLAUDE.md) | Conventions, and what bites if ignored |
-| [`DEVELOPMENT.md`](DEVELOPMENT.md) | Setup and the daily loop |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Components and how they connect |
 | [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | Postgres schema |
 | [`docs/PARSING_STRATEGY.md`](docs/PARSING_STRATEGY.md) | Extraction, resolution, per-language limits |

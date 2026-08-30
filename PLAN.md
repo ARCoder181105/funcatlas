@@ -6,8 +6,7 @@ that closes it.
 
 - **What** we're building and **why** → [`PRD.md`](PRD.md)
 - **Which** technologies and why → [`docs/TECH_STACK.md`](docs/TECH_STACK.md)
-- **How** to run the tooling day to day → [`DEVELOPMENT.md`](DEVELOPMENT.md)
-- The **current** phase's task breakdown → [`TASKLIST.md`](TASKLIST.md)
+- **How** to run it, and how to contribute → [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 A phase is finished when its exit test passes — not when its files exist.
 
@@ -56,7 +55,7 @@ emits the expected functions, calls, and imports; the symlink-escape fixture is 
 
 **Known carry-over into Phase 2** — the IR is correct for inspection but not yet sufficient for
 resolution. Call sites record no file, and method calls lose their receiver. Both are fixed as the
-first chunk of Phase 2; see [`TASKLIST.md`](TASKLIST.md) C0.
+first chunk of Phase 2.
 
 ---
 
@@ -105,7 +104,7 @@ confidence tiers present in `edges` with non-zero counts.
 functions, 5,906 edges — exact 1,106 / name_match 150 / unresolved 4,650), walk tree to card to
 mind-map, read all three edge styles with unresolved ghosts at the boundary, open the source at the
 right line numbers, and land on a function by name with ⌘K. `pnpm -r build`, `test` and `lint` clean.
-The full run, with the six defects it surfaced, is recorded in [`TASKLIST.md`](TASKLIST.md) §B8.
+It surfaced six defects, listed in the paragraph below.
 
 **What running it changed.** The gate is worth more than the chunks it closes: across 3b it caught
 edges that silently never rendered, three confidence tiers flattened into one dash pattern, a clone
@@ -155,7 +154,7 @@ correctness, not parse time.
 
 **Exit test:** pushing a commit updates the graph **without rewriting unchanged rows** — the
 function ids of untouched files survive; a replayed webhook is ignored; a webhook flood is
-throttled; the parser still works with no network egress. — passed; see `TASKLIST.md` D8.
+throttled; the parser still works with no network egress. — passed.
 
 **Known carry-over into Phase 5** — R34: `store/ui.ts` restores a file and its open branches through
 `zustand/persist`, and this is the first phase whose re-parse can delete the rows behind them.
@@ -218,3 +217,15 @@ Each of these was considered and deliberately deferred, not forgotten.
 | Neo4j | Recursive CTEs over an edge table handle this scale. Revisit when traversal is measurably the bottleneck. |
 | Saved canvas layouts | Positions resetting on reload is a papercut, not a blocker. |
 | Multi-tenancy and RBAC | Single-user MVP. Each repo is already an isolated workspace, so this stays cheap to add. |
+
+---
+
+## Still open
+
+The MVP is done. Nothing below blocks it; each is a known gap rather than a bug.
+
+| | Gap |
+|---|---|
+| **NFR-1** | The performance targets have never been measured. `honojs/hono` is the fixed benchmark repository (`docs/RISKS.md` R3); the timings are not. |
+| **FR-7** | Several file cards on the canvas at once, cut deliberately in Phase 3b (`docs/UI_GUIDE.md` §6). |
+| **FR-9** | An incremental re-parse still re-parses the whole repository; only the write is scoped (R35). |
