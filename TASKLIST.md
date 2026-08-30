@@ -215,6 +215,24 @@ the workspace before executing, so a build stage needs every manifest; `.env`'s 
 the container itself; `<placeholder>` values broke every `set -a && . ./.env`; and `.optional()`
 rejects a present-but-empty variable, which is the state every fresh `.env` is in.
 
+## Open-sourcing (`polish`, not a phase)
+
+The last pass before the repository goes public.
+
+- [x] **Canvas screenshots, one per theme**, captured from the running stack against `honojs/hono`.
+      Subject is `accepts`: its three direct calls are one of each confidence tier, so a single
+      frame shows the whole claim. Two files rather than one recoloured — the tier colours are the
+      subject, and an inverted dark shot would misstate them.
+- [x] **The shot on the landing page and at the top of the README.** `<picture>` with a
+      `prefers-color-scheme` source on GitHub; class-based `dark:` in the app, because the theme
+      toggle sets a class and a media query would ignore it.
+- [x] **`CONTRIBUTING.md`** — how to run it, what review checks, and how to add a language.
+- [x] **React Flow's attribution themed and moved.** It shipped a hardcoded half-white background
+      sitting on top of the minimap. `!important` and outside `@layer base`: `reactflow/dist/base.css`
+      is unlayered and loads with the lazy canvas chunk, so it beat the rule on both counts.
+- [x] **Go CI pinned to 1.25**, matching `go.mod`. Behind it, every job silently downloaded a
+      second toolchain first.
+
 ## Next
 
 - [ ] **NFR-1 — the performance targets have never been measured.** `honojs/hono` is the fixed
