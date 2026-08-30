@@ -52,10 +52,15 @@ export function Tiers() {
       {/* Staggered in tier order, so the three arrive most certain first and
           the scale is read in the direction it means something. One gesture
           for the set rather than three cards each deciding for themselves --
-          the same treatment the coverage chips get. */}
+          the same treatment the coverage chips get.
+
+          `asChild` is load-bearing, not tidiness. Without it `Fades` wraps each
+          card in its own motion.div, which becomes the grid item -- the `li`
+          inside then sizes to its own text, so the three cards ended up three
+          different heights. It also put a div between `ul` and `li`. */}
       <ul className="grid gap-4 md:grid-cols-3">
         {animate ? (
-          <Fades inView inViewMargin="-64px" holdDelay={70}>
+          <Fades asChild inView inViewMargin="-64px" holdDelay={70}>
             {cards}
           </Fades>
         ) : (
