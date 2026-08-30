@@ -211,3 +211,18 @@ body,
     }
   }
 }
+
+/* React Flow's attribution ships a hardcoded half-white background, which on
+   the dark canvas is a bright chip in the corner. It stays -- removing it is a
+   Pro-licence feature -- so it is themed instead.
+ *
+ * `!important`, and outside `@layer base`, because `reactflow/dist/base.css` is
+ * unlayered and imported from the lazily-loaded canvas chunk -- so it arrives
+ * after this file and wins on both layering and source order. */
+.react-flow__attribution {
+  background: transparent !important;
+}
+
+.react-flow__attribution a {
+  @apply text-muted-foreground/50;
+}

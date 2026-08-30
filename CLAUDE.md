@@ -24,7 +24,7 @@ The old working name "CodeCanvas" is retired; do not reintroduce it.
 - [x] Phase 4 — Webhooks, queue, hardening
 - [x] Phase 5 — Go, Rust, Python, JavaScript, Java (extraction only; per-language resolution stays cut)
 
-Active task list: `TASKLIST.md`.
+What is still open, and why each gap is deliberate: `PLAN.md` § Still open.
 
 ## How to work here
 
@@ -39,7 +39,7 @@ You implement, phase by phase, with tests. The user reviews at each phase gate.
   "generated with" footers anywhere, including PR bodies.
 - **Stop at every phase gate.** Run the phase's exit test from `PLAN.md`, mark the PR ready, and wait
   for the user before opening the next branch.
-- **A test ships in the same commit as the code it tests.** Keep `TASKLIST.md` checkboxes current.
+- **A test ships in the same commit as the code it tests.**
 - **Ask when a choice changes the product**, not for routine judgment calls.
 
 ### Code style the user has asked for
@@ -156,7 +156,7 @@ guarantee.
 
 ## Known gaps
 
-Phase 3b is closed. `TASKLIST.md` is the chunk-level truth; this is what outlives it.
+Phase 3b is closed. This is what outlived its chunk list.
 
 - **Node data is compared by value, not by reference.** `buildGraph` rebuilds every node's data on
   any change, so a `memo` keyed on reference re-rendered every card whenever one changed — and each
@@ -226,7 +226,6 @@ make test                      # TypeScript AND Go. `pnpm -r test` silently skip
 make lint && make typecheck
 make go-vet                    # not part of `make test`
 git log --oneline -5           # what happened last
-grep -c '\[x\]' TASKLIST.md    # how far into the current phase
 gh run list --branch $(git branch --show-current) --limit 2   # is CI green?
 ```
 
@@ -246,8 +245,7 @@ commands are cheaper and more honest.
 |---|---|
 | What are we building, and what counts as done? | `PRD.md` |
 | What's the phase order and what closes each phase? | `PLAN.md` |
-| What am I working on right now? | `TASKLIST.md` |
-| How do I run it? | `DEVELOPMENT.md` |
+| How do I run it, and how does someone contribute? | `CONTRIBUTING.md` |
 | What's the schema? | `docs/DATA_MODEL.md` |
 | How does extraction and resolution work? | `docs/PARSING_STRATEGY.md` |
 | What's still undecided? | `docs/RISKS.md` |

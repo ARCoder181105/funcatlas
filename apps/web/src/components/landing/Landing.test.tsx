@@ -97,6 +97,19 @@ describe("the landing page", () => {
     expect(within(index as HTMLElement).getByText("23")).toBeInTheDocument();
   });
 
+  it("ships a canvas shot for each theme", () => {
+    renderLanding();
+
+    // Two files rather than one filtered: the tier colours are the subject of
+    // the picture, and a recoloured dark shot would misstate them. A single
+    // image here means one theme is showing the other theme's palette.
+    const shots = screen.getAllByRole("img", { name: /funcatlas canvas/i });
+    expect(shots.map((s) => s.getAttribute("src"))).toEqual([
+      "/canvas-dark.png",
+      "/canvas-light.png",
+    ]);
+  });
+
   it("links to the source even when GitHub will not answer", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("rate limited"));
 

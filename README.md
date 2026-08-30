@@ -5,6 +5,14 @@ extracts every function and call site with tree-sitter, resolves each call to th
 reaches, and draws the result as a graph you can walk: file tree → file card → function mind-map →
 highlighted source.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/canvas-dark.png">
+  <img alt="The funcatlas canvas showing hono's accepts function branching into one solid exact call, one dashed name match, and three dotted unresolved calls." src="apps/web/public/canvas-light.png">
+</picture>
+
+<sup>hono's `accepts` helper, opened from its file card. Three calls leave it, drawn for how well
+each is known.</sup>
+
 **The part that matters: it tells you what it does not know.** Every call gets one of three
 answers, and each is drawn as a different line.
 
@@ -156,9 +164,11 @@ make help           # every target
 Integration tests read `TEST_DATABASE_URL` and skip when it is unset, so a green run that never
 touched Postgres is possible — check that you created the test database above.
 
+[`CONTRIBUTING.md`](CONTRIBUTING.md) is the place to start: what a good first change looks like,
+how to add a language, and the four conventions that will fail review if you miss them.
 [`CLAUDE.md`](CLAUDE.md) is the load-bearing summary of how this repository is organised and which
 conventions bite if ignored; it is worth reading before a first change even though it is addressed
-to an assistant. [`DEVELOPMENT.md`](DEVELOPMENT.md) has the daily loop.
+to an assistant.
 
 ## Layout
 
@@ -190,10 +200,9 @@ Reasoning for each pick, and the rejected alternatives, is in
 | Document | Owns |
 |---|---|
 | [`PRD.md`](PRD.md) | What we are building and what counts as done |
-| [`PLAN.md`](PLAN.md) | The phase order and what closed each one |
-| [`TASKLIST.md`](TASKLIST.md) | The live task list |
+| [`PLAN.md`](PLAN.md) | The phase order, what closed each one, and what is still open |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to make a change here, and what review checks |
 | [`CLAUDE.md`](CLAUDE.md) | Conventions, and what bites if ignored |
-| [`DEVELOPMENT.md`](DEVELOPMENT.md) | Setup and the daily loop |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Components and how they connect |
 | [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | Postgres schema |
 | [`docs/PARSING_STRATEGY.md`](docs/PARSING_STRATEGY.md) | Extraction, resolution, per-language limits |
