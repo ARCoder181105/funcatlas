@@ -1,5 +1,6 @@
 import { useMotionEnabled } from "../../lib/motion";
 import { useSmoothScroll } from "../../lib/useSmoothScroll";
+import { CanvasShot } from "./CanvasShot";
 import { ClosingCta } from "./ClosingCta";
 import { Hero } from "./Hero";
 import { HowItWorks } from "./HowItWorks";
@@ -30,6 +31,7 @@ export function Landing() {
       <main>
         <Hero />
         <Tiers />
+        <CanvasShot />
         <HowItWorks />
         <Index />
         <Languages />
