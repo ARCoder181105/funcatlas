@@ -97,6 +97,24 @@ describe("the landing page", () => {
     expect(within(index as HTMLElement).getByText("23")).toBeInTheDocument();
   });
 
+  it("makes each tier card its own grid item", () => {
+    renderLanding();
+
+    const list = screen
+      .getByRole("heading", { name: /certainty is the product/i })
+      .closest("section")
+      ?.querySelector("ul");
+    expect(list).not.toBeNull();
+
+    // The heights cannot be asserted here -- jsdom has no layout. What can be
+    // asserted is the cause: a wrapper between the grid and the `li` makes the
+    // wrapper the grid item, so the card sizes to its own text instead of the
+    // row, and the three end up different heights. It is also invalid markup.
+    for (const child of Array.from((list as HTMLElement).children)) {
+      expect(child.tagName).toBe("LI");
+    }
+  });
+
   it("ships a canvas shot for each theme", () => {
     renderLanding();
 
