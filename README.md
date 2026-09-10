@@ -80,20 +80,15 @@ Paste a public repository URL and explore it. `⌘K` finds any function by name.
 You can run funcatlas directly from GHCR images:
 
 ```bash
-docker pull ghcr.io/arcoder181105/funcatlas-api:latest
-docker pull ghcr.io/arcoder181105/funcatlas-web:latest
-docker pull ghcr.io/arcoder181105/funcatlas-migrations:latest
-curl -fsSL https://raw.githubusercontent.com/ARCoder181105/funcatlas/main/docker-compose.images.yml -o docker-compose.images.yml
-docker compose -f docker-compose.images.yml up
+TAG=v1.2.3
+docker pull ghcr.io/arcoder181105/funcatlas-api:${TAG}
+docker pull ghcr.io/arcoder181105/funcatlas-web:${TAG}
+docker pull ghcr.io/arcoder181105/funcatlas-migrations:${TAG}
+curl -fsSL https://raw.githubusercontent.com/ARCoder181105/funcatlas/${TAG}/docker-compose.images.yml -o docker-compose.images.yml
+FUNCATLAS_IMAGE_TAG=${TAG} docker compose -f docker-compose.images.yml up
 ```
 
-Then open <http://localhost:5173>.
-
-Use a specific published version by setting `FUNCATLAS_IMAGE_TAG`:
-
-```bash
-FUNCATLAS_IMAGE_TAG=v1.2.3 docker compose -f docker-compose.images.yml up
-```
+Then open <http://localhost:5173>. The compose file comes from the same `${TAG}` as the images, so a pinned run cannot drift onto a newer compose file. For the floating `latest` run, use `TAG=main`.
 
 Published images:
 
