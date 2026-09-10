@@ -98,6 +98,14 @@ Published images:
 - `ghcr.io/arcoder181105/funcatlas-web`
 - `ghcr.io/arcoder181105/funcatlas-migrations`
 
+Tags: `latest` (tip of `main`), `vX.Y.Z` (release, e.g. `v0.2.0`), `sha-<commit>` (one exact build):
+
+```bash
+docker pull ghcr.io/arcoder181105/funcatlas-api:latest
+docker pull ghcr.io/arcoder181105/funcatlas-web:latest
+docker pull ghcr.io/arcoder181105/funcatlas-migrations:latest
+```
+
 ### With real GitHub sign-in
 
 Blank `FUNCATLAS_SINGLE_USER` in `.env` and register an OAuth app at
