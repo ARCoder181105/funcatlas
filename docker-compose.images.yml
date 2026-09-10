@@ -31,7 +31,7 @@ services:
     image: ghcr.io/arcoder181105/funcatlas-migrations:${FUNCATLAS_IMAGE_TAG:-latest}
     command:
       - -path=/migrations
-      - -database=******postgres:5432/funcatlas?sslmode=disable
+      - -database=postgres://funcatlas:funcatlas@postgres:5432/funcatlas?sslmode=disable
       - up
     depends_on:
       postgres:
@@ -45,7 +45,7 @@ services:
       PORT: 3000
       WEB_APP_URL: http://localhost:5173
       CORS_ORIGIN: http://localhost:5173
-      DATABASE_URL: ******postgres:5432/funcatlas?sslmode=disable
+      DATABASE_URL: postgres://funcatlas:funcatlas@postgres:5432/funcatlas?sslmode=disable
       REDIS_URL: redis://redis:6379
       QUEUE_NAME: funcatlas-parse
       GITHUB_CLIENT_ID: ci-client-id
