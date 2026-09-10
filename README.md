@@ -75,6 +75,32 @@ Paste a public repository URL and explore it. `⌘K` finds any function by name.
 > this way on a server. Blank the value in `.env` to use real GitHub sign-in instead
 > ([`docs/RISKS.md`](docs/RISKS.md) R39).
 
+### Run from published Docker images (no clone)
+
+You can run funcatlas directly from GHCR images:
+
+```bash
+docker pull ghcr.io/arcoder181105/funcatlas-api:latest
+docker pull ghcr.io/arcoder181105/funcatlas-web:latest
+docker pull ghcr.io/arcoder181105/funcatlas-migrations:latest
+curl -fsSL https://raw.githubusercontent.com/ARCoder181105/funcatlas/main/docker-compose.images.yml -o docker-compose.images.yml
+docker compose -f docker-compose.images.yml up
+```
+
+Then open <http://localhost:5173>.
+
+Use a specific published version by setting `FUNCATLAS_IMAGE_TAG`:
+
+```bash
+FUNCATLAS_IMAGE_TAG=v1.2.3 docker compose -f docker-compose.images.yml up
+```
+
+Published images:
+
+- `ghcr.io/arcoder181105/funcatlas-api`
+- `ghcr.io/arcoder181105/funcatlas-web`
+- `ghcr.io/arcoder181105/funcatlas-migrations`
+
 ### With real GitHub sign-in
 
 Blank `FUNCATLAS_SINGLE_USER` in `.env` and register an OAuth app at

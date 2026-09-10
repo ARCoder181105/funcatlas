@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: funcatlas
+      POSTGRES_PASSWORD: funcatlas
+      POSTGRES_DB: funcatlas
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U funcatlas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    image: ghcr.io/arcoder181105/funcatlas-migrations:${FUNCATLAS_IMAGE_TAG:-latest}
+    command:
+      - -path=/migrations
+      - -database=******postgres:5432/funcatlas?sslmode=disable
+      - up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api: &node
+    image: ghcr.io/arcoder181105/funcatlas-api:${FUNCATLAS_IMAGE_TAG:-latest}
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      WEB_APP_URL: http://localhost:5173
+      CORS_ORIGIN: http://localhost:5173
+      DATABASE_URL: ******postgres:5432/funcatlas?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      QUEUE_NAME: funcatlas-parse
+      GITHUB_CLIENT_ID: ci-client-id
+      GITHUB_CLIENT_SECRET: ci-client-secret
+      GITHUB_REDIRECT_URI: http://localhost:3000/auth/callback
+      GITHUB_WEBHOOK_SECRET: local-webhook-secret
+      SESSION_SECRET: local-session-secret-change-me
+      FUNCATLAS_SINGLE_USER: funcatlas
+      PARSER_BIN: /usr/local/bin/funcatlas-parser
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  worker:
+    <<: *node
+    command: ["./node_modules/.bin/tsx", "src/worker.ts"]
+    ports: []
+
+  web:
+    image: ghcr.io/arcoder181105/funcatlas-web:${FUNCATLAS_IMAGE_TAG:-latest}
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:5173:80"
+
+volumes:
+  pgdata:
+  redisdata:
